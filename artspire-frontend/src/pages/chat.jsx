@@ -196,7 +196,8 @@ export default function Chat() {
       Notification.requestPermission();
     }
   }, []);
-
+// ADD this inside the init useEffect, after setCurrentUser:
+socket.emit("join_room", parsedUser._id);
   // -- Send message ----------------------------------------------------------
   const sendMessage = async () => {
     if ((!text.trim() && !imagePreview) || !currentUser || !receiverId) return;
