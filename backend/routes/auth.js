@@ -2,8 +2,14 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const Artist = require("../models/Artist"); // your mongoose model
+const Artist = require("../models/user"); // your mongoose model
 const User = require("../models/User");     // your mongoose model
+
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error("Missing JWT_SECRET environment variable.");
+  process.exit(1);
+}
 
 // 🎨 ARTIST REGISTER
 router.post("/register", async (req, res) => {
@@ -32,7 +38,7 @@ router.post("/register", async (req, res) => {
     // Generate token
     const token = jwt.sign(
       { id: newArtist._id },
-      "your_secret_key",
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 
@@ -72,7 +78,7 @@ router.post("/login", async (req, res) => {
 
     const token = jwt.sign(
       { id: account._id },
-      "your_secret_key",
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 
