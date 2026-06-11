@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { signInWithRedirect, getRedirectResult } from "firebase/auth";
@@ -50,19 +50,20 @@ export default function UserLogin() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [notif, setNotif] = useState(null);
-  let notifTimer = null;
+  const notifTimer = useRef(null);
 
   function showNotif(type, message, autoDismiss = true) {
-    clearTimeout(notifTimer);
+    clearTimeout(notifTimer.current);
     setNotif({ type, message });
     if (autoDismiss && type !== "loading") {
-      notifTimer = setTimeout(() => setNotif(null), 3500);
+      notifTimer.current = setTimeout(() => setNotif(null), 3500);
     }
   }
 
   // ── Handle Google redirect result ─────────────────────────────────────────
   useEffect(() => {
     showNotif("loading", "Checking Google login...", false);
+
     getRedirectResult(auth)
       .then(async (result) => {
         setNotif(null);
@@ -81,6 +82,8 @@ export default function UserLogin() {
         setTimeout(() => navigate("/"), 1200);
       })
       .catch(() => setNotif(null));
+
+    return () => clearTimeout(notifTimer.current);
   }, []);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
