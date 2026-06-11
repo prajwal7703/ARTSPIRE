@@ -2,7 +2,6 @@ const User             = require("../models/User");
 const bcrypt           = require("bcryptjs");
 const jwt              = require("jsonwebtoken");
 const { sendResetEmail } = require("../utils/email");
-const user = await User.findOne({ email }).select("+password");
 // ── Helper: sign login token (7 days) ────────────────────────────────────────
 function signToken(user) {
   return jwt.sign(
@@ -89,7 +88,6 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
@@ -152,7 +150,6 @@ exports.forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    const user = await User.findOne({ email });
 
     // Always return the same message — never reveal if email exists
     if (!user) {
