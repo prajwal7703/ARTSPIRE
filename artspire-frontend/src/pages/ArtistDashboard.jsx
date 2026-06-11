@@ -3,7 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 // ── Base URL — uses env var in production, localhost in dev ──────────────────
-const API = import.meta.env.VITE_API_URL || "https://artspire-backend-e3us.onrender.com";
+const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 // ── Safe helpers ──────────────────────────────────────────────────────────────
 function safeParse(key) {

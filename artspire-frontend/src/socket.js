@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // Hard-code the backend URL as fallback in case env var is malformed
-const BACKEND = "https://artspire-backend-e3us.onrender.com";
+const BACKEND = "https://artspire-backend-qv5b.onrender.com";
 
 const socket = io(BACKEND, {
   transports: ["polling", "websocket"],
