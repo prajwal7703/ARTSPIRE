@@ -1,27 +1,10 @@
-const mongoose = require("mongoose");
-<Route path="/groups" element={<GroupChat />} />
-const messageSchema = new mongoose.Schema(
-  {
-    senderId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+const mongoose = require('mongoose');
 
-    receiverId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+const messageSchema = new mongoose.Schema({
+  senderId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  receiverId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  content:    { type: String, required: true },
+  read:       { type: Boolean, default: false },
+}, { timestamps: true });
 
-    message: {
-      type: String,
-      default: "",
-    },
-  },
-
-  {
-    timestamps: true,
-  }
-);
-
-module.exports =
-mongoose.model("Message", messageSchema);
+module.exports = mongoose.model('Message', messageSchema);
