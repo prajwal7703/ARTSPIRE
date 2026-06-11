@@ -4,6 +4,7 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String },
+passwordResetToken: { type: String, default: null },
   role: { type: String, enum: ["user", "artist"], default: "user" },
   category: { type: String },
   bio: { type: String },
@@ -16,6 +17,7 @@ const userSchema = new mongoose.Schema({
   skills: [{ type: String }],
   facebook: { type: String },
   youtube: { type: String },
+  password: { type: String, select: false },
   rating: { type: Number, default: 5 },
   portfolio: [{ type: String }],
 }, { timestamps: true });

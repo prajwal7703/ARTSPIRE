@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-
+<Route path="/groups" element={<GroupChat />} />
 const messageSchema = new mongoose.Schema(
   {
     senderId: {
@@ -14,7 +14,7 @@ const messageSchema = new mongoose.Schema(
 
     message: {
       type: String,
-      required: true,
+      default: "",
     },
   },
 

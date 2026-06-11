@@ -4,14 +4,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ["react", "react-dom", "react-router-dom"],
-          axios: ["axios"],
-        },
-      },
-    },
-  },
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          axios: ['axios'],
+        }
+      }
+    }
+  }
 })
