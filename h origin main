@@ -1,0 +1,18 @@
+[33m91d3332[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m fix: add missing User.findOne in login and forgotPassword
+[33m42c789b[m fix: add missing User.findOne in login and forgotPassword
+[33m3498437[m fix: register page UI
+[33m10b7f69[m fix: register page and env url
+[33m05a0d6b[m fix: CORS origin true
+[33mf34a126[m fix: simplify CORS to origin:true fixes all Vercel URLs
+[33ma25a8d1[m fix: update backend URL
+[33mfba971b[m fix: add missing groups.js route
+[33m4f51c8c[m fix: remove JSX from Message.js model
+[33m2ed1d81[m fix: remove top-level await crashing server
+[33m543650c[m fix: use Node 18 for Render compatibility
+[33m8c65ded[m fix: correct filename casing for Linux deploy
+[33m6d6f1a9[m Initial commit - ArtSpire frontend + backend
+[33m04a179f[m fix: notifTimer useRef in Register and ResetPassword
+[33md414522[m fix: notifTimer useRef in Register and ResetPassword
+[33maa59254[m remove zip
+[33m772f4b0[m remove zip
+[33m3b9d278[m fresh start - removed large files
