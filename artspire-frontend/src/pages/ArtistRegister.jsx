@@ -99,15 +99,25 @@ export default function ArtistRegister() {
     return true;
   };
 
-  const nextStep = () => { if (validateStep()) setStep((s) => s + 1); };
-  const prevStep = () => setStep((s) => s - 1);
+  const handleNextStep = (e) => {
+    e.preventDefault(); // Prevents page refreshes inside individual steps
+    if (validateStep()) setStep((s) => s + 1);
+  };
+  
+  const prevStep = (e) => {
+    e.preventDefault();
+    setStep((s) => s - 1);
+  };
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  const handleSubmit = async () => {
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
     if (!validateStep()) return;
+    
     showNotif("loading", "Creating your artist profile...", false);
     try {
-const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`, {        name: formData.name,
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`, {        
+        name: formData.name,
         email: formData.email,
         password: formData.password,
         category: formData.category,
@@ -168,22 +178,22 @@ const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`
 
             {/* ── STEP 0: Account ── */}
             {step === 0 && (
-              <div style={s.stepWrap}>
+              <form onSubmit={handleNextStep} style={s.stepWrap}>
                 <div style={s.stepTitle}>Create Account</div>
                 <div style={s.stepSub}>Start your creative journey</div>
                 <div style={s.fields}>
-                  <Field label="Full Name" name="name" placeholder="Vandana Sharma" value={formData.name} onChange={handleChange} />
-                  <Field label="Email Address" name="email" type="email" placeholder="you@example.com" value={formData.email} onChange={handleChange} />
-                  <Field label="Password" name="password" type="password" placeholder="Min. 6 characters" value={formData.password} onChange={handleChange} />
-                  <Field label="Confirm Password" name="confirmPassword" type="password" placeholder="Repeat password" value={formData.confirmPassword} onChange={handleChange} />
+                  <Field label="Full Name" name="name" placeholder="Vandana Sharma" autoComplete="name" value={formData.name} onChange={handleChange} />
+                  <Field label="Email Address" name="email" type="email" placeholder="you@example.com" autoComplete="username" value={formData.email} onChange={handleChange} />
+                  <Field label="Password" name="password" type="password" placeholder="Min. 6 characters" autoComplete="new-password" value={formData.password} onChange={handleChange} />
+                  <Field label="Confirm Password" name="confirmPassword" type="password" placeholder="Repeat password" autoComplete="new-password" value={formData.confirmPassword} onChange={handleChange} />
                 </div>
-                <button style={s.primaryBtn} onClick={nextStep}>Continue →</button>
-              </div>
+                <button type="submit" style={s.primaryBtn}>Continue →</button>
+              </form>
             )}
 
             {/* ── STEP 1: Profile ── */}
             {step === 1 && (
-              <div style={s.stepWrap}>
+              <form onSubmit={handleNextStep} style={s.stepWrap}>
                 <div style={s.stepTitle}>Your Profile</div>
                 <div style={s.stepSub}>Tell us what you do</div>
                 <div style={s.fields}>
@@ -205,19 +215,19 @@ const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`
                       ))}
                     </div>
                   </div>
-                  <Field label="City *" name="city" placeholder="Bangalore" value={formData.city} onChange={handleChange} />
-                  <Field label="Instagram Handle (optional)" name="instagram" placeholder="yourhandle (without @)" value={formData.instagram} onChange={handleChange} />
+                  <Field label="City *" name="city" placeholder="Bangalore" autoComplete="address-level2" value={formData.city} onChange={handleChange} />
+                  <Field label="Instagram Handle (optional)" name="instagram" placeholder="yourhandle (without @)" autoComplete="off" value={formData.instagram} onChange={handleChange} />
                 </div>
                 <div style={{ display:"flex", gap:"12px" }}>
-                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
-                  <button style={{ ...s.primaryBtn, flex:1 }} onClick={nextStep}>Continue →</button>
+                  <button type="button" style={s.secondaryBtn} onClick={prevStep}>← Back</button>
+                  <button type="submit" style={{ ...s.primaryBtn, flex:1 }}>Continue →</button>
                 </div>
-              </div>
+              </form>
             )}
 
             {/* ── STEP 2: Bio ── */}
             {step === 2 && (
-              <div style={s.stepWrap}>
+              <form onSubmit={handleSubmit} style={s.stepWrap}>
                 <div style={s.stepTitle}>About You</div>
                 <div style={s.stepSub}>Let the world know your story</div>
                 <div style={s.fields}>
@@ -241,12 +251,12 @@ const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:"12px" }}>
-                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
-                  <button style={{ ...s.primaryBtn, flex:1, background:"linear-gradient(90deg,#4f46e5,#7c3aed)" }} onClick={handleSubmit}>
+                  <button type="button" style={s.secondaryBtn} onClick={prevStep}>← Back</button>
+                  <button type="submit" style={{ ...s.primaryBtn, flex:1, background:"linear-gradient(90deg,#4f46e5,#7c3aed)" }}>
                     🎨 Join ArtSpire
                   </button>
                 </div>
-              </div>
+              </form>
             )}
 
           </div>
@@ -257,7 +267,7 @@ const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`
 }
 
 // ── Reusable field ────────────────────────────────────────────────────────────
-function Field({ label, name, type = "text", placeholder, value, onChange }) {
+function Field({ label, name, type = "text", placeholder, autoComplete, value, onChange }) {
   return (
     <div style={s.fieldGroup}>
       <label style={s.fieldLabel}>{label}</label>
@@ -265,9 +275,11 @@ function Field({ label, name, type = "text", placeholder, value, onChange }) {
         type={type}
         name={name}
         placeholder={placeholder}
+        autoComplete={autoComplete}
         value={value}
         onChange={onChange}
         style={s.input}
+        required={type !== "text" || name === "name" || name === "city"}
       />
     </div>
   );
