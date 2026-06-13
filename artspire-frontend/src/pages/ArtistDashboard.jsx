@@ -489,4 +489,3 @@ const s = {
   typeBtn:        { flex:1, padding:"12px", border:"1.5px solid #e2e8f0", background:"#fff", borderRadius:10, fontWeight:700, cursor:"pointer", color:"#64748b", fontFamily:"'Nunito',sans-serif" },
   typeBtnActive:  { background:"#e0e7ff", borderHexColor:"#1e3a8a", color:"#1e3a8a" }
 };
-ENDOFFILE
