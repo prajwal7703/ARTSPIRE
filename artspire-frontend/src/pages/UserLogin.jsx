@@ -95,6 +95,7 @@ export default function UserLogin() {
       const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
         email: formData.email,
         password: formData.password,
+        role: "user", // ✅ FIXED: role is now sent
       });
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", JSON.stringify(res.data.user));

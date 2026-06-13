@@ -48,13 +48,13 @@ export default function ArtistLogin() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [notif, setNotif] = useState(null);
-  let notifTimer = null;
+  const notifTimer = { current: null }; // ✅ FIXED: use object ref to avoid stale closure
 
   function showNotif(type, message, autoDismiss = true) {
-    clearTimeout(notifTimer);
+    clearTimeout(notifTimer.current);
     setNotif({ type, message });
     if (autoDismiss && type !== "loading") {
-      notifTimer = setTimeout(() => setNotif(null), 3500);
+      notifTimer.current = setTimeout(() => setNotif(null), 3500);
     }
   }
 
@@ -71,18 +71,21 @@ export default function ArtistLogin() {
       const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
         email: formData.email,
         password: formData.password,
+        role: "artist", // ✅ FIXED: role is now sent
       });
 
-      // Make sure it's actually an artist account
-      if (res.data.user?.role !== "artist") {
-        showNotif("error", "This account is not an artist account. Please use User Login.");
+      // ✅ FIXED: backend returns res.data.artist (not res.data.user) for artists
+      const artist = res.data.artist;
+
+      if (!artist) {
+        showNotif("error", "Login failed. Please try again.");
         return;
       }
 
       localStorage.setItem("token", res.data.token);
-      localStorage.setItem("artist", JSON.stringify(res.data.user));
+      localStorage.setItem("artist", JSON.stringify(artist)); // ✅ FIXED: was res.data.user
       localStorage.removeItem("user");
-      showNotif("artist", `Welcome back, ${res.data.user.name}! 🎨`);
+      showNotif("artist", `Welcome back, ${artist.name}! 🎨`); // ✅ FIXED: was res.data.user
       setTimeout(() => navigate("/artist-dashboard"), 1200);
     } catch (err) {
       showNotif("error", err.response?.data?.message || "Something went wrong. Please try again.");

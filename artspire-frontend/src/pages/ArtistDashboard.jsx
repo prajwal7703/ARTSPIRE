@@ -189,7 +189,7 @@ export default function ArtistDashboard() {
   const fetchPosts = async (id) => {
     try {
       const res = await axios.get(`${API}/api/posts`);
-      setPosts(res.data.filter((p) => p.artistId === id));
+      setPosts(res.data.filter((p) => String(p.artistId) === String(id)));
     } catch (err) { console.log(err); }
   };
 

@@ -120,7 +120,13 @@ export default function Register() {
         role: "user",
       });
       if (res.data.token) localStorage.setItem("token", res.data.token);
-      if (res.data.user)  localStorage.setItem("user", JSON.stringify(res.data.user));
+      if (res.data.user.role === "artist") {
+  localStorage.setItem("artist", JSON.stringify(res.data.user));
+  localStorage.removeItem("user");
+} else {
+  localStorage.setItem("user", JSON.stringify(res.data.user));
+  localStorage.removeItem("artist");
+}
       showNotif("welcome", `Welcome to ArtSpire, ${res.data.user?.name}! 🎉`);
       setTimeout(() => navigate("/"), 1400);
     } catch (err) {
