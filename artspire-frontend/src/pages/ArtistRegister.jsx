@@ -99,25 +99,15 @@ export default function ArtistRegister() {
     return true;
   };
 
-  const handleNextStep = (e) => {
-    e.preventDefault(); // Prevents page refreshes inside individual steps
-    if (validateStep()) setStep((s) => s + 1);
-  };
-  
-  const prevStep = (e) => {
-    e.preventDefault();
-    setStep((s) => s - 1);
-  };
+  const nextStep = () => { if (validateStep()) setStep((s) => s + 1); };
+  const prevStep = () => setStep((s) => s - 1);
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+  const handleSubmit = async () => {
     if (!validateStep()) return;
-    
     showNotif("loading", "Creating your artist profile...", false);
     try {
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`, {        
-        name: formData.name,
+const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`, {        name: formData.name,
         email: formData.email,
         password: formData.password,
         category: formData.category,
@@ -178,22 +168,22 @@ export default function ArtistRegister() {
 
             {/* ── STEP 0: Account ── */}
             {step === 0 && (
-              <form onSubmit={handleNextStep} style={s.stepWrap}>
+              <div style={s.stepWrap}>
                 <div style={s.stepTitle}>Create Account</div>
                 <div style={s.stepSub}>Start your creative journey</div>
                 <div style={s.fields}>
-                  <Field label="Full Name" name="name" placeholder="Vandana Sharma" autoComplete="name" value={formData.name} onChange={handleChange} />
-                  <Field label="Email Address" name="email" type="email" placeholder="you@example.com" autoComplete="username" value={formData.email} onChange={handleChange} />
-                  <Field label="Password" name="password" type="password" placeholder="Min. 6 characters" autoComplete="new-password" value={formData.password} onChange={handleChange} />
-                  <Field label="Confirm Password" name="confirmPassword" type="password" placeholder="Repeat password" autoComplete="new-password" value={formData.confirmPassword} onChange={handleChange} />
+                  <Field label="Full Name" name="name" placeholder="Vandana Sharma" value={formData.name} onChange={handleChange} />
+                  <Field label="Email Address" name="email" type="email" placeholder="you@example.com" value={formData.email} onChange={handleChange} />
+                  <Field label="Password" name="password" type="password" placeholder="Min. 6 characters" value={formData.password} onChange={handleChange} />
+                  <Field label="Confirm Password" name="confirmPassword" type="password" placeholder="Repeat password" value={formData.confirmPassword} onChange={handleChange} />
                 </div>
-                <button type="submit" style={s.primaryBtn}>Continue →</button>
-              </form>
+                <button style={s.primaryBtn} onClick={nextStep}>Continue →</button>
+              </div>
             )}
 
             {/* ── STEP 1: Profile ── */}
             {step === 1 && (
-              <form onSubmit={handleNextStep} style={s.stepWrap}>
+              <div style={s.stepWrap}>
                 <div style={s.stepTitle}>Your Profile</div>
                 <div style={s.stepSub}>Tell us what you do</div>
                 <div style={s.fields}>
@@ -215,19 +205,19 @@ export default function ArtistRegister() {
                       ))}
                     </div>
                   </div>
-                  <Field label="City *" name="city" placeholder="Bangalore" autoComplete="address-level2" value={formData.city} onChange={handleChange} />
-                  <Field label="Instagram Handle (optional)" name="instagram" placeholder="yourhandle (without @)" autoComplete="off" value={formData.instagram} onChange={handleChange} />
+                  <Field label="City *" name="city" placeholder="Bangalore" value={formData.city} onChange={handleChange} />
+                  <Field label="Instagram Handle (optional)" name="instagram" placeholder="yourhandle (without @)" value={formData.instagram} onChange={handleChange} />
                 </div>
                 <div style={{ display:"flex", gap:"12px" }}>
-                  <button type="button" style={s.secondaryBtn} onClick={prevStep}>← Back</button>
-                  <button type="submit" style={{ ...s.primaryBtn, flex:1 }}>Continue →</button>
+                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
+                  <button style={{ ...s.primaryBtn, flex:1 }} onClick={nextStep}>Continue →</button>
                 </div>
-              </form>
+              </div>
             )}
 
             {/* ── STEP 2: Bio ── */}
             {step === 2 && (
-              <form onSubmit={handleSubmit} style={s.stepWrap}>
+              <div style={s.stepWrap}>
                 <div style={s.stepTitle}>About You</div>
                 <div style={s.stepSub}>Let the world know your story</div>
                 <div style={s.fields}>
@@ -251,12 +241,12 @@ export default function ArtistRegister() {
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:"12px" }}>
-                  <button type="button" style={s.secondaryBtn} onClick={prevStep}>← Back</button>
-                  <button type="submit" style={{ ...s.primaryBtn, flex:1, background:"linear-gradient(90deg,#4f46e5,#7c3aed)" }}>
+                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
+                  <button style={{ ...s.primaryBtn, flex:1, background:"linear-gradient(90deg,#4f46e5,#7c3aed)" }} onClick={handleSubmit}>
                     🎨 Join ArtSpire
                   </button>
                 </div>
-              </form>
+              </div>
             )}
 
           </div>
@@ -267,7 +257,7 @@ export default function ArtistRegister() {
 }
 
 // ── Reusable field ────────────────────────────────────────────────────────────
-function Field({ label, name, type = "text", placeholder, autoComplete, value, onChange }) {
+function Field({ label, name, type = "text", placeholder, value, onChange }) {
   return (
     <div style={s.fieldGroup}>
       <label style={s.fieldLabel}>{label}</label>
@@ -275,11 +265,9 @@ function Field({ label, name, type = "text", placeholder, autoComplete, value, o
         type={type}
         name={name}
         placeholder={placeholder}
-        autoComplete={autoComplete}
         value={value}
         onChange={onChange}
         style={s.input}
-        required={type !== "text" || name === "name" || name === "city"}
       />
     </div>
   );
