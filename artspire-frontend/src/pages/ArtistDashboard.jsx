@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import socket from "../socket";
@@ -31,6 +31,16 @@ function Toast({ msg, type, onClose }) {
   );
 }
 
+// ── Live indicator badge ───────────────────────────────────────────────────────
+function LiveBadge() {
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:5, background:"#fee2e2", color:"#dc2626", fontSize:11, fontWeight:800, padding:"3px 10px", borderRadius:20, fontFamily:"'Nunito',sans-serif", letterSpacing:0.5 }}>
+      <span style={{ width:7, height:7, borderRadius:"50%", background:"#dc2626", display:"inline-block", animation:"livePulse 1.2s ease-in-out infinite" }} />
+      LIVE
+    </span>
+  );
+}
+
 export default function ArtistDashboard() {
   const navigate = useNavigate();
   const fileRef  = useRef(null);
@@ -53,6 +63,12 @@ export default function ArtistDashboard() {
   const [postTitle, setPostTitle] = useState("");
   const [postType, setPostType]   = useState("image");
   const [postLoading, setPostLoading] = useState(false);
+  // Track IDs being deleted to show spinner
+  const [deletingIds, setDeletingIds] = useState(new Set());
+  // Track newly arrived real-time posts (for highlight animation)
+  const [newPostIds, setNewPostIds] = useState(new Set());
+  // Upload progress (0–100)
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // ── Messages ──
   const [messages, setMessages]   = useState([]);
@@ -64,7 +80,7 @@ export default function ArtistDashboard() {
   // ── Stats ──
   const [stats, setStats] = useState({ posts:0, messages:0, profileViews: Math.floor(Math.random()*200)+50, rating:5 });
 
-  const showToast = (msg, type="info") => setToast({ msg, type });
+  const showToast = useCallback((msg, type="info") => setToast({ msg, type }), []);
 
   // ── Init ─────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -75,8 +91,10 @@ export default function ArtistDashboard() {
     setArtist(a);
     setProfileForm({ name: a.name||"", bio: a.bio||"", city: a.city||"", instagram: a.instagram||"", category: a.category||"", experience: a.experience||"" });
 
-    // Socket
+    // ── Socket joins ──
     socket.emit("join_room", a._id);
+
+    // ── Real-time: incoming chat message ──
     socket.on("receive_message", (data) => {
       if (data.receiverId === a._id) {
         setMessages(prev => [data, ...prev]);
@@ -84,13 +102,48 @@ export default function ArtistDashboard() {
         showToast(`New message from someone 💬`, "info");
       }
     });
-    socket.on("user_online", (id) => setOnlineUsers(prev => new Set([...prev, id])));
+
+    // ── Real-time: new post from ANY artist (broadcast by server) ──
+    socket.on("post_created", (post) => {
+      if (post.artistId === a._id) {
+        setPosts(prev => {
+          // Avoid duplicate if optimistic insert already happened
+          if (prev.some(p => p._id === post._id)) return prev;
+          const updated = [post, ...prev];
+          setStats(s => ({ ...s, posts: updated.length }));
+          return updated;
+        });
+        // Highlight the new post
+        setNewPostIds(prev => new Set([...prev, post._id]));
+        setTimeout(() => setNewPostIds(prev => { const n = new Set(prev); n.delete(post._id); return n; }), 2500);
+      }
+    });
+
+    // ── Real-time: post deleted by server confirmation or another session ──
+    socket.on("post_deleted", ({ postId, artistId }) => {
+      if (artistId === a._id) {
+        setPosts(prev => {
+          const updated = prev.filter(p => p._id !== postId);
+          setStats(s => ({ ...s, posts: updated.length }));
+          return updated;
+        });
+      }
+    });
+
+    // ── Online presence ──
+    socket.on("user_online",  (id) => setOnlineUsers(prev => new Set([...prev, id])));
     socket.on("user_offline", (id) => setOnlineUsers(prev => { const n = new Set(prev); n.delete(id); return n; }));
 
     fetchPosts(a._id);
     fetchMessages(a._id);
 
-    return () => { socket.off("receive_message"); socket.off("user_online"); socket.off("user_offline"); };
+    return () => {
+      socket.off("receive_message");
+      socket.off("post_created");
+      socket.off("post_deleted");
+      socket.off("user_online");
+      socket.off("user_offline");
+    };
   }, []);
 
   const fetchPosts = async (id) => {
@@ -161,31 +214,113 @@ export default function ArtistDashboard() {
     } catch { showToast("Save failed. Try again.", "error"); }
   };
 
-  // ── Upload post ──────────────────────────────────────────────────────────
+  // ── Upload post (real-time: optimistic insert + socket broadcast) ─────────
   const handlePostUpload = async () => {
     if (!postMedia) { showToast("Please select a file", "error"); return; }
     setPostLoading(true);
+    setUploadProgress(0);
+
+    // ── Optimistic placeholder ──
+    const tempId = `temp_${Date.now()}`;
+    const optimisticPost = {
+      _id: tempId,
+      artistId: artist._id,
+      media: URL.createObjectURL(postMedia),
+      type: postType,
+      title: postTitle,
+      createdAt: new Date().toISOString(),
+      _optimistic: true,
+    };
+    setPosts(prev => {
+      const updated = [optimisticPost, ...prev];
+      setStats(s => ({ ...s, posts: updated.length }));
+      return updated;
+    });
+    setNewPostIds(prev => new Set([...prev, tempId]));
+
     try {
       const fd = new FormData();
       fd.append("image", postMedia);
-      const upRes = await axios.post(`${API}/api/upload`, fd, { headers: { "Content-Type": "multipart/form-data" } });
+
+      // Track real upload progress
+      const upRes = await axios.post(`${API}/api/upload`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (e) => {
+          if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 100));
+        },
+      });
       const url = upRes.data.url || upRes.data.imageUrl || upRes.data.path;
-      await axios.post(`${API}/api/posts`, { artistId: artist._id, media: url, type: postType, title: postTitle });
-      showToast("Post uploaded! 🎨", "success");
+
+      const postRes = await axios.post(`${API}/api/posts`, {
+        artistId: artist._id,
+        media: url,
+        type: postType,
+        title: postTitle,
+      });
+
+      const savedPost = postRes.data;
+
+      // Replace optimistic entry with real server post
+      setPosts(prev => {
+        const updated = prev.map(p => p._id === tempId ? savedPost : p);
+        setStats(s => ({ ...s, posts: updated.length }));
+        return updated;
+      });
+      setNewPostIds(prev => { const n = new Set(prev); n.delete(tempId); n.add(savedPost._id); return n; });
+      setTimeout(() => setNewPostIds(prev => { const n = new Set(prev); n.delete(savedPost._id); return n; }), 2500);
+
+      // ── Broadcast to all connected sessions via socket ──
+      socket.emit("post_created", savedPost);
+
+      showToast("Post published! 🎨", "success");
       setPostMedia(null);
       setPostTitle("");
-      fetchPosts(artist._id);
-    } catch { showToast("Upload failed.", "error"); }
+      setUploadProgress(0);
+      setTab("portfolio");
+    } catch {
+      // Roll back optimistic insert on failure
+      setPosts(prev => {
+        const updated = prev.filter(p => p._id !== tempId);
+        setStats(s => ({ ...s, posts: updated.length }));
+        return updated;
+      });
+      setNewPostIds(prev => { const n = new Set(prev); n.delete(tempId); return n; });
+      showToast("Upload failed.", "error");
+      setUploadProgress(0);
+    }
     setPostLoading(false);
   };
 
-  // ── Delete post ──────────────────────────────────────────────────────────
+  // ── Delete post (real-time: optimistic remove + socket broadcast) ─────────
   const deletePost = async (postId) => {
+    // Mark as deleting
+    setDeletingIds(prev => new Set([...prev, postId]));
+
+    // Optimistic remove
+    const removedPost = posts.find(p => p._id === postId);
+    setPosts(prev => {
+      const updated = prev.filter(p => p._id !== postId);
+      setStats(s => ({ ...s, posts: updated.length }));
+      return updated;
+    });
+
     try {
       await axios.delete(`${API}/api/posts/${postId}`);
-      setPosts(prev => prev.filter(p => p._id !== postId));
+      // ── Broadcast deletion to all connected sessions ──
+      socket.emit("post_deleted", { postId, artistId: artist._id });
       showToast("Post deleted", "info");
-    } catch { showToast("Delete failed", "error"); }
+    } catch {
+      // Roll back on failure
+      if (removedPost) {
+        setPosts(prev => {
+          const updated = [removedPost, ...prev];
+          setStats(s => ({ ...s, posts: updated.length }));
+          return updated;
+        });
+      }
+      showToast("Delete failed", "error");
+    }
+    setDeletingIds(prev => { const n = new Set(prev); n.delete(postId); return n; });
   };
 
   // ── Logout ────────────────────────────────────────────────────────────────
@@ -216,13 +351,16 @@ export default function ArtistDashboard() {
     <div style={s.page}>
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
-        @keyframes toastIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
-        @keyframes fadeUp  { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes toastIn   { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes fadeUp    { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes newPost   { 0%,100% { box-shadow:0 0 0 0 rgba(30,58,138,0); } 50% { box-shadow:0 0 0 6px rgba(30,58,138,0.35); } }
+        @keyframes livePulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.5); } }
         .dash-tab:hover  { background: rgba(30,58,138,0.08) !important; }
         .stat-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(30,58,138,0.15) !important; }
         .post-card:hover { transform: scale(1.02); }
         .action-btn:hover { transform: translateY(-2px); }
         input:focus, textarea:focus, select:focus { border-color: #1e3a8a !important; outline: none; }
+        .post-new { animation: newPost 0.8s ease 2; }
       `}</style>
 
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg:"", type:"info" })} />
@@ -290,7 +428,10 @@ export default function ArtistDashboard() {
         {/* ── OVERVIEW TAB ── */}
         {tab === "overview" && (
           <div style={{ animation:"fadeUp 0.4s ease both" }}>
-            <div style={s.sectionTitle}>Dashboard Overview</div>
+            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+              <div style={s.sectionTitle}>Dashboard Overview</div>
+              <LiveBadge />
+            </div>
 
             {/* Stats */}
             <div style={s.statsGrid}>
@@ -309,7 +450,10 @@ export default function ArtistDashboard() {
             </div>
 
             {/* Recent posts preview */}
-            <div style={s.sectionTitle}>Recent Posts</div>
+            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+              <div style={s.sectionTitle}>Recent Posts</div>
+              <LiveBadge />
+            </div>
             {posts.length === 0 ? (
               <div style={s.empty}>
                 <div style={{ fontSize:48, marginBottom:12 }}>🎭</div>
@@ -318,10 +462,19 @@ export default function ArtistDashboard() {
               </div>
             ) : (
               <div style={s.postsGrid}>
-                {posts.slice(0,6).map((p, i) => (
-                  <div key={p._id} className="post-card" style={{ ...s.postThumb, transition:"transform 0.2s" }}>
+                {posts.slice(0,6).map((p) => (
+                  <div
+                    key={p._id}
+                    className={`post-card${newPostIds.has(p._id) ? " post-new" : ""}`}
+                    style={{ ...s.postThumb, transition:"transform 0.2s", opacity: p._optimistic ? 0.65 : 1 }}
+                  >
                     <img src={p.media} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                     {p.title && <div style={s.postLabel}>{p.title}</div>}
+                    {p._optimistic && (
+                      <div style={s.uploadingOverlay}>
+                        <span style={{ fontSize:11, fontWeight:800, color:"#fff" }}>Uploading…</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -393,7 +546,10 @@ export default function ArtistDashboard() {
         {tab === "portfolio" && (
           <div style={{ animation:"fadeUp 0.4s ease both" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
-              <div style={s.sectionTitle}>My Portfolio ({posts.length} works)</div>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <div style={s.sectionTitle}>My Portfolio ({posts.length} works)</div>
+                <LiveBadge />
+              </div>
               <button style={s.primaryBtn} onClick={() => setTab("upload")}>+ Add Work</button>
             </div>
             {posts.length === 0 ? (
@@ -404,19 +560,36 @@ export default function ArtistDashboard() {
               </div>
             ) : (
               <div style={s.portfolioGrid}>
-                {posts.map((p, i) => (
-                  <div key={p._id} style={s.portfolioCard}>
+                {posts.map((p) => (
+                  <div
+                    key={p._id}
+                    className={newPostIds.has(p._id) ? "post-new" : ""}
+                    style={{ ...s.portfolioCard, opacity: p._optimistic ? 0.65 : 1, position:"relative" }}
+                  >
                     <div style={s.portfolioThumb}>
                       {p.type === "video"
                         ? <video src={p.media} style={{ width:"100%", height:"100%", objectFit:"cover" }} muted />
                         : <img src={p.media} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                       }
                       <div style={s.thumbBadge}>{p.type === "video" ? "▶ Video" : "🖼 Image"}</div>
+                      {p._optimistic && (
+                        <div style={s.uploadingOverlay}>
+                          <span style={{ fontSize:11, fontWeight:800, color:"#fff" }}>Uploading…</span>
+                        </div>
+                      )}
                     </div>
                     {p.title && <div style={s.portfolioTitle}>{p.title}</div>}
                     <div style={s.portfolioMeta}>
-                      <span style={{ fontSize:12, color:"#94a3b8" }}>{new Date(p.createdAt).toLocaleDateString()}</span>
-                      <button style={s.deleteBtn} onClick={() => deletePost(p._id)}>🗑 Delete</button>
+                      <span style={{ fontSize:12, color:"#94a3b8" }}>
+                        {p._optimistic ? "Just now" : new Date(p.createdAt).toLocaleDateString()}
+                      </span>
+                      <button
+                        style={{ ...s.deleteBtn, opacity: deletingIds.has(p._id) ? 0.5 : 1 }}
+                        disabled={deletingIds.has(p._id) || p._optimistic}
+                        onClick={() => deletePost(p._id)}
+                      >
+                        {deletingIds.has(p._id) ? "⏳" : "🗑 Delete"}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -428,7 +601,10 @@ export default function ArtistDashboard() {
         {/* ── MESSAGES TAB ── */}
         {tab === "messages" && (
           <div style={{ animation:"fadeUp 0.4s ease both" }}>
-            <div style={s.sectionTitle}>Messages & Conversations</div>
+            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+              <div style={s.sectionTitle}>Messages & Conversations</div>
+              <LiveBadge />
+            </div>
             {messages.length === 0 ? (
               <div style={s.empty}>
                 <div style={{ fontSize:48, marginBottom:12 }}>💬</div>
@@ -498,6 +674,18 @@ export default function ArtistDashboard() {
                 )}
               </div>
 
+              {/* Upload progress bar */}
+              {postLoading && (
+                <div style={{ width:"100%", background:"#e2e8f0", borderRadius:99, height:8, overflow:"hidden" }}>
+                  <div style={{ height:"100%", borderRadius:99, background:"#1e3a8a", width:`${uploadProgress}%`, transition:"width 0.3s ease" }} />
+                </div>
+              )}
+              {postLoading && (
+                <div style={{ fontSize:12, color:"#64748b", fontWeight:700, textAlign:"center" }}>
+                  {uploadProgress < 100 ? `Uploading… ${uploadProgress}%` : "Saving post…"}
+                </div>
+              )}
+
               {/* Title input */}
               <div style={s.fieldGroup}>
                 <label style={s.fieldLabel}>Title / Caption</label>
@@ -527,7 +715,7 @@ export default function ArtistDashboard() {
                 onClick={handlePostUpload}
                 disabled={postLoading}
               >
-                {postLoading ? "Uploading... ⏳" : "🚀 Publish Work"}
+                {postLoading ? `Uploading… ${uploadProgress}%` : "🚀 Publish Work"}
               </button>
             </div>
           </div>
@@ -569,7 +757,7 @@ const s = {
   tabActive:    { background:"#1e3a8a", color:"#fff" },
 
   content:      { maxWidth:1100, margin:"0 auto", padding:"32px 24px" },
-  sectionTitle: { fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:"#1e3a8a", letterSpacing:1, marginBottom:20 },
+  sectionTitle: { fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:"#1e3a8a", letterSpacing:1, marginBottom:0 },
 
   statsGrid:    { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:16, marginBottom:32 },
   statCard:     { borderRadius:16, padding:"24px 20px", textAlign:"center", boxShadow:"0 2px 12px rgba(0,0,0,0.06)" },
@@ -577,6 +765,7 @@ const s = {
   postsGrid:    { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))", gap:12 },
   postThumb:    { aspectRatio:"3/4", borderRadius:12, overflow:"hidden", position:"relative", background:"#e2e8f0", cursor:"pointer" },
   postLabel:    { position:"absolute", bottom:0, left:0, right:0, background:"rgba(0,0,0,0.6)", color:"#fff", fontSize:11, fontWeight:700, padding:"6px 10px", fontFamily:"'Nunito',sans-serif" },
+  uploadingOverlay: { position:"absolute", inset:0, background:"rgba(30,58,138,0.45)", display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(2px)" },
 
   profileCard:  { background:"#fff", borderRadius:20, padding:28, boxShadow:"0 4px 24px rgba(0,0,0,0.07)", display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 },
   fieldGroup:   { display:"flex", flexDirection:"column", gap:6, gridColumn:"span 1" },
