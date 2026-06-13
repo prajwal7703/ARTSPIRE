@@ -1,45 +1,28 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const User = require("../models/User");
+const User = require('../models/User');
+const Artist = require('../models/Artist');
 
-// GET ALL ARTISTS (for chat sidebar)
-router.get("/artists/all", async (req, res) => {
+router.get('/artists/all', async (req, res) => {
   try {
-    const artists = await User.find({ role: "artist" });
+    const artists = await User.find({ role: 'artist' });
     res.json(artists);
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  } catch (err) { res.status(500).json(err); }
 });
 
-// GET ALL USERS
-router.get("/", async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const users = await User.find({ role: "user" });
+    const users = await User.find();
     res.json(users);
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  } catch (err) { res.status(500).json(err); }
 });
 
-// GET ONE USER
-router.get("/:id", async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
     res.json(user);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
-
-// UPDATE USER
-router.put("/:id", async (req, res) => {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(user);
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  } catch (err) { res.status(500).json(err); }
 });
 
 module.exports = router;

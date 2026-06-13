@@ -1,91 +1,37 @@
-const Message =
-require("../models/Message");
+const Message = require('../models/Message');
 
-
-// SEND MESSAGE
-
-const sendMessage = async (req, res) => {
-
+exports.sendMessage = async (req, res) => {
   try {
-
-    const {
-      senderId,
-      receiverId,
-      message,
-    } = req.body;
-
-
-    const newMessage =
-      await Message.create({
-
-        senderId,
-        receiverId,
-        message,
-
-      });
-
-
-    res.status(201).json(
-      newMessage
-    );
-
-  } catch (error) {
-
-    res.status(500).json({
-      message: error.message,
+    const { senderId, receiverId, message, mediaUrl, mediaType } = req.body;
+    if (!senderId || !receiverId) {
+      return res.status(400).json({ message: 'senderId and receiverId required' });
+    }
+    const newMessage = new Message({
+      senderId, receiverId,
+      message: message || '',
+      mediaUrl: mediaUrl || null,
+      mediaType: mediaType || null,
     });
-
+    await newMessage.save();
+    res.json({ success: true, message: newMessage });
+  } catch (err) {
+    console.error('Send message error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
-
 };
 
-
-// GET MESSAGES
-
-const getMessages = async (req, res) => {
-
+exports.getMessages = async (req, res) => {
   try {
-
-    const {
-      senderId,
-      receiverId,
-    } = req.params;
-
-
-    const messages =
-      await Message.find({
-
-        $or: [
-
-          {
-            senderId,
-            receiverId,
-          },
-
-          {
-            senderId: receiverId,
-            receiverId: senderId,
-          },
-
-        ],
-
-      }).sort({ createdAt: 1 });
-
-
+    const { senderId, receiverId } = req.params;
+    const messages = await Message.find({
+      $or: [
+        { senderId, receiverId },
+        { senderId: receiverId, receiverId: senderId },
+      ],
+    }).sort({ createdAt: 1 });
     res.json(messages);
-
-  } catch (error) {
-
-    res.status(500).json({
-      message: error.message,
-    });
-
+  } catch (err) {
+    console.error('Get messages error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
-
-};
-
-
-module.exports = {
-  sendMessage,
-  getMessages,
 };
