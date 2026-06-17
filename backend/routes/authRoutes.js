@@ -3,8 +3,8 @@ const router   = express.Router();
 const bcrypt   = require("bcryptjs");
 const jwt      = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
-const Artist   = require("../models/user");   // artist model
-const User     = require("../models/User");   // user model
+const Artist   = require("../models/Artist");  // ✅ fixed capitalisation
+const User     = require("../models/User");    // ✅ correct
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
