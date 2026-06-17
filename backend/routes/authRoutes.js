@@ -4,7 +4,7 @@ const bcrypt   = require("bcryptjs");
 const jwt      = require("jsonwebtoken");
 const { Resend } = require("resend");
 const Artist   = require("../models/Artist");  // ✅ fixed capitalisation
-const User     = require("../models/User");    // ✅ correct
+const User     = require("../models/Artist");    // ✅ correct
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
