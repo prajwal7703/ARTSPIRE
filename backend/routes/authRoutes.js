@@ -2,7 +2,7 @@ const express  = require("express");
 const router   = express.Router();
 const bcrypt   = require("bcryptjs");
 const jwt      = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const Artist   = require("../models/Artist");  // ✅ fixed capitalisation
 const User     = require("../models/User");    // ✅ correct
 
@@ -12,20 +12,8 @@ if (!JWT_SECRET) {
   process.exit(1);
 }
 
-// ── EMAIL TRANSPORTER ────────────────────────────────────────────────────────
-// ✅ Port 465 + secure:true — Render free tier blocks port 587
-const transporter = nodemailer.createTransport({
-  host:   "smtp.gmail.com",
-  port:   465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  connectionTimeout: 10000,
-  greetingTimeout:   10000,
-  socketTimeout:     10000,
-});
+// ── EMAIL CLIENT (Resend — works on Render free tier via HTTPS) ──────────────
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // 🎨 ARTIST REGISTER
 router.post("/register", async (req, res) => {
@@ -130,9 +118,9 @@ router.post("/forgot-password", async (req, res) => {
 
     const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
 
-    // Send email
-    await transporter.sendMail({
-      from:    `"ArtSpire" <${process.env.EMAIL_USER}>`,
+    // Send email via Resend (HTTPS — works on Render free tier)
+    await resend.emails.send({
+      from:    "ArtSpire <onboarding@resend.dev>",
       to:      email,
       subject: "ArtSpire — Reset Your Password",
       html: `
