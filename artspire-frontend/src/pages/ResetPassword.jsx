@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+
 const NOTIF_THEMES = {
   loading: { bg: "#dbeafe", color: "#1e3a5f", border: "#93c5fd" },
   success: { bg: "#dcfce7", color: "#14532d", border: "#86efac" },
@@ -52,9 +54,11 @@ export default function ResetPassword() {
   const [done, setDone] = useState(false);
   const [notif, setNotif] = useState(null);
   const notifTimer = useRef(null);
-useEffect(() => {
+
+  useEffect(() => {
     return () => clearTimeout(notifTimer.current);
   }, []);
+
   function showNotif(type, message, autoDismiss = true) {
     clearTimeout(notifTimer.current);
     setNotif({ type, message });
@@ -63,24 +67,16 @@ useEffect(() => {
     }
   }
 
-  // No token in URL
   if (!token) {
     return (
-      <div style={{
-        minHeight:"100vh", background:"linear-gradient(135deg,#4f46e5,#7c3aed,#312e81)",
-        display:"flex", justifyContent:"center", alignItems:"center",
-      }}>
+      <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#4f46e5,#7c3aed,#312e81)", display:"flex", justifyContent:"center", alignItems:"center" }}>
         <div style={{ background:"white", borderRadius:"24px", padding:"40px", textAlign:"center", maxWidth:"380px" }}>
           <div style={{ fontSize:"48px", marginBottom:"16px" }}>⚠️</div>
           <h2 style={{ color:"#7f1d1d", marginBottom:"8px" }}>Invalid Link</h2>
           <p style={{ color:"#94a3b8", fontSize:"14px", marginBottom:"24px" }}>
             This reset link is missing or invalid. Please request a new one.
           </p>
-          <button onClick={() => navigate("/forgot-password")} style={{
-            padding:"12px 28px", border:"none", borderRadius:"50px",
-            background:"linear-gradient(90deg,#4f46e5,#7c3aed)", color:"white",
-            fontWeight:"bold", fontSize:"15px", cursor:"pointer",
-          }}>
+          <button onClick={() => navigate("/forgot-password")} style={{ padding:"12px 28px", border:"none", borderRadius:"50px", background:"linear-gradient(90deg,#4f46e5,#7c3aed)", color:"white", fontWeight:"bold", fontSize:"15px", cursor:"pointer" }}>
             Request New Link
           </button>
         </div>
@@ -98,7 +94,11 @@ useEffect(() => {
     }
     showNotif("loading", "Resetting your password...", false);
     try {
-      await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/reset-password/${token}`, { newPassword });
+      // ✅ FIX: token sent in request BODY, not as URL parameter
+      await axios.post(`${API}/api/auth/reset-password`, {
+        token,
+        newPassword,
+      });
       setNotif(null);
       setDone(true);
     } catch (err) {
@@ -109,17 +109,8 @@ useEffect(() => {
   return (
     <>
       <NotifBar notif={notif} onClose={() => setNotif(null)} />
-      <div style={{
-        minHeight:"100vh",
-        background:"linear-gradient(135deg,#4f46e5,#7c3aed,#312e81)",
-        display:"flex", justifyContent:"center", alignItems:"center", padding:"30px",
-      }}>
-        <div style={{
-          width:"100%", maxWidth:"460px", background:"white",
-          borderRadius:"32px", padding:"48px 40px",
-          boxShadow:"0 20px 60px rgba(0,0,0,0.4)",
-          display:"flex", flexDirection:"column", alignItems:"center", gap:"20px",
-        }}>
+      <div style={{ minHeight:"100vh", background:"linear-gradient(135deg,#4f46e5,#7c3aed,#312e81)", display:"flex", justifyContent:"center", alignItems:"center", padding:"30px" }}>
+        <div style={{ width:"100%", maxWidth:"460px", background:"white", borderRadius:"32px", padding:"48px 40px", boxShadow:"0 20px 60px rgba(0,0,0,0.4)", display:"flex", flexDirection:"column", alignItems:"center", gap:"20px" }}>
 
           {/* Logo */}
           <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
@@ -151,11 +142,7 @@ useEffect(() => {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
-                    style={{
-                      padding:"16px", borderRadius:"50px",
-                      border:"1px solid #d1d5db", outline:"none", fontSize:"16px",
-                      boxSizing:"border-box", width:"100%",
-                    }}
+                    style={{ padding:"16px", borderRadius:"50px", border:"1px solid #d1d5db", outline:"none", fontSize:"16px", boxSizing:"border-box", width:"100%" }}
                   />
                 </div>
 
@@ -169,39 +156,26 @@ useEffect(() => {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
-                    style={{
-                      padding:"16px", borderRadius:"50px",
-                      border:"1px solid #d1d5db", outline:"none", fontSize:"16px",
-                      boxSizing:"border-box", width:"100%",
-                    }}
+                    style={{ padding:"16px", borderRadius:"50px", border:"1px solid #d1d5db", outline:"none", fontSize:"16px", boxSizing:"border-box", width:"100%" }}
                   />
                 </div>
 
-                {/* Password strength hint */}
+                {/* Password strength */}
                 {newPassword.length > 0 && (
                   <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-                    <div style={{
-                      flex:1, height:"4px", borderRadius:"2px",
-                      background: newPassword.length < 6 ? "#fca5a5" : newPassword.length < 10 ? "#fcd34d" : "#86efac",
-                      transition:"background 0.3s",
-                    }} />
+                    <div style={{ flex:1, height:"4px", borderRadius:"2px", background: newPassword.length < 6 ? "#fca5a5" : newPassword.length < 10 ? "#fcd34d" : "#86efac", transition:"background 0.3s" }} />
                     <span style={{ fontSize:"12px", fontWeight:700, color: newPassword.length < 6 ? "#ef4444" : newPassword.length < 10 ? "#f59e0b" : "#22c55e" }}>
-                      {newPassword.length < 6 ? "Too short" : newPassword.length < 10 ? "Good" : "Strong"}
+                      {newPassword.length < 6 ? "Too short" : newPassword.length < 10 ? "Good" : "Strong ✅"}
                     </span>
                   </div>
                 )}
 
-                <button type="submit" style={{
-                  padding:"16px", border:"none", borderRadius:"50px",
-                  background:"linear-gradient(90deg,#4f46e5,#7c3aed)",
-                  color:"white", fontSize:"17px", fontWeight:"bold", cursor:"pointer", marginTop:"4px",
-                }}>
+                <button type="submit" style={{ padding:"16px", border:"none", borderRadius:"50px", background:"linear-gradient(90deg,#4f46e5,#7c3aed)", color:"white", fontSize:"17px", fontWeight:"bold", cursor:"pointer", marginTop:"4px" }}>
                   Reset Password
                 </button>
               </form>
             </>
           ) : (
-            /* ── Success state ── */
             <>
               <div style={{ width:"80px", height:"80px", background:"#dcfce7", borderRadius:"50%", display:"flex", justifyContent:"center", alignItems:"center", fontSize:"40px" }}>
                 ✅
@@ -209,16 +183,12 @@ useEffect(() => {
               <div style={{ textAlign:"center" }}>
                 <h1 style={{ fontSize:"26px", color:"#14532d", fontWeight:"bold", margin:"0 0 10px" }}>Password Reset!</h1>
                 <p style={{ color:"#64748b", fontSize:"14px", fontWeight:600, lineHeight:1.6, margin:0 }}>
-                  Your password has been updated successfully. You can now log in with your new password.
+                  Your password has been updated. You can now log in with your new password.
                 </p>
               </div>
               <button
                 onClick={() => navigate("/login")}
-                style={{
-                  padding:"14px 36px", border:"none", borderRadius:"50px",
-                  background:"linear-gradient(90deg,#4f46e5,#7c3aed)",
-                  color:"white", fontSize:"16px", fontWeight:"bold", cursor:"pointer",
-                }}
+                style={{ padding:"14px 36px", border:"none", borderRadius:"50px", background:"linear-gradient(90deg,#4f46e5,#7c3aed)", color:"white", fontSize:"16px", fontWeight:"bold", cursor:"pointer" }}
               >
                 Go to Login →
               </button>
