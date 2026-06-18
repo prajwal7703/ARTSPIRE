@@ -3,7 +3,7 @@ import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import BookingModal from "../components/BookingModal";
 
-const API = import.meta.env.VITE_API_URL;
+const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 function getId(obj) {
   if (!obj) return undefined;
@@ -27,8 +27,8 @@ function getSkills(cat) { return CATEGORY_SKILLS[cat] || CATEGORY_SKILLS.default
 
 const DotGrid = () => (
   <svg style={{ position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.18,pointerEvents:"none" }} xmlns="http://www.w3.org/2000/svg">
-    <defs><pattern id="dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.5" fill="#1e3a8a" /></pattern></defs>
-    <rect width="100%" height="100%" fill="url(#dots)" />
+    <defs><pattern id="dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.5" fill="#1e3a8a"/></pattern></defs>
+    <rect width="100%" height="100%" fill="url(#dots)"/>
   </svg>
 );
 
@@ -36,18 +36,17 @@ export default function ArtistProfile() {
   const { id }   = useParams();
   const navigate = useNavigate();
 
-  const [artist, setArtist]         = useState(null);
-  const [posts, setPosts]           = useState([]);
-  const [lightbox, setLightbox]     = useState(null);
+  const [artist,      setArtist]      = useState(null);
+  const [posts,       setPosts]       = useState([]);
+  const [lightbox,    setLightbox]    = useState(null);
   const [showBooking, setShowBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
+  const [mobileMenu,  setMobileMenu]  = useState(false);
+  const [activeTab,   setActiveTab]   = useState("portfolio");
 
-  const loggedArtistRaw = localStorage.getItem("artist");
-  const loggedUserRaw   = localStorage.getItem("user");
-  let loggedArtist = null;
-  let loggedUser   = null;
-  try { loggedArtist = loggedArtistRaw ? JSON.parse(loggedArtistRaw) : null; } catch {}
-  try { loggedUser   = loggedUserRaw   ? JSON.parse(loggedUserRaw)   : null; } catch {}
+  let loggedArtist = null, loggedUser = null;
+  try { loggedArtist = JSON.parse(localStorage.getItem("artist") || "null"); } catch {}
+  try { loggedUser   = JSON.parse(localStorage.getItem("user")   || "null"); } catch {}
 
   const currentUser = loggedUser || loggedArtist;
   const isLoggedIn  = !!(loggedArtist || loggedUser);
@@ -55,305 +54,330 @@ export default function ArtistProfile() {
   const isOwner     = role === "artist" && getId(loggedArtist) === id;
 
   useEffect(() => {
-    if (!isLoggedIn) { navigate("/login"); return; }
     fetchArtist();
     fetchPosts();
     if (!isOwner) axios.post(`${API}/api/users/${id}/view`).catch(() => {});
   }, [id]);
 
   const fetchArtist = async () => {
-    try { const res = await axios.get(`${API}/api/artists/${id}`); setArtist(res.data); }
-    catch (err) { console.log(err); }
+    try {
+      const res = await axios.get(`${API}/api/users`);
+      const all = Array.isArray(res.data) ? res.data : [];
+      const found = all.find(u => u._id === id || getId(u) === id);
+      if (found) setArtist(found);
+    } catch(err) { console.log("fetchArtist error:", err); }
   };
 
   const fetchPosts = async () => {
-    try { const res = await axios.get(`${API}/api/posts`); setPosts(res.data.filter(p => p.artistId === id)); }
-    catch (err) { console.log(err); }
+    try {
+      const res = await axios.get(`${API}/api/posts`);
+      setPosts(res.data.filter(p => p.artistId === id));
+    } catch(err) { console.log("fetchPosts error:", err); }
   };
 
-  const getInitials = (name) => name ? name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "A";
+  const getInitials = (name) => name ? name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) : "A";
 
   const handleLogout = () => {
     localStorage.removeItem("artist");
     localStorage.removeItem("user");
     localStorage.removeItem("token");
-    navigate("/login");
+    navigate("/artist-login");
   };
 
-  if (!isLoggedIn) return null;
   if (!artist) return (
-    <div style={{ background:"#f0f4ff",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
-      <div style={{ fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",color:"#1e3a8a",letterSpacing:"3px" }}>LOADING PROFILE...</div>
+    <div style={{ background:"#f0f4ff", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@700;800&display=swap" rel="stylesheet"/>
+      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:36, color:"#1e3a8a", letterSpacing:3 }}>LOADING...</div>
     </div>
   );
 
   const skills = getSkills(artist.category);
 
   return (
-    <div style={s.page}>
-      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <div style={{ fontFamily:"'Nunito',sans-serif", minHeight:"100vh", background:"#f0f4ff", overflowX:"hidden" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
       <style>{`
+        * { box-sizing:border-box; }
         @keyframes fadeUp  { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
         @keyframes slideIn { from{opacity:0;transform:translateX(-20px)} to{opacity:1;transform:translateX(0)} }
-        .post-thumb:hover { transform:scale(1.04); box-shadow:0 8px 30px rgba(30,58,138,0.25); }
+        @keyframes slideDown { from{opacity:0;transform:translateY(-10px)} to{opacity:1;transform:translateY(0)} }
+        .post-thumb:hover { transform:scale(1.04); box-shadow:0 8px 30px rgba(30,58,138,0.3)!important; }
         .post-thumb:hover .thumb-icon { opacity:1!important; }
-        .skill-pill:hover { background:#1e3a8a!important; color:#fff!important; }
-        .action-btn { position:relative; z-index:20; cursor:pointer!important; pointer-events:all!important; }
-        .action-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(30,58,138,0.3); }
-        @media(max-width:600px){.vertical-sidebar{display:none!important}.blue-section-content{padding:32px 20px!important}.action-row-wrap{flex-direction:column!important}}
+        .skill-pill:hover { background:#fff!important; color:#1e3a8a!important; }
+        .action-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.2); }
+        @media (max-width:768px) {
+          .hero-content { flex-direction:column!important; padding:20px!important; }
+          .hero-left { max-width:100%!important; }
+          .hero-right { width:100%!important; display:flex!important; flex-direction:column!important; align-items:center!important; }
+          .profile-photo-wrap { width:180px!important; height:220px!important; }
+          .big-title { font-size:clamp(36px,10vw,64px)!important; }
+          .big-category { font-size:clamp(28px,8vw,50px)!important; }
+          .stats-card { width:100%!important; max-width:300px!important; }
+          .book-card { width:100%!important; max-width:340px!important; }
+          .blue-section { flex-direction:column!important; }
+          .vertical-sidebar { display:none!important; }
+          .blue-content { padding:28px 20px!important; }
+          .portfolio-grid { grid-template-columns:repeat(2,1fr)!important; gap:8px!important; }
+          .action-row { gap:8px!important; }
+          .action-row button { flex:1!important; min-width:120px!important; padding:11px 16px!important; font-size:13px!important; }
+          .nav-desktop { display:none!important; }
+          .nav-mobile-btn { display:flex!important; }
+          .top-nav { padding:12px 16px!important; }
+        }
+        @media (min-width:769px) {
+          .nav-mobile-btn { display:none!important; }
+          .mobile-menu-panel { display:none!important; }
+        }
       `}</style>
 
-      {/* HERO */}
-      <div style={s.heroSection}>
-        <DotGrid />
-        <div style={s.topNav}>
-          <button style={s.navLink} onClick={() => navigate("/artists")}>← Artists</button>
-          <div style={s.navLinks}>
-            <button style={s.navItemBtn} onClick={() => navigate("/")}>🏠 Home</button>
-            <span style={s.navItem}>Profile</span>
-            <span style={s.navItem}>Posts</span>
-          </div>
-          <div style={{ display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap" }}>
-            {isOwner
-              ? <button style={s.navActionBtn} onClick={() => navigate("/artist-dashboard")}>✏️ Edit</button>
-              : <>
-                  <button style={s.navActionBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
-                  {/* ✅ BOOK NOW button — only for non-owners */}
-                  <button style={{ ...s.navActionBtn, background:"#16a34a" }} onClick={() => setShowBooking(true)}>
-                    📅 Book Now
-                  </button>
-                </>
+      {/* LIGHTBOX */}
+      {lightbox && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(8px)" }} onClick={()=>setLightbox(null)}>
+          <button style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,0.1)", border:"none", color:"#fff", width:40, height:40, borderRadius:"50%", fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
+          <div onClick={e=>e.stopPropagation()} style={{ borderRadius:16, overflow:"hidden", maxWidth:"90vw", maxHeight:"90vh" }}>
+            {lightbox.type === "video"
+              ? <video src={lightbox.media} controls style={{ maxWidth:"85vw", maxHeight:"85vh", display:"block" }} />
+              : <img src={lightbox.media} alt="" style={{ maxWidth:"85vw", maxHeight:"85vh", objectFit:"contain", display:"block" }} />
             }
-            <button style={{ ...s.navActionBtn,background:"#dc2626" }} onClick={handleLogout}>Logout</button>
+            {lightbox.title && <div style={{ background:"rgba(0,0,0,0.8)", color:"#fff", padding:"10px 16px", fontSize:13, fontWeight:700 }}>{lightbox.title}</div>}
           </div>
         </div>
+      )}
 
-        <div style={s.heroContent}>
-          <div style={s.heroLeft}>
-            <div style={s.bigTitleWrap}>
-              <div style={s.bigTitle}>{(artist.name || "ARTIST").toUpperCase()}</div>
-              <div style={s.bigCategory}>{(artist.category || "PORTFOLIO").toUpperCase()}</div>
-            </div>
-            <div style={s.aboutSection}>
-              <div style={s.sectionBadge}>About Me</div>
-              <p style={s.bioText}>
-                {artist.bio || `${artist.name} is a talented ${artist.category || "artist"} based in ${artist.city || "the world"}.`}
-              </p>
-              <div style={s.infoPills}>
-                {artist.city     && <span style={s.infoPill}>📍 {artist.city}</span>}
-                {artist.instagram && (
-                  <a href={`https://instagram.com/${artist.instagram}`} target="_blank" rel="noreferrer" style={{ textDecoration:"none" }}>
-                    <span style={{ ...s.infoPill,background:"#fff0e6",color:"#e8621a" }}>📸 @{artist.instagram}</span>
-                  </a>
-                )}
-                <span style={{ ...s.infoPill,background:"#e8f0ff",color:"#1e3a8a" }}>🎨 {posts.length} Posts</span>
-                <span style={{ ...s.infoPill,background:"#f0fdf4",color:"#14532d" }}>👁 {artist.profileViews || 0} views</span>
-                <span style={{ ...s.infoPill,background:isOwner?"#d1fae5":"#fef3c7",color:isOwner?"#065f46":"#92400e" }}>
-                  {isOwner ? "👑 Your Profile" : role === "user" ? "👤 Viewing as User" : "🎨 Artist View"}
-                </span>
-                {/* ✅ Booking confirmed badge */}
-                {bookingDone && <span style={{ ...s.infoPill,background:"#dcfce7",color:"#14532d" }}>✅ Booked!</span>}
-              </div>
-            </div>
-          </div>
-
-          <div style={s.heroRight}>
-            <div style={s.cornerTL} /><div style={s.cornerBR} />
-            <div style={s.profilePhotoWrap}>
-              {artist.profileImage
-                ? <img src={artist.profileImage} alt={artist.name} style={s.profilePhoto} />
-                : <div style={s.profileInitials}>{getInitials(artist.name)}</div>
-              }
-            </div>
-            <div style={s.statsCard}>
-              <div style={s.statItem}><div style={s.statNum}>{posts.length}</div><div style={s.statLbl}>Posts</div></div>
-              <div style={s.statDivider} />
-              <div style={s.statItem}><div style={s.statNum}>{artist.profileViews || 0}</div><div style={s.statLbl}>Views</div></div>
-              <div style={s.statDivider} />
-              <div style={s.statItem}><div style={s.statNum}>{artist.rating || 5}.0</div><div style={s.statLbl}>Rating</div></div>
-            </div>
-
-            {/* ✅ Book Now card — shown to non-owners */}
-            {!isOwner && (
-              <div style={s.bookCard}>
-                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:18, color:"#1e3a8a", letterSpacing:0.5, marginBottom:4 }}>
-                  {artist.price ? `From ₹${artist.price.toLocaleString()}` : "Available for Booking"}
-                </div>
-                <div style={{ fontSize:12, color:"#64748b", fontFamily:"'Nunito',sans-serif", marginBottom:12 }}>
-                  {artist.category} · {artist.city || "India"}
-                </div>
-                <button
-                  style={s.bookNowBtn}
-                  onClick={() => setShowBooking(true)}
-                >
-                  📅 Book Now
-                </button>
-                <button
-                  style={s.chatNowBtn}
-                  onClick={() => navigate(`/chat/${id}`)}
-                >
-                  💬 Chat First
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* BLUE SECTION */}
-      <div style={s.blueSection}>
-        <div className="vertical-sidebar" style={s.verticalLabel}>
-          <div style={s.verticalText}>{(artist.category || "ARTIST").toUpperCase()}</div>
-          <div style={s.verticalHandle}>aka {artist.instagram ? `@${artist.instagram}` : artist.name}</div>
-        </div>
-
-        <div className="blue-section-content" style={s.blueSectionContent}>
-          {/* Skills */}
-          <div style={{ marginBottom:"36px",animation:"fadeUp 0.5s ease both",animationDelay:"0.1s" }}>
-            <div style={s.blueBadge}>✦ Skills & Expertise</div>
-            <div style={s.skillsGrid}>
-              {skills.map((skill, i) => <span key={i} className="skill-pill" style={s.skillPill}>{skill}</span>)}
-            </div>
-          </div>
-
-          {/* Portfolio */}
-          <div style={{ animation:"fadeUp 0.5s ease both",animationDelay:"0.2s" }}>
-            <div style={s.portfolioHeaderRow}>
-              <div style={s.blueBadge}>🎨 My Portfolio</div>
-              <span style={s.postCount}>{posts.length} works</span>
-            </div>
-            {posts.length === 0
-              ? <div style={s.emptyPortfolio}><div style={{ fontSize:"48px",marginBottom:"12px" }}>🎭</div><div style={{ color:"rgba(255,255,255,0.6)",fontFamily:"'Nunito',sans-serif",fontSize:"15px" }}>No portfolio posts yet</div></div>
-              : <div style={s.portfolioGrid}>
-                  {posts.map((post, i) => (
-                    <div key={post._id} className="post-thumb" onClick={() => setLightbox(post)} style={{ ...s.portfolioThumb,animationDelay:`${0.05*i}s` }}>
-                      {post.type === "image"
-                        ? <img src={post.media} alt="" style={s.thumbMedia} />
-                        : <video src={post.media} style={s.thumbMedia} muted />
-                      }
-                      <div className="thumb-overlay" style={s.thumbOverlay}>
-                        <span className="thumb-icon" style={s.thumbIcon}>{post.type==="video"?"▶":"🖼"}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-            }
-          </div>
-
-          {/* Action buttons */}
-          <div className="action-row-wrap" style={s.actionRow}>
-            {role === "user" && (
-              <>
-                {/* ✅ Big Book Now button in action row */}
-                <button className="action-btn" style={{ ...s.primaryBtn, background:"#22c55e", color:"#fff" }} onClick={() => setShowBooking(true)}>
-                  📅 Book {artist.name.split(" ")[0]}
-                </button>
-                <button className="action-btn" style={s.primaryBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
-                <button className="action-btn" style={s.secondaryBtn} onClick={() => navigate("/artists")}>🔍 More Artists</button>
-              </>
-            )}
-            {role === "artist" && !isOwner && (
-              <>
-                <button className="action-btn" style={{ ...s.primaryBtn, background:"#22c55e", color:"#fff" }} onClick={() => setShowBooking(true)}>📅 Book Now</button>
-                <button className="action-btn" style={s.primaryBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
-              </>
-            )}
-            {isOwner && (
-              <>
-                <button className="action-btn" style={s.primaryBtn} onClick={() => navigate("/artist-dashboard")}>🛠 Dashboard</button>
-                <button className="action-btn" style={s.secondaryBtn} onClick={() => navigate(`/chat/${getId(artist)}`)}>💬 Chat</button>
-              </>
-            )}
-            <button className="action-btn" style={s.secondaryBtn} onClick={() => navigate("/")}>🏠 Home</button>
-            <button className="action-btn" style={{ ...s.secondaryBtn,background:"#dc2626",borderColor:"#dc2626" }} onClick={handleLogout}>Logout</button>
-          </div>
-        </div>
-      </div>
-
-      {/* ✅ BOOKING MODAL */}
+      {/* BOOKING MODAL */}
       {showBooking && (
         <BookingModal
           artist={artist}
           currentUser={currentUser}
-          onClose={() => setShowBooking(false)}
-          onSuccess={() => { setShowBooking(false); setBookingDone(true); }}
+          onClose={()=>setShowBooking(false)}
+          onSuccess={()=>{ setShowBooking(false); setBookingDone(true); }}
         />
       )}
 
-      {/* LIGHTBOX */}
-      {lightbox && (
-        <div style={s.lightboxOverlay} onClick={() => setLightbox(null)}>
-          <div style={s.lightboxBox} onClick={e => e.stopPropagation()}>
-            <button style={s.lightboxClose} onClick={() => setLightbox(null)}>✕</button>
-            {lightbox.type === "image"
-              ? <img src={lightbox.media} alt="" style={s.lightboxMedia} />
-              : <video src={lightbox.media} controls style={s.lightboxMedia} />
-            }
+      {/* ══ HERO ══ */}
+      <div style={{ position:"relative", background:"#f5f0e8", overflow:"hidden", paddingBottom:48 }}>
+        <DotGrid />
+
+        {/* TOP NAV */}
+        <div className="top-nav" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"16px 32px", borderBottom:"1px solid rgba(30,58,138,0.1)", position:"relative", zIndex:10, flexWrap:"wrap", gap:10 }}>
+          <button style={{ background:"none", border:"none", fontFamily:"'Nunito',sans-serif", fontSize:14, color:"#1e3a8a", cursor:"pointer", fontWeight:800 }} onClick={()=>navigate("/discover")}>← Discover</button>
+          <div className="nav-desktop" style={{ display:"flex", gap:20, alignItems:"center" }}>
+            <button style={{ background:"none", border:"none", fontFamily:"'Nunito',sans-serif", fontSize:13, color:"#1e3a8a", fontWeight:700, cursor:"pointer" }} onClick={()=>navigate("/")}>🏠 Home</button>
+            <span style={{ fontSize:13, color:"#1e3a8a", fontWeight:600, opacity:0.5 }}>Profile</span>
+          </div>
+          <div className="nav-desktop" style={{ display:"flex", gap:8, alignItems:"center" }}>
+            {isOwner ? (
+              <button style={s.navBtn} onClick={()=>navigate("/artist-dashboard")}>✏️ Edit Dashboard</button>
+            ) : (
+              <>
+                <button style={s.navBtn} onClick={()=>navigate(`/chat/${id}`)}>💬 Chat</button>
+                <button style={{ ...s.navBtn, background:"#16a34a" }} onClick={()=>setShowBooking(true)}>📅 Book Now</button>
+              </>
+            )}
+            <button style={{ ...s.navBtn, background:"#dc2626" }} onClick={handleLogout}>Logout</button>
+          </div>
+          <button className="nav-mobile-btn" style={{ background:"#1e3a8a", border:"none", color:"#fff", width:38, height:38, borderRadius:10, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setMobileMenu(m=>!m)}>
+            {mobileMenu ? "✕" : "☰"}
+          </button>
+        </div>
+
+        {/* Mobile menu */}
+        {mobileMenu && (
+          <div className="mobile-menu-panel" style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"16px 20px", display:"flex", flexDirection:"column", gap:10, animation:"slideDown 0.2s ease", position:"relative", zIndex:9 }}>
+            <button style={{ ...s.navBtn, width:"100%", justifyContent:"center" }} onClick={()=>{ navigate("/"); setMobileMenu(false); }}>🏠 Home</button>
+            {isOwner ? (
+              <button style={{ ...s.navBtn, width:"100%", justifyContent:"center" }} onClick={()=>navigate("/artist-dashboard")}>✏️ Edit Dashboard</button>
+            ) : (
+              <>
+                <button style={{ ...s.navBtn, width:"100%", justifyContent:"center" }} onClick={()=>{ navigate(`/chat/${id}`); setMobileMenu(false); }}>💬 Chat</button>
+                <button style={{ ...s.navBtn, background:"#16a34a", width:"100%", justifyContent:"center" }} onClick={()=>{ setShowBooking(true); setMobileMenu(false); }}>📅 Book Now</button>
+              </>
+            )}
+            <button style={{ ...s.navBtn, background:"#dc2626", width:"100%", justifyContent:"center" }} onClick={handleLogout}>Logout</button>
+          </div>
+        )}
+
+        {/* HERO CONTENT */}
+        <div className="hero-content" style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"36px 32px 0", position:"relative", zIndex:2, gap:24, flexWrap:"wrap" }}>
+          {/* LEFT */}
+          <div className="hero-left" style={{ flex:1, maxWidth:520, minWidth:280, animation:"slideIn 0.5s ease both" }}>
+            <div style={{ marginBottom:24 }}>
+              <div className="big-title" style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:"clamp(48px,8vw,88px)", color:"#1e3a8a", lineHeight:0.95, letterSpacing:2 }}>
+                {(artist.name||"ARTIST").toUpperCase()}
+              </div>
+              <div className="big-category" style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:"clamp(36px,6vw,68px)", color:"#1e3a8a", lineHeight:0.95, letterSpacing:2, opacity:0.65 }}>
+                {(artist.category||"PORTFOLIO").toUpperCase()}
+              </div>
+            </div>
+            <div style={{ background:"rgba(255,255,255,0.6)", borderRadius:16, padding:"20px 22px", backdropFilter:"blur(8px)", border:"1px solid rgba(30,58,138,0.1)" }}>
+              <div style={{ display:"inline-block", background:"#1e3a8a", color:"#fff", fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:13, padding:"6px 18px", borderRadius:10, marginBottom:12 }}>About Me</div>
+              <p style={{ fontFamily:"'Nunito',sans-serif", fontSize:14, color:"#1a1a2e", lineHeight:1.75, fontWeight:600, margin:"0 0 14px 0" }}>
+                {artist.bio || `${artist.name} is a talented ${artist.category||"artist"} based in ${artist.city||"India"}.`}
+              </p>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {artist.city       && <span style={s.pill}>📍 {artist.city}</span>}
+                {artist.experience && <span style={{ ...s.pill, background:"#fef3c7", color:"#92400e" }}>⏱ {artist.experience}</span>}
+                {artist.instagram  && (
+                  <a href={`https://instagram.com/${artist.instagram}`} target="_blank" rel="noreferrer" style={{ textDecoration:"none" }}>
+                    <span style={{ ...s.pill, background:"#fff0e6", color:"#e8621a" }}>📸 @{artist.instagram}</span>
+                  </a>
+                )}
+                <span style={{ ...s.pill, background:"#e0e7ff", color:"#3730a3" }}>🎨 {posts.length} Posts</span>
+                <span style={{ ...s.pill, background:"#f0fdf4", color:"#14532d" }}>⭐ {artist.rating||5}.0</span>
+                {bookingDone && <span style={{ ...s.pill, background:"#dcfce7", color:"#14532d" }}>✅ Booked!</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT */}
+          <div className="hero-right" style={{ width:280, flexShrink:0, animation:"fadeUp 0.6s ease both", display:"flex", flexDirection:"column", alignItems:"center", gap:14 }}>
+            <div className="profile-photo-wrap" style={{ width:240, height:300, borderRadius:20, overflow:"hidden", border:"4px solid #1e3a8a", background:"#dbeafe", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"6px 6px 0 #1e3a8a" }}>
+              {artist.profileImage
+                ? <img src={artist.profileImage} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                : <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:72, color:"#1e3a8a", letterSpacing:4 }}>{getInitials(artist.name)}</div>
+              }
+            </div>
+            <div className="stats-card" style={{ display:"flex", alignItems:"center", justifyContent:"center", background:"#1e3a8a", borderRadius:14, padding:"12px 20px", width:"100%", boxShadow:"4px 4px 0 rgba(30,58,138,0.3)" }}>
+              {[{ num:posts.length, lbl:"Posts" },{ num:artist.profileViews||0, lbl:"Views" },{ num:`${artist.rating||5}.0`, lbl:"Rating" }].map((st,i) => (
+                <div key={i} style={{ display:"contents" }}>
+                  {i>0 && <div style={{ width:1, height:32, background:"rgba(255,255,255,0.2)", margin:"0 10px" }} />}
+                  <div style={{ textAlign:"center", flex:1 }}>
+                    <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#fff", letterSpacing:1 }}>{st.num}</div>
+                    <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:10, color:"rgba(255,255,255,0.6)", fontWeight:600, letterSpacing:1, textTransform:"uppercase" }}>{st.lbl}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {!isOwner && (
+              <div className="book-card" style={{ background:"#fff", borderRadius:16, padding:"18px 16px", width:"100%", boxShadow:"4px 4px 0 rgba(30,58,138,0.12)", border:"1px solid rgba(30,58,138,0.12)" }}>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:18, color:"#1e3a8a", letterSpacing:0.5, marginBottom:4 }}>
+                  {artist.price ? `From ₹${Number(artist.price).toLocaleString("en-IN")}` : "Available for Booking"}
+                </div>
+                <div style={{ fontSize:12, color:"#64748b", fontFamily:"'Nunito',sans-serif", marginBottom:14 }}>{artist.category} · {artist.city||"India"}</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  <button onClick={()=>setShowBooking(true)} style={{ padding:"12px", background:"#1e3a8a", color:"#fff", border:"none", borderRadius:22, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, cursor:"pointer" }}>📅 Book Now</button>
+                  <button onClick={()=>navigate(`/chat/${id}`)} style={{ padding:"10px", background:"transparent", color:"#1e3a8a", border:"2px solid #1e3a8a", borderRadius:22, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, cursor:"pointer" }}>💬 Chat First</button>
+                </div>
+              </div>
+            )}
+            {isOwner && (
+              <div style={{ display:"flex", flexDirection:"column", gap:8, width:"100%" }}>
+                <button onClick={()=>navigate("/artist-dashboard")} style={{ padding:"12px", background:"#1e3a8a", color:"#fff", border:"none", borderRadius:22, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, cursor:"pointer" }}>🛠 Go to Dashboard</button>
+                <button onClick={()=>navigate(`/chat/${getId(loggedArtist)}`)} style={{ padding:"10px", background:"transparent", color:"#1e3a8a", border:"2px solid #1e3a8a", borderRadius:22, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, cursor:"pointer" }}>💬 Messages</button>
+              </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ══ BLUE SECTION ══ */}
+      <div className="blue-section" style={{ background:"linear-gradient(160deg,#1e40af,#1e3a8a 40%,#1d4ed8)", display:"flex", minHeight:500, position:"relative" }}>
+        <div className="vertical-sidebar" style={{ width:64, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"flex-end", padding:"0 0 40px", background:"rgba(0,0,0,0.15)", flexShrink:0, gap:8, pointerEvents:"none" }}>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:"#fff", letterSpacing:4, writingMode:"vertical-rl", transform:"rotate(180deg)", lineHeight:1 }}>{(artist.category||"ARTIST").toUpperCase()}</div>
+          <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:9, color:"rgba(255,255,255,0.5)", writingMode:"vertical-rl", transform:"rotate(180deg)", letterSpacing:1, fontWeight:700 }}>{artist.instagram ? `@${artist.instagram}` : artist.name}</div>
+        </div>
+
+        <div className="blue-content" style={{ flex:1, padding:"40px 36px 40px 28px", position:"relative", zIndex:1 }}>
+          {/* Tabs */}
+          <div style={{ display:"flex", gap:8, marginBottom:28, flexWrap:"wrap" }}>
+            {["portfolio","skills","about"].map(t => (
+              <button key={t} onClick={()=>setActiveTab(t)} style={{ padding:"8px 20px", borderRadius:20, border:`1.5px solid ${activeTab===t?"#fff":"rgba(255,255,255,0.3)"}`, background:activeTab===t?"#fff":"rgba(255,255,255,0.1)", color:activeTab===t?"#1e3a8a":"#fff", fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif", transition:"all 0.2s", textTransform:"capitalize" }}>
+                {t==="portfolio" ? `🎨 Portfolio (${posts.length})` : t==="skills" ? "✦ Skills" : "👤 About"}
+              </button>
+            ))}
+          </div>
+
+          {/* Portfolio */}
+          {activeTab === "portfolio" && (
+            <div style={{ animation:"fadeUp 0.3s ease" }}>
+              {posts.length === 0 ? (
+                <div style={{ textAlign:"center", padding:"60px 0", opacity:0.7 }}>
+                  <div style={{ fontSize:48, marginBottom:12 }}>🎭</div>
+                  <div style={{ color:"rgba(255,255,255,0.6)", fontFamily:"'Nunito',sans-serif", fontSize:15 }}>No portfolio works yet</div>
+                  {isOwner && <button onClick={()=>navigate("/artist-dashboard")} style={{ marginTop:16, padding:"10px 24px", background:"#fff", color:"#1e3a8a", border:"none", borderRadius:22, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>Upload Your First Work</button>}
+                </div>
+              ) : (
+                <div className="portfolio-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))", gap:12 }}>
+                  {posts.map((post,i) => (
+                    <div key={post._id} className="post-thumb" onClick={()=>setLightbox(post)} style={{ aspectRatio:"3/4", borderRadius:14, overflow:"hidden", position:"relative", cursor:"pointer", transition:"transform 0.2s, box-shadow 0.2s", animation:`fadeUp 0.4s ease ${0.05*i}s both`, border:"2px solid rgba(255,255,255,0.15)", background:"rgba(0,0,0,0.3)" }}>
+                      {post.type==="video"
+                        ? <video src={post.media} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} muted />
+                        : <img src={post.media} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                      }
+                      <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                        <span className="thumb-icon" style={{ fontSize:22, opacity:0, transition:"opacity 0.2s" }}>{post.type==="video"?"▶":"🔍"}</span>
+                      </div>
+                      {post.title && <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(transparent,rgba(0,0,0,0.75))", padding:"16px 8px 6px", color:"#fff", fontSize:10, fontWeight:800, fontFamily:"'Nunito',sans-serif" }}>{post.title}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Skills */}
+          {activeTab === "skills" && (
+            <div style={{ animation:"fadeUp 0.3s ease", display:"flex", flexWrap:"wrap", gap:12 }}>
+              {skills.map((skill,i) => (
+                <span key={i} className="skill-pill" style={{ background:"rgba(255,255,255,0.12)", color:"#fff", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:14, padding:"10px 22px", borderRadius:24, border:"1.5px solid rgba(255,255,255,0.25)", cursor:"default", transition:"all 0.2s" }}>{skill}</span>
+              ))}
+            </div>
+          )}
+
+          {/* About */}
+          {activeTab === "about" && (
+            <div style={{ animation:"fadeUp 0.3s ease", display:"flex", flexDirection:"column", gap:14 }}>
+              {[
+                { icon:"🎨", label:"Category",  value:artist.category },
+                { icon:"📍", label:"City",       value:artist.city },
+                { icon:"⏱",  label:"Experience", value:artist.experience },
+                { icon:"⭐", label:"Rating",     value:`${artist.rating||5}.0 / 5.0` },
+                { icon:"🎭", label:"Works",      value:`${posts.length} uploads` },
+              ].filter(r=>r.value).map((row,i) => (
+                <div key={i} style={{ display:"flex", gap:14, alignItems:"center", background:"rgba(255,255,255,0.08)", borderRadius:14, padding:"14px 18px", border:"1px solid rgba(255,255,255,0.12)" }}>
+                  <div style={{ width:40, height:40, borderRadius:12, background:"rgba(255,255,255,0.12)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{row.icon}</div>
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:1, textTransform:"uppercase" }}>{row.label}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:"#fff", marginTop:2, fontFamily:"'Nunito',sans-serif" }}>{row.value}</div>
+                  </div>
+                </div>
+              ))}
+              {artist.bio && (
+                <div style={{ background:"rgba(255,255,255,0.08)", borderRadius:14, padding:"16px 18px", border:"1px solid rgba(255,255,255,0.12)" }}>
+                  <div style={{ fontSize:10, fontWeight:800, color:"rgba(255,255,255,0.5)", letterSpacing:1, textTransform:"uppercase", marginBottom:8 }}>Bio</div>
+                  <div style={{ fontSize:14, color:"rgba(255,255,255,0.85)", lineHeight:1.8, fontFamily:"'Nunito',sans-serif", fontWeight:500 }}>{artist.bio}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="action-row" style={{ display:"flex", gap:12, flexWrap:"wrap", marginTop:36, paddingBottom:36 }}>
+            {!isOwner && (
+              <>
+                <button className="action-btn" style={s.primaryBtn} onClick={()=>setShowBooking(true)}>📅 Book {artist.name?.split(" ")[0]}</button>
+                <button className="action-btn" style={s.primaryBtn} onClick={()=>navigate(`/chat/${id}`)}>💬 Chat</button>
+                <button className="action-btn" style={s.secondaryBtn} onClick={()=>navigate("/discover")}>🔍 More Artists</button>
+              </>
+            )}
+            {isOwner && (
+              <>
+                <button className="action-btn" style={s.primaryBtn} onClick={()=>navigate("/artist-dashboard")}>🛠 Dashboard</button>
+                <button className="action-btn" style={s.secondaryBtn} onClick={()=>navigate(`/chat/${getId(loggedArtist)}`)}>💬 Messages</button>
+                <button className="action-btn" style={s.secondaryBtn} onClick={()=>navigate("/discover")}>🔍 Browse Artists</button>
+              </>
+            )}
+            <button className="action-btn" style={{ ...s.secondaryBtn, background:"#dc2626", borderColor:"#dc2626" }} onClick={handleLogout}>Logout</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 const s = {
-  page:               { fontFamily:"'Nunito',sans-serif",minHeight:"100vh",background:"#f0f4ff",overflowX:"hidden" },
-  heroSection:        { position:"relative",background:"#f5f0e8",overflow:"hidden",paddingBottom:"48px" },
-  topNav:             { display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 40px",borderBottom:"1px solid rgba(30,58,138,0.1)",position:"relative",zIndex:2,flexWrap:"wrap",gap:"10px" },
-  navLink:            { background:"none",border:"none",fontFamily:"'Nunito',sans-serif",fontSize:"14px",color:"#1e3a8a",cursor:"pointer",fontWeight:700 },
-  navLinks:           { display:"flex",gap:"24px",alignItems:"center" },
-  navItemBtn:         { background:"none",border:"none",fontFamily:"'Nunito',sans-serif",fontSize:"13px",color:"#1e3a8a",fontWeight:700,letterSpacing:"1px",cursor:"pointer",padding:"4px 8px",borderRadius:"8px" },
-  navItem:            { fontSize:"13px",color:"#1e3a8a",fontWeight:600,letterSpacing:"1.5px",opacity:0.6 },
-  navActionBtn:       { background:"#1e3a8a",color:"#fff",border:"none",padding:"9px 22px",borderRadius:"22px",fontFamily:"'Nunito',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer",transition:"opacity 0.2s" },
-  heroContent:        { display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"40px 40px 0",position:"relative",zIndex:2,gap:"20px",flexWrap:"wrap" },
-  heroLeft:           { flex:1,maxWidth:"520px",minWidth:"280px",animation:"slideIn 0.6s ease both" },
-  bigTitleWrap:       { marginBottom:"28px" },
-  bigTitle:           { fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(52px,8vw,88px)",color:"#1e3a8a",lineHeight:0.95,letterSpacing:"2px" },
-  bigCategory:        { fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(40px,6vw,70px)",color:"#1e3a8a",lineHeight:0.95,letterSpacing:"2px",opacity:0.75 },
-  aboutSection:       { background:"rgba(255,255,255,0.55)",borderRadius:"16px",padding:"22px 24px",backdropFilter:"blur(6px)",border:"1px solid rgba(30,58,138,0.1)" },
-  sectionBadge:       { display:"inline-block",background:"#1e3a8a",color:"#fff",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:"14px",padding:"7px 20px",borderRadius:"10px",marginBottom:"14px" },
-  bioText:            { fontFamily:"'Nunito',sans-serif",fontSize:"15px",color:"#1a1a2e",lineHeight:1.75,fontWeight:600,margin:"0 0 16px 0" },
-  infoPills:          { display:"flex",gap:"8px",flexWrap:"wrap" },
-  infoPill:           { background:"#e8f0ff",color:"#1e3a8a",fontFamily:"'Nunito',sans-serif",fontWeight:700,fontSize:"12px",padding:"5px 14px",borderRadius:"20px" },
-  heroRight:          { position:"relative",width:"280px",flexShrink:0,animation:"fadeUp 0.7s ease both" },
-  cornerTL:           { position:"absolute",top:"-10px",right:"-10px",width:"60px",height:"60px",background:"#1e3a8a",borderRadius:"12px",opacity:0.15,transform:"rotate(15deg)",pointerEvents:"none" },
-  cornerBR:           { position:"absolute",bottom:"60px",left:"-15px",width:"40px",height:"40px",background:"#3b82f6",borderRadius:"8px",opacity:0.2,transform:"rotate(-10deg)",pointerEvents:"none" },
-  profilePhotoWrap:   { width:"240px",height:"300px",borderRadius:"20px",overflow:"hidden",border:"4px solid #1e3a8a",background:"#dbeafe",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",boxShadow:"8px 8px 0 #1e3a8a" },
-  profilePhoto:       { width:"100%",height:"100%",objectFit:"cover" },
-  profileInitials:    { fontFamily:"'Bebas Neue',sans-serif",fontSize:"72px",color:"#1e3a8a",letterSpacing:"4px" },
-  statsCard:          { display:"flex",alignItems:"center",justifyContent:"center",background:"#1e3a8a",borderRadius:"14px",padding:"12px 20px",marginTop:"16px",boxShadow:"4px 4px 0 rgba(30,58,138,0.3)" },
-  statItem:           { textAlign:"center",flex:1 },
-  statNum:            { fontFamily:"'Bebas Neue',sans-serif",fontSize:"22px",color:"#fff",letterSpacing:"1px" },
-  statLbl:            { fontFamily:"'Nunito',sans-serif",fontSize:"10px",color:"rgba(255,255,255,0.6)",fontWeight:600,letterSpacing:"1px",textTransform:"uppercase" },
-  statDivider:        { width:"1px",height:"32px",background:"rgba(255,255,255,0.2)",margin:"0 12px" },
-
-  // ✅ NEW booking card styles
-  bookCard:           { background:"#fff",borderRadius:16,padding:"18px 16px",marginTop:16,boxShadow:"4px 4px 0 rgba(30,58,138,0.15)",border:"1px solid rgba(30,58,138,0.15)",display:"flex",flexDirection:"column",gap:8 },
-  bookNowBtn:         { background:"#1e3a8a",color:"#fff",border:"none",padding:"12px",borderRadius:22,fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",transition:"opacity 0.2s",textAlign:"center" },
-  chatNowBtn:         { background:"transparent",color:"#1e3a8a",border:"2px solid #1e3a8a",padding:"10px",borderRadius:22,fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",textAlign:"center" },
-
-  blueSection:        { background:"linear-gradient(160deg,#1e40af 0%,#1e3a8a 40%,#1d4ed8 100%)",display:"flex",position:"relative",minHeight:"600px" },
-  verticalLabel:      { width:"64px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",padding:"0 0 40px 0",background:"rgba(0,0,0,0.15)",flexShrink:0,gap:"8px",pointerEvents:"none" },
-  verticalText:       { fontFamily:"'Bebas Neue',sans-serif",fontSize:"28px",color:"#fff",letterSpacing:"4px",writingMode:"vertical-rl",transform:"rotate(180deg)",lineHeight:1 },
-  verticalHandle:     { fontFamily:"'Nunito',sans-serif",fontSize:"9px",color:"rgba(255,255,255,0.5)",writingMode:"vertical-rl",transform:"rotate(180deg)",letterSpacing:"1px",fontWeight:700 },
-  blueSectionContent: { flex:1,padding:"48px 40px 48px 32px",position:"relative",zIndex:1 },
-  blueBadge:          { display:"inline-block",background:"rgba(255,255,255,0.15)",backdropFilter:"blur(8px)",color:"#fff",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:"15px",padding:"9px 22px",borderRadius:"12px",marginBottom:"20px",border:"1px solid rgba(255,255,255,0.25)" },
-  skillsGrid:         { display:"flex",flexWrap:"wrap",gap:"10px" },
-  skillPill:          { background:"rgba(255,255,255,0.12)",color:"#fff",fontFamily:"'Nunito',sans-serif",fontWeight:700,fontSize:"13px",padding:"8px 20px",borderRadius:"24px",border:"1.5px solid rgba(255,255,255,0.25)",cursor:"default",transition:"background 0.2s,color 0.2s" },
-  portfolioHeaderRow: { display:"flex",alignItems:"center",gap:"14px",marginBottom:"0" },
-  postCount:          { fontFamily:"'Nunito',sans-serif",fontSize:"12px",color:"rgba(255,255,255,0.5)",fontWeight:600 },
-  emptyPortfolio:     { textAlign:"center",padding:"60px 0",opacity:0.7 },
-  portfolioGrid:      { display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:"12px",marginTop:"4px" },
-  portfolioThumb:     { aspectRatio:"3/4",borderRadius:"14px",overflow:"hidden",position:"relative",cursor:"pointer",transition:"transform 0.25s ease,box-shadow 0.25s ease",animation:"fadeUp 0.4s ease both",border:"2px solid rgba(255,255,255,0.15)",background:"rgba(0,0,0,0.3)" },
-  thumbMedia:         { width:"100%",height:"100%",objectFit:"cover",display:"block" },
-  thumbOverlay:       { position:"absolute",inset:0,background:"rgba(0,0,0,0)",display:"flex",alignItems:"center",justifyContent:"center",transition:"background 0.2s",pointerEvents:"none" },
-  thumbIcon:          { fontSize:"22px",opacity:0,transition:"opacity 0.2s" },
-  actionRow:          { display:"flex",gap:"12px",flexWrap:"wrap",marginTop:"36px",position:"relative",zIndex:20,paddingBottom:"32px" },
-  primaryBtn:         { background:"#fff",color:"#1e3a8a",border:"none",padding:"13px 28px",borderRadius:"28px",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:"14px",cursor:"pointer",transition:"transform 0.2s,box-shadow 0.2s",position:"relative",zIndex:20 },
-  secondaryBtn:       { background:"transparent",color:"#fff",border:"2px solid rgba(255,255,255,0.4)",padding:"13px 28px",borderRadius:"28px",fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:"14px",cursor:"pointer",transition:"transform 0.2s,box-shadow 0.2s",position:"relative",zIndex:20 },
-  lightboxOverlay:    { position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)" },
-  lightboxBox:        { position:"relative",maxWidth:"90vw",maxHeight:"90vh",borderRadius:"20px",overflow:"hidden" },
-  lightboxClose:      { position:"absolute",top:"12px",right:"12px",background:"rgba(0,0,0,0.6)",color:"#fff",border:"none",width:"36px",height:"36px",borderRadius:"50%",cursor:"pointer",fontSize:"16px",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center" },
-  lightboxMedia:      { maxWidth:"80vw",maxHeight:"85vh",objectFit:"contain",display:"block" },
+  navBtn:      { background:"#1e3a8a", color:"#fff", border:"none", padding:"9px 20px", borderRadius:22, fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13, cursor:"pointer", transition:"opacity 0.2s", display:"flex", alignItems:"center", gap:6 },
+  pill:        { background:"#e8f0ff", color:"#1e3a8a", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:12, padding:"5px 13px", borderRadius:20 },
+  primaryBtn:  { background:"#fff", color:"#1e3a8a", border:"none", padding:"13px 26px", borderRadius:28, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, cursor:"pointer", transition:"transform 0.2s, box-shadow 0.2s", flexShrink:0 },
+  secondaryBtn:{ background:"transparent", color:"#fff", border:"2px solid rgba(255,255,255,0.4)", padding:"13px 26px", borderRadius:28, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, cursor:"pointer", transition:"transform 0.2s, box-shadow 0.2s", flexShrink:0 },
 };

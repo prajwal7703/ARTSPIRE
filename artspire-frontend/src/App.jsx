@@ -14,7 +14,9 @@ import UserLogin       from "./pages/UserLogin";
 import ArtistLogin     from "./pages/ArtistLogin";
 import ForgotPassword  from "./pages/ForgotPassword";
 import ResetPassword   from "./pages/ResetPassword";
-
+import LandingPage       from "./pages/LandingPage";
+import DiscoverPage      from "./pages/DiscoverPage";
+import ArtistProfilePage from "./pages/ArtistProfilePage";
 function App() {
   return (
     <BrowserRouter>
@@ -37,7 +39,9 @@ function App() {
 
         {/* ── Chat ── */}
         <Route path="/chat/:id"          element={<Chat />} />
-
+        <Route path="/"                    element={<LandingPage />} />
+        <Route path="/discover"            element={<DiscoverPage />} />
+        <Route path="/artist-profile/:id"  element={<ArtistProfilePage />} />
         {/* ── Aliases ── */}
         <Route path="/become-artist"     element={<ArtistRegister />} />
         <Route path="/explore"           element={<Artists />} />
