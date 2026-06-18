@@ -14,21 +14,23 @@ import UserLogin       from "./pages/UserLogin";
 import ArtistLogin     from "./pages/ArtistLogin";
 import ForgotPassword  from "./pages/ForgotPassword";
 import ResetPassword   from "./pages/ResetPassword";
-import LandingPage       from "./pages/LandingPage";
-import DiscoverPage      from "./pages/DiscoverPage";
-import ArtistProfilePage from "./pages/ArtistProfilePage";
+import LandingPage     from "./pages/LandingPage";
+import DiscoverPage    from "./pages/DiscoverPage";
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* ── Main pages ── */}
-        <Route path="/"                  element={<Home />} />
+        <Route path="/"                  element={<LandingPage />} />
+        <Route path="/home"              element={<Home />} />
         <Route path="/login"             element={<UserLogin />} />
         <Route path="/register"          element={<Register />} />
 
         {/* ── Artists ── */}
         <Route path="/artists"           element={<Artists />} />
         <Route path="/artist/:id"        element={<ArtistProfile />} />
+        <Route path="/artist-profile/:id" element={<ArtistProfile />} />
         <Route path="/artist-dashboard"  element={<ArtistDashboard />} />
         <Route path="/artist-register"   element={<ArtistRegister />} />
         <Route path="/artist-login"      element={<ArtistLogin />} />
@@ -39,9 +41,10 @@ function App() {
 
         {/* ── Chat ── */}
         <Route path="/chat/:id"          element={<Chat />} />
-        <Route path="/"                    element={<LandingPage />} />
-        <Route path="/discover"            element={<DiscoverPage />} />
-        <Route path="/artist-profile/:id"  element={<ArtistProfilePage />} />
+
+        {/* ── Discover ── */}
+        <Route path="/discover"          element={<DiscoverPage />} />
+
         {/* ── Aliases ── */}
         <Route path="/become-artist"     element={<ArtistRegister />} />
         <Route path="/explore"           element={<Artists />} />
