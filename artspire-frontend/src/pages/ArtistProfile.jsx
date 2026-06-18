@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
+import BookingModal from "../components/BookingModal";
 
 const API = import.meta.env.VITE_API_URL;
 
@@ -32,11 +33,14 @@ const DotGrid = () => (
 );
 
 export default function ArtistProfile() {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
-  const [artist, setArtist]   = useState(null);
-  const [posts, setPosts]     = useState([]);
-  const [lightbox, setLightbox] = useState(null);
+  const { id }   = useParams();
+  const navigate = useNavigate();
+
+  const [artist, setArtist]         = useState(null);
+  const [posts, setPosts]           = useState([]);
+  const [lightbox, setLightbox]     = useState(null);
+  const [showBooking, setShowBooking] = useState(false);
+  const [bookingDone, setBookingDone] = useState(false);
 
   const loggedArtistRaw = localStorage.getItem("artist");
   const loggedUserRaw   = localStorage.getItem("user");
@@ -45,39 +49,29 @@ export default function ArtistProfile() {
   try { loggedArtist = loggedArtistRaw ? JSON.parse(loggedArtistRaw) : null; } catch {}
   try { loggedUser   = loggedUserRaw   ? JSON.parse(loggedUserRaw)   : null; } catch {}
 
-  const isLoggedIn = !!(loggedArtist || loggedUser);
-  const role       = loggedArtist ? "artist" : loggedUser ? "user" : null;
-  const isOwner    = role === "artist" && getId(loggedArtist) === id;
+  const currentUser = loggedUser || loggedArtist;
+  const isLoggedIn  = !!(loggedArtist || loggedUser);
+  const role        = loggedArtist ? "artist" : loggedUser ? "user" : null;
+  const isOwner     = role === "artist" && getId(loggedArtist) === id;
 
   useEffect(() => {
     if (!isLoggedIn) { navigate("/login"); return; }
     fetchArtist();
     fetchPosts();
-
-    // ✅ Increment profile view — but NOT if the owner is viewing their own profile
-    if (!isOwner) {
-      axios.post(`${API}/api/users/${id}/view`).catch(() => {});
-    }
+    if (!isOwner) axios.post(`${API}/api/users/${id}/view`).catch(() => {});
   }, [id]);
 
   const fetchArtist = async () => {
-    try {
-      const res = await axios.get(`${API}/api/artists/${id}`);
-      setArtist(res.data);
-    } catch (err) { console.log(err); }
+    try { const res = await axios.get(`${API}/api/artists/${id}`); setArtist(res.data); }
+    catch (err) { console.log(err); }
   };
 
   const fetchPosts = async () => {
-    try {
-      const res = await axios.get(`${API}/api/posts`);
-      setPosts(res.data.filter((p) => p.artistId === id));
-    } catch (err) { console.log(err); }
+    try { const res = await axios.get(`${API}/api/posts`); setPosts(res.data.filter(p => p.artistId === id)); }
+    catch (err) { console.log(err); }
   };
 
-  const getInitials = (name) => {
-    if (!name) return "A";
-    return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
-  };
+  const getInitials = (name) => name ? name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "A";
 
   const handleLogout = () => {
     localStorage.removeItem("artist");
@@ -123,7 +117,13 @@ export default function ArtistProfile() {
           <div style={{ display:"flex",gap:"8px",alignItems:"center",flexWrap:"wrap" }}>
             {isOwner
               ? <button style={s.navActionBtn} onClick={() => navigate("/artist-dashboard")}>✏️ Edit</button>
-              : <button style={s.navActionBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
+              : <>
+                  <button style={s.navActionBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
+                  {/* ✅ BOOK NOW button — only for non-owners */}
+                  <button style={{ ...s.navActionBtn, background:"#16a34a" }} onClick={() => setShowBooking(true)}>
+                    📅 Book Now
+                  </button>
+                </>
             }
             <button style={{ ...s.navActionBtn,background:"#dc2626" }} onClick={handleLogout}>Logout</button>
           </div>
@@ -148,13 +148,12 @@ export default function ArtistProfile() {
                   </a>
                 )}
                 <span style={{ ...s.infoPill,background:"#e8f0ff",color:"#1e3a8a" }}>🎨 {posts.length} Posts</span>
-                {/* ✅ Real profile views from DB */}
-                <span style={{ ...s.infoPill,background:"#f0fdf4",color:"#14532d" }}>
-                  👁 {artist.profileViews || 0} views
-                </span>
+                <span style={{ ...s.infoPill,background:"#f0fdf4",color:"#14532d" }}>👁 {artist.profileViews || 0} views</span>
                 <span style={{ ...s.infoPill,background:isOwner?"#d1fae5":"#fef3c7",color:isOwner?"#065f46":"#92400e" }}>
                   {isOwner ? "👑 Your Profile" : role === "user" ? "👤 Viewing as User" : "🎨 Artist View"}
                 </span>
+                {/* ✅ Booking confirmed badge */}
+                {bookingDone && <span style={{ ...s.infoPill,background:"#dcfce7",color:"#14532d" }}>✅ Booked!</span>}
               </div>
             </div>
           </div>
@@ -170,11 +169,34 @@ export default function ArtistProfile() {
             <div style={s.statsCard}>
               <div style={s.statItem}><div style={s.statNum}>{posts.length}</div><div style={s.statLbl}>Posts</div></div>
               <div style={s.statDivider} />
-              {/* ✅ Real views in stats card */}
               <div style={s.statItem}><div style={s.statNum}>{artist.profileViews || 0}</div><div style={s.statLbl}>Views</div></div>
               <div style={s.statDivider} />
               <div style={s.statItem}><div style={s.statNum}>{artist.rating || 5}.0</div><div style={s.statLbl}>Rating</div></div>
             </div>
+
+            {/* ✅ Book Now card — shown to non-owners */}
+            {!isOwner && (
+              <div style={s.bookCard}>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:18, color:"#1e3a8a", letterSpacing:0.5, marginBottom:4 }}>
+                  {artist.price ? `From ₹${artist.price.toLocaleString()}` : "Available for Booking"}
+                </div>
+                <div style={{ fontSize:12, color:"#64748b", fontFamily:"'Nunito',sans-serif", marginBottom:12 }}>
+                  {artist.category} · {artist.city || "India"}
+                </div>
+                <button
+                  style={s.bookNowBtn}
+                  onClick={() => setShowBooking(true)}
+                >
+                  📅 Book Now
+                </button>
+                <button
+                  style={s.chatNowBtn}
+                  onClick={() => navigate(`/chat/${id}`)}
+                >
+                  💬 Chat First
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -223,12 +245,19 @@ export default function ArtistProfile() {
           <div className="action-row-wrap" style={s.actionRow}>
             {role === "user" && (
               <>
-                <button className="action-btn" style={s.primaryBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat with Artist</button>
+                {/* ✅ Big Book Now button in action row */}
+                <button className="action-btn" style={{ ...s.primaryBtn, background:"#22c55e", color:"#fff" }} onClick={() => setShowBooking(true)}>
+                  📅 Book {artist.name.split(" ")[0]}
+                </button>
+                <button className="action-btn" style={s.primaryBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
                 <button className="action-btn" style={s.secondaryBtn} onClick={() => navigate("/artists")}>🔍 More Artists</button>
               </>
             )}
             {role === "artist" && !isOwner && (
-              <button className="action-btn" style={s.primaryBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat with Artist</button>
+              <>
+                <button className="action-btn" style={{ ...s.primaryBtn, background:"#22c55e", color:"#fff" }} onClick={() => setShowBooking(true)}>📅 Book Now</button>
+                <button className="action-btn" style={s.primaryBtn} onClick={() => navigate(`/chat/${id}`)}>💬 Chat</button>
+              </>
             )}
             {isOwner && (
               <>
@@ -241,6 +270,16 @@ export default function ArtistProfile() {
           </div>
         </div>
       </div>
+
+      {/* ✅ BOOKING MODAL */}
+      {showBooking && (
+        <BookingModal
+          artist={artist}
+          currentUser={currentUser}
+          onClose={() => setShowBooking(false)}
+          onSuccess={() => { setShowBooking(false); setBookingDone(true); }}
+        />
+      )}
 
       {/* LIGHTBOX */}
       {lightbox && (
@@ -266,7 +305,7 @@ const s = {
   navLinks:           { display:"flex",gap:"24px",alignItems:"center" },
   navItemBtn:         { background:"none",border:"none",fontFamily:"'Nunito',sans-serif",fontSize:"13px",color:"#1e3a8a",fontWeight:700,letterSpacing:"1px",cursor:"pointer",padding:"4px 8px",borderRadius:"8px" },
   navItem:            { fontSize:"13px",color:"#1e3a8a",fontWeight:600,letterSpacing:"1.5px",opacity:0.6 },
-  navActionBtn:       { background:"#1e3a8a",color:"#fff",border:"none",padding:"9px 22px",borderRadius:"22px",fontFamily:"'Nunito',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer" },
+  navActionBtn:       { background:"#1e3a8a",color:"#fff",border:"none",padding:"9px 22px",borderRadius:"22px",fontFamily:"'Nunito',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer",transition:"opacity 0.2s" },
   heroContent:        { display:"flex",justifyContent:"space-between",alignItems:"flex-start",padding:"40px 40px 0",position:"relative",zIndex:2,gap:"20px",flexWrap:"wrap" },
   heroLeft:           { flex:1,maxWidth:"520px",minWidth:"280px",animation:"slideIn 0.6s ease both" },
   bigTitleWrap:       { marginBottom:"28px" },
@@ -288,6 +327,12 @@ const s = {
   statNum:            { fontFamily:"'Bebas Neue',sans-serif",fontSize:"22px",color:"#fff",letterSpacing:"1px" },
   statLbl:            { fontFamily:"'Nunito',sans-serif",fontSize:"10px",color:"rgba(255,255,255,0.6)",fontWeight:600,letterSpacing:"1px",textTransform:"uppercase" },
   statDivider:        { width:"1px",height:"32px",background:"rgba(255,255,255,0.2)",margin:"0 12px" },
+
+  // ✅ NEW booking card styles
+  bookCard:           { background:"#fff",borderRadius:16,padding:"18px 16px",marginTop:16,boxShadow:"4px 4px 0 rgba(30,58,138,0.15)",border:"1px solid rgba(30,58,138,0.15)",display:"flex",flexDirection:"column",gap:8 },
+  bookNowBtn:         { background:"#1e3a8a",color:"#fff",border:"none",padding:"12px",borderRadius:22,fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",transition:"opacity 0.2s",textAlign:"center" },
+  chatNowBtn:         { background:"transparent",color:"#1e3a8a",border:"2px solid #1e3a8a",padding:"10px",borderRadius:22,fontFamily:"'Nunito',sans-serif",fontWeight:800,fontSize:14,cursor:"pointer",textAlign:"center" },
+
   blueSection:        { background:"linear-gradient(160deg,#1e40af 0%,#1e3a8a 40%,#1d4ed8 100%)",display:"flex",position:"relative",minHeight:"600px" },
   verticalLabel:      { width:"64px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-end",padding:"0 0 40px 0",background:"rgba(0,0,0,0.15)",flexShrink:0,gap:"8px",pointerEvents:"none" },
   verticalText:       { fontFamily:"'Bebas Neue',sans-serif",fontSize:"28px",color:"#fff",letterSpacing:"4px",writingMode:"vertical-rl",transform:"rotate(180deg)",lineHeight:1 },
