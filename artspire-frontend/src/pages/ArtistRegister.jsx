@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { saveAuth } from "../utils/auth";
 
 // ── Notification (copied from Login) ─────────────────────────────────────────
 const NOTIF_THEMES = {
@@ -116,11 +117,9 @@ const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`
         bio: formData.bio,
         role: "artist",
       });
-      if (res.data.user) {
-        localStorage.setItem("artist", JSON.stringify(res.data.user));
-        localStorage.removeItem("user");
+      if (res.data.token && res.data.user) {
+        saveAuth(res.data.token, res.data.user);
       }
-      if (res.data.token) localStorage.setItem("token", res.data.token);
       showNotif("artist", `Welcome to ArtSpire, ${res.data.user?.name}! 🎨`);
       setTimeout(() => navigate("/artist-dashboard"), 1400);
     } catch (err) {
