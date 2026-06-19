@@ -3,6 +3,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { saveAuth } from "../utils/auth";
 
+const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+
 // ── Notification (copied from Login) ─────────────────────────────────────────
 const NOTIF_THEMES = {
   loading:  { bg: "#dbeafe", color: "#1e3a5f", border: "#93c5fd" },
@@ -108,7 +110,8 @@ export default function ArtistRegister() {
     if (!validateStep()) return;
     showNotif("loading", "Creating your artist profile...", false);
     try {
-const res = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/register`, {        name: formData.name,
+const res = await axios.post(`${API}/api/auth/register`, {
+        name: formData.name,
         email: formData.email,
         password: formData.password,
         category: formData.category,
