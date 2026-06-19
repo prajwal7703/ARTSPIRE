@@ -1,9 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { saveAuth } from "../utils/auth";
 
-// ✅ FIXED: correct backend URL
-const API = import.meta.env.VITE_API_URL || "https://artspire-backend-e3us.onrender.com";
+const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 const NOTIF_THEMES = {
   loading: { bg: "#dbeafe", color: "#1e3a5f", border: "#93c5fd" },
@@ -17,7 +17,7 @@ function NotifBar({ notif, onClose }) {
   if (!notif) return null;
   const theme = NOTIF_THEMES[notif.type] || NOTIF_THEMES.success;
   return (
-    <div style={{ position:"fixed", top:"20px", left:"50%", transform:"translateX(-50%)", zIndex:9999, minWidth:"320px", maxWidth:"520px", background:theme.bg, color:theme.color, border:`1px solid ${theme.border}`, borderRadius:"14px", padding:"14px 20px", display:"flex", alignItems:"center", gap:"12px", boxShadow:"0 8px 32px rgba(0,0,0,0.15)", animation:"notifSlide 0.35s cubic-bezier(0.34,1.3,0.64,1) both", fontFamily:"sans-serif", fontSize:"15px", fontWeight:"600" }}>
+    <div style={{ position:"fixed",top:"20px",left:"50%",transform:"translateX(-50%)",zIndex:9999,minWidth:"280px",maxWidth:"90vw",background:theme.bg,color:theme.color,border:`1px solid ${theme.border}`,borderRadius:"14px",padding:"14px 20px",display:"flex",alignItems:"center",gap:"12px",boxShadow:"0 8px 32px rgba(0,0,0,0.15)",fontFamily:"sans-serif",fontSize:"14px",fontWeight:"600" }}>
       <style>{`@keyframes notifSlide{from{opacity:0;transform:translateX(-50%) translateY(-20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
       {notif.type === "loading"
         ? <div style={{ width:"18px",height:"18px",border:`2px solid ${theme.border}`,borderTop:`2px solid ${theme.color}`,borderRadius:"50%",animation:"spin 0.75s linear infinite",flexShrink:0 }} />
@@ -33,9 +33,9 @@ function NotifBar({ notif, onClose }) {
 
 function StepDots({ step, total }) {
   return (
-    <div style={{ display:"flex", gap:"8px", justifyContent:"center", marginBottom:"28px" }}>
+    <div style={{ display:"flex",gap:"8px",justifyContent:"center",marginBottom:"28px" }}>
       {Array.from({ length: total }).map((_, i) => (
-        <div key={i} style={{ width:i===step?"24px":"8px", height:"8px", borderRadius:"4px", background:i===step?"#E8192C":i<step?"#86efac":"#d1d5db", transition:"all 0.3s ease" }} />
+        <div key={i} style={{ width:i===step?"24px":"8px",height:"8px",borderRadius:"4px",background:i===step?"#E8192C":i<step?"#86efac":"#d1d5db",transition:"all 0.3s ease" }} />
       ))}
     </div>
   );
@@ -47,7 +47,7 @@ export default function Register() {
   const [notif, setNotif] = useState(null);
   let notifTimer = null;
 
-  const [form, setForm] = useState({ name:"", email:"", password:"", confirmPassword:"", city:"", interests:[] });
+  const [form, setForm] = useState({ name:"",email:"",password:"",confirmPassword:"",city:"",interests:[] });
   const [showPass, setShowPass]       = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -66,10 +66,10 @@ export default function Register() {
 
   const validateStep = () => {
     if (step === 0) {
-      if (!form.name.trim())                            { showNotif("error","Please enter your full name."); return false; }
-      if (!form.email.trim())                           { showNotif("error","Please enter your email address."); return false; }
-      if (form.password.length < 6)                     { showNotif("error","Password must be at least 6 characters."); return false; }
-      if (form.password !== form.confirmPassword)       { showNotif("error","Passwords do not match."); return false; }
+      if (!form.name.trim())                      { showNotif("error","Please enter your full name."); return false; }
+      if (!form.email.trim())                     { showNotif("error","Please enter your email address."); return false; }
+      if (form.password.length < 6)               { showNotif("error","Password must be at least 6 characters."); return false; }
+      if (form.password !== form.confirmPassword) { showNotif("error","Passwords do not match."); return false; }
     }
     return true;
   };
@@ -78,24 +78,34 @@ export default function Register() {
   const prevStep = () => setStep(s => s-1);
 
   const handleSubmit = async () => {
-    showNotif("loading", "Creating your account...", false);
+    showNotif("loading","Creating your account...",false);
     try {
       const res = await axios.post(`${API}/api/auth/register`, {
         name: form.name, email: form.email, password: form.password,
         city: form.city, interests: form.interests, role: "user",
       });
-      if (res.data.token) localStorage.setItem("token", res.data.token);
-      if (res.data.user?.role === "artist") {
-        localStorage.setItem("artist", JSON.stringify(res.data.user));
-        localStorage.removeItem("user");
-      } else {
-        localStorage.setItem("user", JSON.stringify(res.data.user));
-        localStorage.removeItem("artist");
-      }
+      // ✅ FIXED: use saveAuth helper — puts data in right localStorage key
+      saveAuth(res.data.token, res.data.user);
       showNotif("welcome", `Welcome to ArtSpire, ${res.data.user?.name}! 🎉`);
       setTimeout(() => navigate("/"), 1400);
     } catch (err) {
       showNotif("error", err.response?.data?.message || "Registration failed. Email may already be used.");
+    }
+  };
+
+  const handleGoogleRegister = async () => {
+    try {
+      const { signInWithPopup } = await import("firebase/auth");
+      const { auth, provider }  = await import("../firebase");
+      const result = await signInWithPopup(auth, provider);
+      const user   = result.user;
+      const res    = await axios.post(`${API}/api/auth/google`, {
+        name: user.displayName, email: user.email, photo: user.photoURL, role: "user",
+      });
+      saveAuth(res.data.token, res.data.user);
+      window.location.href = "/";
+    } catch (err) {
+      if (err.code !== "auth/popup-closed-by-user") showNotif("error","Google sign-in failed.");
     }
   };
 
@@ -106,185 +116,150 @@ export default function Register() {
   return (
     <>
       <NotifBar notif={notif} onClose={() => setNotif(null)} />
-      <div style={s.page}>
-        <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        .reg-input { padding:13px 16px;border-radius:12px;border:1.5px solid #e2e8f0;background:#f8fafc;color:#1e293b;font-size:14px;font-weight:600;font-family:'Nunito',sans-serif;outline:none;width:100%; }
+        .reg-input:focus { border-color:#E8192C; }
+        .reg-primary { background:linear-gradient(90deg,#E8192C,#c0152a);color:#fff;border:none;padding:14px;border-radius:50px;font-family:'Nunito',sans-serif;font-weight:800;font-size:15px;cursor:pointer;width:100%; }
+        .reg-secondary { background:#f1f5f9;color:#64748b;border:none;padding:14px 20px;border-radius:50px;font-family:'Nunito',sans-serif;font-weight:800;font-size:14px;cursor:pointer; }
+        .reg-google { width:100%;padding:13px 24px;border:1.5px solid #e2e8f0;border-radius:50px;background:#fff;color:#1e293b;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Nunito',sans-serif; }
+        .interest-btn { padding:9px 12px;border-radius:10px;font-family:'Nunito',sans-serif;font-weight:700;font-size:12px;cursor:pointer;transition:all 0.2s; }
+      `}</style>
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
-        {/* LEFT */}
-        <div style={s.left}>
-          <div style={s.leftOverlay} />
-          <img src="/artlogin.jpg" alt="art" style={s.leftImg} />
-          <div style={s.leftContent}>
-            <div style={s.leftBrand}>ArtSpire</div>
-            <div style={s.leftTagline}>Discover artists.<br />Book experiences.</div>
-            <div style={s.featureList}>
-              {[{icon:"🎵",text:"50,000+ verified artists"},{icon:"⭐",text:"4.9★ average rating"},{icon:"🔒",text:"Secure & trusted platform"},{icon:"💸",text:"Best prices guaranteed"}].map((f,i)=>(
-                <div key={i} style={s.featureRow}><span style={s.featureIcon}>{f.icon}</span><span style={s.featureText}>{f.text}</span></div>
-              ))}
-            </div>
-            <div style={s.leftSteps}>
-              {["Your Account","Preferences"].map((label,i)=>(
-                <div key={i} style={{...s.leftStep,...(i===step?s.leftStepActive:i<step?s.leftStepDone:{})}}>
-                  <div style={{...s.leftStepNum,...(i===step?s.leftStepNumActive:i<step?s.leftStepNumDone:{})}}>{i<step?"✓":i+1}</div>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
+      <div style={{ minHeight:"100vh",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px" }}>
+        <div style={{ width:"100%",maxWidth:"480px",background:"#fff",borderRadius:"28px",padding:"clamp(20px,5vw,36px)",boxShadow:"0 8px 40px rgba(0,0,0,0.08)" }}>
+
+          {/* Logo */}
+          <div style={{ textAlign:"center",marginBottom:"24px" }}>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(28px,6vw,36px)",color:"#E8192C",letterSpacing:"3px" }}>ArtSpire</div>
+            <div style={{ fontSize:"13px",color:"#94a3b8",fontWeight:600 }}>Discover & Book Local Artists</div>
           </div>
-        </div>
 
-        {/* RIGHT */}
-        <div style={s.right}>
-          <div style={s.formCard}>
-            <div style={s.topLink}>Already have an account?{" "}<span style={s.topLinkBtn} onClick={() => navigate("/login")}>Sign In</span></div>
-            <StepDots step={step} total={2} />
+          <div style={{ textAlign:"center",fontSize:"13px",color:"#94a3b8",fontWeight:600,marginBottom:"20px" }}>
+            Already have an account?{" "}
+            <span style={{ color:"#E8192C",cursor:"pointer",fontWeight:800 }} onClick={() => navigate("/login")}>Sign In</span>
+          </div>
 
-            {step === 0 && (
-              <div style={s.stepWrap}>
-                <div style={s.stepTitle}>Create Account</div>
-                <div style={s.stepSub}>Find and book amazing artists</div>
-                <div style={s.fields}>
-                  <Field label="Full Name" name="name" placeholder="Arjun Sharma" value={form.name} onChange={handleChange} />
-                  <Field label="Email Address" name="email" type="email" placeholder="you@example.com" value={form.email} onChange={handleChange} />
-                  <div style={s.fieldGroup}>
-                    <label style={s.fieldLabel}>Password</label>
-                    <div style={s.inputWrap}>
-                      <input type={showPass?"text":"password"} name="password" placeholder="Min. 6 characters" value={form.password} onChange={handleChange} style={{...s.input,flex:1}} />
-                      <button type="button" onClick={()=>setShowPass(!showPass)} style={s.eyeBtn}>{showPass?"🙈":"👁️"}</button>
-                    </div>
-                    {form.password && (
-                      <div style={{ marginTop:"6px" }}>
-                        <div style={{ display:"flex", gap:"4px" }}>
-                          {[1,2,3].map(lvl=><div key={lvl} style={{ flex:1,height:"4px",borderRadius:"2px",background:passwordStrength>=lvl?strengthColors[passwordStrength-1]:"#e2e8f0",transition:"background 0.3s" }} />)}
-                        </div>
-                        <div style={{ fontSize:"11px",color:strengthColors[passwordStrength-1],fontWeight:700,marginTop:"4px" }}>{strengthLabels[passwordStrength-1]}</div>
-                      </div>
-                    )}
-                  </div>
-                  <div style={s.fieldGroup}>
-                    <label style={s.fieldLabel}>Confirm Password</label>
-                    <div style={s.inputWrap}>
-                      <input type={showConfirm?"text":"password"} name="confirmPassword" placeholder="Repeat password" value={form.confirmPassword} onChange={handleChange} style={{...s.input,flex:1}} />
-                      <button type="button" onClick={()=>setShowConfirm(!showConfirm)} style={s.eyeBtn}>{showConfirm?"🙈":"👁️"}</button>
-                    </div>
-                    {form.confirmPassword && form.password !== form.confirmPassword && <div style={{ fontSize:"12px",color:"#ef4444",fontWeight:700,marginTop:"4px" }}>Passwords do not match</div>}
-                    {form.confirmPassword && form.password === form.confirmPassword && form.password.length >= 6 && <div style={{ fontSize:"12px",color:"#22c55e",fontWeight:700,marginTop:"4px" }}>✓ Passwords match</div>}
-                  </div>
-                </div>
-                <button style={s.primaryBtn} onClick={nextStep}>Continue →</button>
-                <div style={s.divider}><span style={s.dividerText}>or</span></div>
-                <button style={s.googleBtn} onClick={() => {
-                  import("firebase/auth").then(({ signInWithPopup }) => {
-  import("../firebase").then(({ auth, provider }) => {
-    signInWithPopup(auth, provider).then(async (result) => {
-      const user = result.user;
-      const res = await axios.post(`${API}/api/auth/google`, {
-        name: user.displayName, email: user.email,
-        photo: user.photoURL, role: "user",
-      });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      window.location.href = "/";
-    }).catch((err) => {
-      if (err.code !== "auth/popup-closed-by-user") console.error("Google error:", err);
-    });
-  });
-});
-                }}>
-                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ marginRight:10 }}>
-                    <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/>
-                    <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/>
-                    <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/>
-                    <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.31z"/>
-                  </svg>
-                  Continue with Google
-                </button>
+          <StepDots step={step} total={2} />
+
+          {/* STEP 0 */}
+          {step === 0 && (
+            <div style={{ display:"flex",flexDirection:"column",gap:"16px" }}>
+              <div>
+                <div style={{ fontSize:"clamp(20px,5vw,24px)",fontWeight:900,color:"#1e293b",marginBottom:"4px" }}>Create Account</div>
+                <div style={{ fontSize:"14px",color:"#94a3b8",fontWeight:600 }}>Find and book amazing artists</div>
               </div>
-            )}
 
-            {step === 1 && (
-              <div style={s.stepWrap}>
-                <div style={s.stepTitle}>Your Preferences</div>
-                <div style={s.stepSub}>Help us personalise your experience</div>
-                <div style={s.fields}>
-                  <Field label="City (optional)" name="city" placeholder="Mumbai" value={form.city} onChange={handleChange} />
-                  <div style={s.fieldGroup}>
-                    <label style={s.fieldLabel}>Interests (optional)</label>
-                    <div style={s.categoryGrid}>
-                      {INTERESTS.map(item=>(
-                        <button key={item} type="button" onClick={()=>toggleInterest(item)} style={{...s.catBtn,...(form.interests.includes(item)?s.catBtnActive:{})}}>{item}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={s.summaryCard}>
-                    <div style={s.summaryRow}><span style={s.summaryLbl}>Name</span><span style={s.summaryVal}>{form.name}</span></div>
-                    <div style={s.summaryRow}><span style={s.summaryLbl}>Email</span><span style={s.summaryVal}>{form.email}</span></div>
-                    {form.city && <div style={s.summaryRow}><span style={s.summaryLbl}>City</span><span style={s.summaryVal}>{form.city}</span></div>}
-                  </div>
+              <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
+                <label style={s.fieldLabel}>Full Name</label>
+                <input className="reg-input" type="text" name="name" placeholder="Arjun Sharma" value={form.name} onChange={handleChange} />
+              </div>
+
+              <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
+                <label style={s.fieldLabel}>Email Address</label>
+                <input className="reg-input" type="email" name="email" placeholder="you@example.com" value={form.email} onChange={handleChange} />
+              </div>
+
+              <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
+                <label style={s.fieldLabel}>Password</label>
+                <div style={{ display:"flex",alignItems:"center",background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:"12px",padding:"0 14px" }}>
+                  <input type={showPass?"text":"password"} name="password" placeholder="Min. 6 characters" value={form.password} onChange={handleChange} style={{ border:"none",background:"none",flex:1,padding:"13px 0",fontSize:"14px",fontWeight:600,fontFamily:"'Nunito',sans-serif",outline:"none",color:"#1e293b",width:"100%" }} />
+                  <button type="button" onClick={()=>setShowPass(!showPass)} style={{ border:"none",background:"none",cursor:"pointer",fontSize:"16px",flexShrink:0 }}>{showPass?"🙈":"👁️"}</button>
                 </div>
-                <div style={{ display:"flex", gap:"12px" }}>
-                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
-                  <button style={{...s.primaryBtn,flex:1}} onClick={handleSubmit}>🎉 Join ArtSpire</button>
+                {form.password && (
+                  <div>
+                    <div style={{ display:"flex",gap:"4px" }}>
+                      {[1,2,3].map(lvl=><div key={lvl} style={{ flex:1,height:"4px",borderRadius:"2px",background:passwordStrength>=lvl?strengthColors[passwordStrength-1]:"#e2e8f0",transition:"background 0.3s" }} />)}
+                    </div>
+                    <div style={{ fontSize:"11px",color:strengthColors[passwordStrength-1],fontWeight:700,marginTop:"4px" }}>{strengthLabels[passwordStrength-1]}</div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
+                <label style={s.fieldLabel}>Confirm Password</label>
+                <div style={{ display:"flex",alignItems:"center",background:"#f8fafc",border:"1.5px solid #e2e8f0",borderRadius:"12px",padding:"0 14px" }}>
+                  <input type={showConfirm?"text":"password"} name="confirmPassword" placeholder="Repeat password" value={form.confirmPassword} onChange={handleChange} style={{ border:"none",background:"none",flex:1,padding:"13px 0",fontSize:"14px",fontWeight:600,fontFamily:"'Nunito',sans-serif",outline:"none",color:"#1e293b",width:"100%" }} />
+                  <button type="button" onClick={()=>setShowConfirm(!showConfirm)} style={{ border:"none",background:"none",cursor:"pointer",fontSize:"16px",flexShrink:0 }}>{showConfirm?"🙈":"👁️"}</button>
+                </div>
+                {form.confirmPassword && form.password !== form.confirmPassword && <div style={{ fontSize:"12px",color:"#ef4444",fontWeight:700 }}>Passwords do not match</div>}
+                {form.confirmPassword && form.password === form.confirmPassword && form.password.length >= 6 && <div style={{ fontSize:"12px",color:"#22c55e",fontWeight:700 }}>✓ Passwords match</div>}
+              </div>
+
+              <button className="reg-primary" onClick={nextStep}>Continue →</button>
+
+              <div style={{ display:"flex",alignItems:"center",gap:"12px" }}>
+                <div style={{ flex:1,height:"1px",background:"#e2e8f0" }} />
+                <span style={{ fontSize:"12px",color:"#cbd5e1",fontWeight:700 }}>or</span>
+                <div style={{ flex:1,height:"1px",background:"#e2e8f0" }} />
+              </div>
+
+              <button className="reg-google" onClick={handleGoogleRegister}>
+                <svg width="18" height="18" viewBox="0 0 18 18" style={{ marginRight:10,flexShrink:0 }}>
+                  <path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 002.38-5.88c0-.57-.05-.66-.15-1.18z"/>
+                  <path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 01-7.18-2.54H1.83v2.07A8 8 0 008.98 17z"/>
+                  <path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 010-3.04V5.41H1.83a8 8 0 000 7.18l2.67-2.07z"/>
+                  <path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 001.83 5.4L4.5 7.49a4.77 4.77 0 014.48-3.31z"/>
+                </svg>
+                Continue with Google
+              </button>
+            </div>
+          )}
+
+          {/* STEP 1 */}
+          {step === 1 && (
+            <div style={{ display:"flex",flexDirection:"column",gap:"16px" }}>
+              <div>
+                <div style={{ fontSize:"clamp(20px,5vw,24px)",fontWeight:900,color:"#1e293b",marginBottom:"4px" }}>Your Preferences</div>
+                <div style={{ fontSize:"14px",color:"#94a3b8",fontWeight:600 }}>Help us personalise your experience</div>
+              </div>
+
+              <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
+                <label style={s.fieldLabel}>City (optional)</label>
+                <input className="reg-input" type="text" name="city" placeholder="Mumbai" value={form.city} onChange={handleChange} />
+              </div>
+
+              <div style={{ display:"flex",flexDirection:"column",gap:"6px" }}>
+                <label style={s.fieldLabel}>Interests (optional)</label>
+                <div style={{ display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:"8px" }}>
+                  {INTERESTS.map(item=>(
+                    <button key={item} type="button" className="interest-btn" onClick={()=>toggleInterest(item)} style={{ border:`1.5px solid ${form.interests.includes(item)?"#E8192C":"#e2e8f0"}`,background:form.interests.includes(item)?"#fff0f0":"#f8fafc",color:form.interests.includes(item)?"#E8192C":"#64748b" }}>
+                      {item}
+                    </button>
+                  ))}
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Summary */}
+              <div style={{ background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:"14px",padding:"16px",display:"flex",flexDirection:"column",gap:"10px" }}>
+                <Row label="Name"  value={form.name} />
+                <Row label="Email" value={form.email} />
+                {form.city && <Row label="City" value={form.city} />}
+              </div>
+
+              <div style={{ display:"flex",gap:"12px" }}>
+                <button className="reg-secondary" onClick={prevStep}>← Back</button>
+                <button className="reg-primary" style={{ flex:1 }} onClick={handleSubmit}>🎉 Join ArtSpire</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>
   );
 }
 
-function Field({ label, name, type="text", placeholder, value, onChange }) {
+function Row({ label, value }) {
   return (
-    <div style={s.fieldGroup}>
-      <label style={s.fieldLabel}>{label}</label>
-      <input type={type} name={name} placeholder={placeholder} value={value} onChange={onChange} style={s.input} />
+    <div style={{ display:"flex",justifyContent:"space-between",gap:8 }}>
+      <span style={{ fontSize:"11px",fontWeight:800,color:"#94a3b8",textTransform:"uppercase" }}>{label}</span>
+      <span style={{ fontSize:"13px",fontWeight:700,color:"#1e293b",textAlign:"right" }}>{value}</span>
     </div>
   );
 }
 
 const s = {
-  page:           { minHeight:"100vh", display:"flex", fontFamily:"'Nunito', sans-serif" },
-  left:           { width:"42%", position:"relative", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 },
-  leftImg:        { position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover" },
-  leftOverlay:    { position:"absolute", inset:0, background:"linear-gradient(to top, rgba(2,6,23,0.92), rgba(100,0,20,0.72))", zIndex:1 },
-  leftContent:    { position:"relative", zIndex:2, padding:"40px", color:"#fff" },
-  leftBrand:      { fontFamily:"'Bebas Neue', sans-serif", fontSize:"52px", letterSpacing:"4px", color:"#fff", marginBottom:"8px" },
-  leftTagline:    { fontSize:"16px", color:"rgba(255,255,255,0.7)", fontWeight:600, lineHeight:1.6, marginBottom:"32px" },
-  featureList:    { display:"flex", flexDirection:"column", gap:"12px", marginBottom:"36px" },
-  featureRow:     { display:"flex", alignItems:"center", gap:"12px" },
-  featureIcon:    { fontSize:"18px", width:"28px", textAlign:"center" },
-  featureText:    { fontSize:"13px", color:"rgba(255,255,255,0.75)", fontWeight:600 },
-  leftSteps:      { display:"flex", flexDirection:"column", gap:"16px" },
-  leftStep:       { display:"flex", alignItems:"center", gap:"14px", color:"rgba(255,255,255,0.4)", fontWeight:700, fontSize:"14px", transition:"color 0.3s" },
-  leftStepActive: { color:"#fff" },
-  leftStepDone:   { color:"#86efac" },
-  leftStepNum:    { width:"32px", height:"32px", borderRadius:"50%", background:"rgba(255,255,255,0.1)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"13px", fontWeight:800, flexShrink:0, transition:"background 0.3s, color 0.3s" },
-  leftStepNumActive: { background:"#E8192C", color:"#fff" },
-  leftStepNumDone:   { background:"#86efac", color:"#14532d" },
-  right:          { flex:1, background:"#f8fafc", display:"flex", alignItems:"center", justifyContent:"center", padding:"40px 24px", overflowY:"auto" },
-  formCard:       { width:"100%", maxWidth:"440px", background:"#fff", borderRadius:"28px", padding:"36px", boxShadow:"0 8px 40px rgba(0,0,0,0.08)" },
-  topLink:        { textAlign:"center", fontSize:"13px", color:"#94a3b8", fontWeight:600, marginBottom:"20px" },
-  topLinkBtn:     { color:"#E8192C", cursor:"pointer", fontWeight:800 },
-  stepWrap:       { display:"flex", flexDirection:"column", gap:"0" },
-  stepTitle:      { fontSize:"28px", fontWeight:900, color:"#1e293b", marginBottom:"4px" },
-  stepSub:        { fontSize:"14px", color:"#94a3b8", fontWeight:600, marginBottom:"24px" },
-  fields:         { display:"flex", flexDirection:"column", gap:"16px", marginBottom:"24px" },
-  fieldGroup:     { display:"flex", flexDirection:"column", gap:"6px" },
-  fieldLabel:     { fontSize:"11px", fontWeight:800, color:"#64748b", letterSpacing:"1px", textTransform:"uppercase" },
-  input:          { padding:"13px 16px", borderRadius:"12px", border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:"14px", fontWeight:600, fontFamily:"'Nunito', sans-serif", outline:"none", transition:"border-color 0.2s", width:"100%", boxSizing:"border-box" },
-  inputWrap:      { display:"flex", alignItems:"center", background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:"12px", padding:"0 14px" },
-  eyeBtn:         { border:"none", background:"none", cursor:"pointer", fontSize:"16px", padding:"0 0 0 8px", flexShrink:0 },
-  categoryGrid:   { display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(110px, 1fr))", gap:"8px" },
-  catBtn:         { padding:"9px 12px", borderRadius:"10px", border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#64748b", fontFamily:"'Nunito', sans-serif", fontWeight:700, fontSize:"12px", cursor:"pointer", transition:"all 0.2s", textAlign:"center" },
-  catBtnActive:   { background:"#fff0f0", borderColor:"#E8192C", color:"#E8192C" },
-  summaryCard:    { background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"14px", padding:"16px", display:"flex", flexDirection:"column", gap:"10px" },
-  summaryRow:     { display:"flex", justifyContent:"space-between", alignItems:"center" },
-  summaryLbl:     { fontSize:"11px", fontWeight:800, color:"#94a3b8", textTransform:"uppercase", letterSpacing:"0.8px" },
-  summaryVal:     { fontSize:"13px", fontWeight:700, color:"#1e293b" },
-  primaryBtn:     { background:"linear-gradient(90deg,#E8192C,#c0152a)", color:"#fff", border:"none", padding:"14px", borderRadius:"50px", fontFamily:"'Nunito', sans-serif", fontWeight:800, fontSize:"15px", cursor:"pointer", width:"100%", letterSpacing:"0.3px" },
-  secondaryBtn:   { background:"#f1f5f9", color:"#64748b", border:"none", padding:"14px 20px", borderRadius:"50px", fontFamily:"'Nunito', sans-serif", fontWeight:800, fontSize:"14px", cursor:"pointer", flexShrink:0 },
-  googleBtn:      { width:"100%", padding:"13px 24px", border:"1.5px solid #e2e8f0", borderRadius:"50px", background:"#fff", color:"#1e293b", fontSize:"14px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Nunito', sans-serif" },
-  divider:        { display:"flex", alignItems:"center", margin:"20px 0", gap:"12px" },
-  dividerText:    { fontSize:"12px", color:"#cbd5e1", fontWeight:700, whiteSpace:"nowrap", background:"#fff", padding:"0 8px" },
+  fieldLabel: { fontSize:"11px",fontWeight:800,color:"#64748b",letterSpacing:"1px",textTransform:"uppercase" },
 };

@@ -3,7 +3,7 @@ const router     = express.Router();
 const bcrypt     = require("bcryptjs");
 const jwt        = require("jsonwebtoken");
 const { Resend } = require("resend");
-const User       = require("../models/Artist"); // single collection for both roles
+const User       = require("../models/User"); // ✅ FIXED: was Artist — now User
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) { console.error("Missing JWT_SECRET"); process.exit(1); }
@@ -13,7 +13,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ── REGISTER ──────────────────────────────────────────────────────────────────
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password, category, bio, city, instagram, experience, role } = req.body;
+    const { name, email, password, category, bio, city, instagram, experience, role, interests } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({ message: "Name, email and password are required" });
@@ -25,20 +25,20 @@ router.post("/register", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({
       name, email,
-      password: hashedPassword,
-      category: category || "",
-      bio:      bio      || "",
-      city:     city     || "",
+      password:   hashedPassword,
+      category:   category   || "",
+      bio:        bio        || "",
+      city:       city       || "",
       instagram:  instagram  || "",
       experience: experience || "",
-      role: role || "user",
+      role:       role       || "user",
+      interests:  interests  || [],
     });
 
     await newUser.save();
     const token = jwt.sign({ id: newUser._id, role: newUser.role }, JWT_SECRET, { expiresIn: "7d" });
 
-    // return both user and artist keys so frontend works regardless of role
-    res.json({ success: true, token, user: safeUser(newUser), artist: safeUser(newUser) });
+    res.json({ success: true, token, user: safeUser(newUser) });
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ message: "Server error" });
@@ -54,7 +54,7 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const account = await User.findOne({ email });
+    const account = await User.findOne({ email }).select("+password");
     if (!account) return res.status(400).json({ message: "Invalid email or password" });
 
     if (!account.password) {
@@ -65,10 +65,8 @@ router.post("/login", async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
 
     const token = jwt.sign({ id: account._id, role: account.role }, JWT_SECRET, { expiresIn: "7d" });
-    const safe  = safeUser(account);
 
-    // return both keys so frontend works for both roles
-    res.json({ success: true, token, user: safe, artist: safe });
+    res.json({ success: true, token, user: safeUser(account) });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ message: "Server error" });
@@ -84,7 +82,6 @@ router.post("/google", async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      // first time — create account
       user = new User({
         name,
         email,
@@ -96,9 +93,8 @@ router.post("/google", async (req, res) => {
     }
 
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, { expiresIn: "7d" });
-    const safe  = safeUser(user);
 
-    res.json({ success: true, token, user: safe, artist: safe });
+    res.json({ success: true, token, user: safeUser(user) });
   } catch (err) {
     console.error("Google login error:", err);
     res.status(500).json({ message: "Server error" });
@@ -113,7 +109,6 @@ router.post("/forgot-password", async (req, res) => {
 
     const account = await User.findOne({ email });
 
-    // always return success for security (don't reveal if email exists)
     if (!account || !account.password) {
       return res.json({ success: true, message: "If that email is registered, a reset link has been sent." });
     }
@@ -155,11 +150,8 @@ router.post("/reset-password", async (req, res) => {
     }
 
     let decoded;
-    try {
-      decoded = jwt.verify(token, JWT_SECRET);
-    } catch {
-      return res.status(400).json({ message: "Reset link is invalid or has expired." });
-    }
+    try { decoded = jwt.verify(token, JWT_SECRET); }
+    catch { return res.status(400).json({ message: "Reset link is invalid or has expired." }); }
 
     const account = await User.findById(decoded.id);
     if (!account) return res.status(404).json({ message: "Account not found." });

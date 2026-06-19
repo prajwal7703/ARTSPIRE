@@ -1,96 +1,53 @@
-const express = require("express");
-const router = express.Router();
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const Artist = require("../models/user"); // your mongoose model
-const User = require("../models/User");     // your mongoose model
+// src/utils/auth.js
+// Single source of truth for reading/writing auth state.
+// All pages import from here — never read localStorage directly.
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.error("Missing JWT_SECRET environment variable.");
-  process.exit(1);
+export function getUser() {
+  try { return JSON.parse(localStorage.getItem("user") || "null"); } catch { return null; }
 }
 
-// 🎨 ARTIST REGISTER
-router.post("/register", async (req, res) => {
-  try {
-    const { name, email, password, category, bio, city, role } = req.body;
+export function getArtist() {
+  try { return JSON.parse(localStorage.getItem("artist") || "null"); } catch { return null; }
+}
 
-    // Check if already exists
-    const existing = await Artist.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ message: "Email already registered" });
-    }
+export function getToken() {
+  return localStorage.getItem("token") || null;
+}
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+/** Returns the logged-in account regardless of role */
+export function getCurrentAccount() {
+  return getArtist() || getUser();
+}
 
-    // Save to MongoDB
-    const newArtist = new Artist({
-      name, email,
-      password: hashedPassword,
-      category, bio, city,
-      role: "artist"
-    });
+export function isLoggedIn() {
+  return !!(getToken() && getCurrentAccount());
+}
 
-    await newArtist.save();
+export function isArtist() {
+  const a = getArtist();
+  const u = getUser();
+  if (a?.role === "artist") return true;
+  if (u?.role === "artist") return true;
+  return false;
+}
 
-    // Generate token
-    const token = jwt.sign(
-      { id: newArtist._id },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // ✅ Send back artist + token
-    res.json({
-      artist: newArtist,
-      token: token
-    });
-
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ message: "Server error" });
+/**
+ * Persist login response from any auth endpoint.
+ * Puts the data in the right localStorage key based on role.
+ */
+export function saveAuth(token, user) {
+  localStorage.setItem("token", token);
+  if (user?.role === "artist") {
+    localStorage.setItem("artist", JSON.stringify(user));
+    localStorage.removeItem("user");
+  } else {
+    localStorage.setItem("user", JSON.stringify(user));
+    localStorage.removeItem("artist");
   }
-});
+}
 
-// 🔑 LOGIN
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password, role } = req.body;
-
-    let account;
-
-    if (role === "artist") {
-      account = await Artist.findOne({ email });
-    } else {
-      account = await User.findOne({ email });
-    }
-
-    if (!account) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const isMatch = await bcrypt.compare(password, account.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: "Wrong password" });
-    }
-
-    const token = jwt.sign(
-      { id: account._id },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    if (role === "artist") {
-      res.json({ artist: account, token });
-    } else {
-      res.json({ user: account, token });
-    }
-
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-});
-
-module.exports = router;
+export function logout() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("artist");
+}
