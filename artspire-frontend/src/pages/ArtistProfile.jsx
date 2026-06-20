@@ -313,7 +313,7 @@ function RatingSection({ artist, currentUser, artistId, onUpdate }) {
                 <span style={{ fontWeight:800, fontSize:12, color:"#333" }}>{r.userName||"User"}</span>
                 <span style={{ fontSize:11, color:"#f59e0b" }}>{"★".repeat(r.rating||0)}</span>
               </div>
-              {r.review && <div style={{ fontSize:12, color:"#666", fontFamily:"'Caveat',cursive", fontSize:14 }}>{r.review}</div>}
+              {r.review && <div style={{ fontSize:12, color:"#666", fontFamily:"'Caveat',cursive",  }}>{r.review}</div>}
             </div>
           ))}
         </div>
