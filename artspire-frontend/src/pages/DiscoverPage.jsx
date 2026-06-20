@@ -7,7 +7,6 @@ const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onren
 const CATEGORIES = ["All", "Singer", "Dancer", "Musician", "Painter", "Photographer", "Actor", "Comedian", "Other"];
 const CITIES = ["All", "Bangalore", "Mumbai", "Delhi", "Chennai", "Hyderabad", "Pune", "Kolkata", "Mangaluru"];
 
-// ── Skeleton card ─────────────────────────────────────────────────────────────
 const SkeletonCard = () => (
   <div style={{ background:"#fff", borderRadius:20, overflow:"hidden", boxShadow:"0 2px 16px rgba(0,0,0,0.06)" }}>
     <div style={{ height:140, background:"linear-gradient(90deg,#f0f4ff 25%,#e0e7ff 50%,#f0f4ff 75%)", backgroundSize:"200% 100%", animation:"shimmer 1.4s infinite" }} />
@@ -19,14 +18,12 @@ const SkeletonCard = () => (
   </div>
 );
 
-// ── Star rating ───────────────────────────────────────────────────────────────
 const Stars = ({ rating = 5 }) => (
   <span style={{ color:"#f59e0b", fontSize:12, letterSpacing:1 }}>
     {"★".repeat(Math.round(rating))}{"☆".repeat(5 - Math.round(rating))}
   </span>
 );
 
-// ── Artist card ───────────────────────────────────────────────────────────────
 const ArtistCard = ({ artist, onClick }) => {
   const [imgErr, setImgErr] = useState(false);
   const initials = artist.name ? artist.name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) : "A";
@@ -38,7 +35,6 @@ const ArtistCard = ({ artist, onClick }) => {
       onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-4px)"; e.currentTarget.style.boxShadow="0 12px 32px rgba(30,58,138,0.13)"; }}
       onMouseLeave={e=>{ e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 2px 16px rgba(0,0,0,0.06)"; }}
     >
-      {/* Cover / gradient header */}
       <div style={{ height:90, background: artist.coverImage ? `url(${artist.coverImage}) center/cover` : `linear-gradient(135deg,${color}33,${color}11)`, position:"relative" }}>
         <div style={{ position:"absolute", bottom:-28, left:16 }}>
           {artist.profileImage && !imgErr
@@ -46,15 +42,12 @@ const ArtistCard = ({ artist, onClick }) => {
             : <div style={{ width:56, height:56, borderRadius:"50%", border:"3px solid #fff", background:color, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:20, color:"#fff", boxShadow:"0 2px 10px rgba(0,0,0,0.12)", fontFamily:"'Bebas Neue',sans-serif" }}>{initials}</div>
           }
         </div>
-        {/* Category badge */}
         {artist.category && (
           <div style={{ position:"absolute", top:10, right:10, background:"rgba(255,255,255,0.92)", borderRadius:20, padding:"3px 10px", fontSize:11, fontWeight:800, color, fontFamily:"'Nunito',sans-serif" }}>
             {artist.category}
           </div>
         )}
       </div>
-
-      {/* Content */}
       <div style={{ padding:"36px 16px 16px" }}>
         <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:"#1e293b", letterSpacing:0.5, marginBottom:2 }}>{artist.name}</div>
         <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
@@ -64,7 +57,7 @@ const ArtistCard = ({ artist, onClick }) => {
         <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
           {artist.city && (
             <span style={{ fontSize:11, fontWeight:700, color:"#64748b", fontFamily:"'Nunito',sans-serif", display:"flex", alignItems:"center", gap:3 }}>
-              📍 {artist.city}
+              📍 {artist.city.trim()}
             </span>
           )}
           {artist.experience && (
@@ -89,41 +82,57 @@ const ArtistCard = ({ artist, onClick }) => {
   );
 };
 
-// ── Main Discover Page ────────────────────────────────────────────────────────
 export default function DiscoverPage() {
   const navigate  = useNavigate();
-  const [artists,    setArtists]    = useState([]);
-  const [filtered,   setFiltered]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [search,     setSearch]     = useState("");
-  const [category,   setCategory]   = useState("All");
-  const [city,       setCity]       = useState("All");
-  const [sortBy,     setSortBy]     = useState("newest");
+  const [artists,      setArtists]      = useState([]);
+  const [filtered,     setFiltered]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState("");
+  const [search,       setSearch]       = useState("");
+  const [category,     setCategory]     = useState("All");
+  const [city,         setCity]         = useState("All");
+  const [sortBy,       setSortBy]       = useState("newest");
   const [mobileFilter, setMobileFilter] = useState(false);
   const searchRef = useRef(null);
 
   useEffect(() => { fetchArtists(); }, []);
-
   useEffect(() => { applyFilters(); }, [artists, search, category, city, sortBy]);
 
   const fetchArtists = async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await axios.get(`${API}/api/users`);
-      const all = Array.isArray(res.data) ? res.data : [];
-      const onlyArtists = all.filter(u => u.role === "artist");
+      // Defensive: ensure we always have an array
+      const data = Array.isArray(res.data) ? res.data : [];
+      if (data.length === 0) console.warn("API returned empty array from /api/users");
+      // Filter to artists only
+      const onlyArtists = data.filter(u => u.role === "artist");
+      console.log(`Fetched ${data.length} users, ${onlyArtists.length} artists`);
       setArtists(onlyArtists);
-    } catch(e) { console.log(e); }
+    } catch (e) {
+      console.error("fetchArtists failed:", e.response?.status, e.response?.data || e.message);
+      setError(`Failed to load artists. ${e.response?.data?.message || e.message}`);
+    }
     setLoading(false);
   };
 
   const applyFilters = () => {
     let list = [...artists];
-    if (search.trim()) list = list.filter(a => a.name?.toLowerCase().includes(search.toLowerCase()) || a.bio?.toLowerCase().includes(search.toLowerCase()));
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(a =>
+        a.name?.toLowerCase().includes(q) ||
+        a.city?.toLowerCase().includes(q) ||
+        a.bio?.toLowerCase().includes(q) ||
+        a.category?.toLowerCase().includes(q)
+      );
+    }
+    // Trim city values when comparing to handle trailing spaces in DB
     if (category !== "All") list = list.filter(a => a.category === category);
-    if (city !== "All") list = list.filter(a => a.city === city);
+    if (city !== "All") list = list.filter(a => a.city?.trim() === city.trim());
     if (sortBy === "rating") list.sort((a,b) => (b.rating||5) - (a.rating||5));
-    else if (sortBy === "name") list.sort((a,b) => a.name?.localeCompare(b.name));
+    else if (sortBy === "name") list.sort((a,b) => (a.name||"").localeCompare(b.name||""));
     else list.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
     setFiltered(list);
   };
@@ -131,7 +140,10 @@ export default function DiscoverPage() {
   const clearFilters = () => { setSearch(""); setCategory("All"); setCity("All"); setSortBy("newest"); };
   const hasFilters = search || category !== "All" || city !== "All";
 
-  const currentUser = (() => { try { return JSON.parse(localStorage.getItem("artist") || localStorage.getItem("user") || "{}"); } catch { return {}; } })();
+  const currentUser = (() => {
+    try { return JSON.parse(localStorage.getItem("artist") || localStorage.getItem("user") || "{}"); }
+    catch { return {}; }
+  })();
 
   return (
     <div style={{ minHeight:"100vh", background:"#f0f4ff", fontFamily:"'Nunito',sans-serif" }}>
@@ -144,7 +156,6 @@ export default function DiscoverPage() {
         input:focus, select:focus { outline:none; border-color:#1e3a8a !important; }
         ::-webkit-scrollbar { width:4px; }
         ::-webkit-scrollbar-thumb { background:#c7d2fe; border-radius:4px; }
-
         @media (max-width: 768px) {
           .discover-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
           .discover-hero-title { font-size: 36px !important; }
@@ -165,7 +176,7 @@ export default function DiscoverPage() {
         }
       `}</style>
 
-      {/* ── NAVBAR ── */}
+      {/* NAVBAR */}
       <nav style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"0 24px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, zIndex:100, boxShadow:"0 1px 12px rgba(0,0,0,0.06)" }}>
         <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:"#1e3a8a", letterSpacing:2, cursor:"pointer" }} onClick={() => navigate("/")}>
           ARTSPIRE
@@ -173,7 +184,7 @@ export default function DiscoverPage() {
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
           {currentUser._id ? (
             <>
-              <button onClick={() => navigate(currentUser.role === "artist" ? "/artist-dashboard" : "/dashboard")} style={{ background:"#f0f4ff", color:"#1e3a8a", border:"none", padding:"8px 16px", borderRadius:20, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
+              <button onClick={() => navigate(currentUser.role === "artist" ? "/artist-dashboard" : "/")} style={{ background:"#f0f4ff", color:"#1e3a8a", border:"none", padding:"8px 16px", borderRadius:20, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
                 Dashboard
               </button>
               <button onClick={() => navigate(`/chat/${currentUser._id}`)} style={{ background:"#1e3a8a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:20, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
@@ -189,9 +200,8 @@ export default function DiscoverPage() {
         </div>
       </nav>
 
-      {/* ── HERO ── */}
+      {/* HERO */}
       <div className="hero-section" style={{ background:"linear-gradient(135deg,#1e3a8a 0%,#3b82f6 60%,#6366f1 100%)", padding:"40px 24px 48px", position:"relative", overflow:"hidden" }}>
-        {/* dot grid bg */}
         <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", opacity:0.08, pointerEvents:"none" }} xmlns="http://www.w3.org/2000/svg">
           <defs><pattern id="dots" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1.5" fill="#fff"/></pattern></defs>
           <rect width="100%" height="100%" fill="url(#dots)"/>
@@ -206,27 +216,23 @@ export default function DiscoverPage() {
           <div className="discover-hero-sub" style={{ fontSize:16, color:"rgba(255,255,255,0.8)", fontWeight:600, marginBottom:28, lineHeight:1.6 }}>
             Browse singers, dancers, photographers, painters and more — all from your city
           </div>
-
-          {/* Search bar */}
           <div style={{ position:"relative", maxWidth:520, margin:"0 auto" }}>
             <svg style={{ position:"absolute", left:18, top:"50%", transform:"translateY(-50%)", opacity:0.5 }} width="16" height="16" fill="none" stroke="#1e3a8a" strokeWidth="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input
               ref={searchRef}
               value={search}
               onChange={e=>setSearch(e.target.value)}
-              placeholder="Search artists by name or skill..."
+              placeholder="Search artists by name, city or category..."
               style={{ width:"100%", padding:"16px 20px 16px 48px", borderRadius:50, border:"none", fontSize:15, fontWeight:600, color:"#1e293b", fontFamily:"'Nunito',sans-serif", boxShadow:"0 8px 32px rgba(0,0,0,0.15)", outline:"none" }}
             />
             {search && (
               <button onClick={()=>setSearch("")} style={{ position:"absolute", right:16, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", fontSize:18, color:"#94a3b8", lineHeight:1 }}>✕</button>
             )}
           </div>
-
-          {/* Stats */}
           <div className="stats-row" style={{ display:"flex", justifyContent:"center", gap:32, marginTop:28 }}>
             {[
-              { num: artists.length || "50+", label:"Artists" },
-              { num: CITIES.length - 1, label:"Cities" },
+              { num: artists.length || "–", label:"Artists" },
+              { num: CITIES.length - 1,     label:"Cities" },
               { num: CATEGORIES.length - 1, label:"Categories" },
             ].map((s,i) => (
               <div key={i} style={{ textAlign:"center" }}>
@@ -238,18 +244,15 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      {/* ── DESKTOP FILTERS ── */}
+      {/* DESKTOP FILTERS */}
       <div className="desktop-filters" style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"14px 24px", display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", position:"sticky", top:60, zIndex:99, boxShadow:"0 2px 8px rgba(0,0,0,0.04)" }}>
         <div style={{ fontSize:13, fontWeight:800, color:"#64748b", marginRight:4 }}>Filter:</div>
-        {/* Category */}
         <select value={category} onChange={e=>setCategory(e.target.value)} style={{ padding:"8px 14px", borderRadius:20, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" }}>
           {CATEGORIES.map(c => <option key={c}>{c}</option>)}
         </select>
-        {/* City */}
         <select value={city} onChange={e=>setCity(e.target.value)} style={{ padding:"8px 14px", borderRadius:20, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" }}>
           {CITIES.map(c => <option key={c}>{c}</option>)}
         </select>
-        {/* Sort */}
         <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{ padding:"8px 14px", borderRadius:20, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" }}>
           <option value="newest">Newest First</option>
           <option value="rating">Top Rated</option>
@@ -261,11 +264,11 @@ export default function DiscoverPage() {
           </button>
         )}
         <div style={{ marginLeft:"auto", fontSize:13, color:"#94a3b8", fontWeight:700 }}>
-          {loading ? "Loading..." : `${filtered.length} artists found`}
+          {loading ? "Loading..." : `${filtered.length} artist${filtered.length !== 1 ? "s" : ""} found`}
         </div>
       </div>
 
-      {/* ── MOBILE FILTER BUTTON ── */}
+      {/* MOBILE FILTER BUTTON */}
       <div className="mobile-filter-btn" style={{ background:"#fff", borderBottom:"1px solid #e2e8f0", padding:"12px 16px", alignItems:"center", justifyContent:"space-between", position:"sticky", top:60, zIndex:99 }}>
         <div style={{ fontSize:13, color:"#94a3b8", fontWeight:700 }}>{loading ? "Loading..." : `${filtered.length} artists`}</div>
         <button onClick={()=>setMobileFilter(f=>!f)} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 18px", borderRadius:20, border:"1.5px solid #1e3a8a", background: mobileFilter ? "#1e3a8a" : "#f0f4ff", color: mobileFilter ? "#fff" : "#1e3a8a", fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
@@ -274,7 +277,7 @@ export default function DiscoverPage() {
         </button>
       </div>
 
-      {/* ── MOBILE FILTER PANEL ── */}
+      {/* MOBILE FILTER PANEL */}
       {mobileFilter && (
         <div className="mobile-filter-panel" style={{ background:"#fff", padding:"16px", borderBottom:"1px solid #e2e8f0", display:"flex", flexDirection:"column", gap:12, animation:"slideDown 0.2s ease" }}>
           <select value={category} onChange={e=>setCategory(e.target.value)} style={{ padding:"10px 14px", borderRadius:12, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:14, fontWeight:700, fontFamily:"'Nunito',sans-serif", width:"100%" }}>
@@ -295,7 +298,7 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* ── CATEGORY PILLS (mobile quick filters) ── */}
+      {/* CATEGORY PILLS */}
       <div style={{ overflowX:"auto", padding:"14px 16px", display:"flex", gap:8, scrollbarWidth:"none", WebkitOverflowScrolling:"touch" }}>
         <style>{`::-webkit-scrollbar{display:none}`}</style>
         {CATEGORIES.map(c => (
@@ -305,35 +308,58 @@ export default function DiscoverPage() {
         ))}
       </div>
 
-      {/* ── CONTENT ── */}
+      {/* CONTENT */}
       <div className="discover-content" style={{ maxWidth:1200, margin:"0 auto", padding:"8px 24px 48px" }}>
 
-        {/* Empty state */}
-        {!loading && filtered.length === 0 && (
+        {/* Error state */}
+        {error && !loading && (
+          <div style={{ textAlign:"center", padding:"40px 20px", animation:"fadeUp 0.4s ease" }}>
+            <div style={{ fontSize:48, marginBottom:12 }}>⚠️</div>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:24, color:"#dc2626", marginBottom:8 }}>
+              Could Not Load Artists
+            </div>
+            <div style={{ color:"#94a3b8", fontSize:13, marginBottom:20, maxWidth:360, margin:"0 auto 20px" }}>{error}</div>
+            <button onClick={fetchArtists} style={{ background:"#1e3a8a", color:"#fff", border:"none", padding:"12px 28px", borderRadius:24, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Empty state (no error, just no results) */}
+        {!loading && !error && filtered.length === 0 && (
           <div style={{ textAlign:"center", padding:"60px 20px", animation:"fadeUp 0.4s ease" }}>
             <div style={{ fontSize:56, marginBottom:12 }}>🎭</div>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:"#1e3a8a", marginBottom:8 }}>No Artists Found</div>
-            <div style={{ color:"#94a3b8", fontSize:14, marginBottom:20 }}>Try different filters or search terms</div>
-            <button onClick={clearFilters} style={{ background:"#1e3a8a", color:"#fff", border:"none", padding:"12px 28px", borderRadius:24, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>Clear Filters</button>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:"#1e3a8a", marginBottom:8 }}>
+              {artists.length === 0 ? "No Artists Yet" : "No Matches Found"}
+            </div>
+            <div style={{ color:"#94a3b8", fontSize:14, marginBottom:20 }}>
+              {artists.length === 0 ? "Be the first to join as an artist!" : "Try different filters or search terms"}
+            </div>
+            {artists.length === 0
+              ? <button onClick={() => navigate("/artist-register")} style={{ background:"#1e3a8a", color:"#fff", border:"none", padding:"12px 28px", borderRadius:24, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>Join as Artist</button>
+              : <button onClick={clearFilters} style={{ background:"#1e3a8a", color:"#fff", border:"none", padding:"12px 28px", borderRadius:24, fontSize:14, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>Clear Filters</button>
+            }
           </div>
         )}
 
         {/* Grid */}
-        <div className="discover-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(240px, 1fr))", gap:20, animation:"fadeUp 0.4s ease" }}>
-          {loading
-            ? Array(6).fill(0).map((_,i) => <SkeletonCard key={i} />)
-            : filtered.map(artist => (
-                <ArtistCard
-                  key={artist._id}
-                  artist={artist}
-                  onClick={() => navigate(`/artist-profile/${artist._id}`)}
-                />
-              ))
-          }
-        </div>
+        {(!error) && (
+          <div className="discover-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(240px, 1fr))", gap:20, animation:"fadeUp 0.4s ease" }}>
+            {loading
+              ? Array(6).fill(0).map((_,i) => <SkeletonCard key={i} />)
+              : filtered.map(artist => (
+                  <ArtistCard
+                    key={artist._id}
+                    artist={artist}
+                    onClick={() => navigate(`/artist-profile/${artist._id}`)}
+                  />
+                ))
+            }
+          </div>
+        )}
       </div>
 
-      {/* ── FLOATING ACTION (mobile) ── */}
+      {/* FLOATING CHAT BUTTON (mobile) */}
       {currentUser._id && (
         <button
           onClick={() => navigate(`/chat/${currentUser._id}`)}
