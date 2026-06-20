@@ -5,15 +5,15 @@ import Navbar from "../Navbar";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-const PALETTES = {
-  Singer:       { a: "#ff4d6d", b: "#c9184a" },
-  Dancer:       { a: "#7209b7", b: "#f72585" },
-  Musician:     { a: "#0096c7", b: "#48cae4" },
-  Painter:      { a: "#f4a261", b: "#e76f51" },
-  Photographer: { a: "#2d6a4f", b: "#74c69d" },
-  Actor:        { a: "#ffd60a", b: "#f48c06" },
-  Comedian:     { a: "#06d6a0", b: "#118ab2" },
-  default:      { a: "#9d4edd", b: "#c77dff" },
+const TCG = {
+  Singer:       { glow:"#ff4d6d", border:"#ff4d6d", bg:"#1a0008", accent:"#ff4d6d", type:"FIRE",    typeColor:"#ff4d6d", symbol:"🔥" },
+  Dancer:       { glow:"#b44fff", border:"#b44fff", bg:"#120015", accent:"#b44fff", type:"PSYCHIC",  typeColor:"#b44fff", symbol:"🔮" },
+  Musician:     { glow:"#00cfff", border:"#00cfff", bg:"#00101a", accent:"#00cfff", type:"WATER",    typeColor:"#00cfff", symbol:"💧" },
+  Painter:      { glow:"#ff9f43", border:"#ff9f43", bg:"#1a0d00", accent:"#ff9f43", type:"EARTH",    typeColor:"#ff9f43", symbol:"🌍" },
+  Photographer: { glow:"#00e676", border:"#00e676", bg:"#001a09", accent:"#00e676", type:"NATURE",   typeColor:"#00e676", symbol:"🌿" },
+  Actor:        { glow:"#ffd600", border:"#ffd600", bg:"#1a1400", accent:"#ffd600", type:"ELECTRIC", typeColor:"#ffd600", symbol:"⚡" },
+  Comedian:     { glow:"#00e5ff", border:"#00e5ff", bg:"#001a1a", accent:"#00e5ff", type:"ICE",      typeColor:"#00e5ff", symbol:"❄️" },
+  default:      { glow:"#9d4edd", border:"#9d4edd", bg:"#0d0015", accent:"#9d4edd", type:"DARK",     typeColor:"#9d4edd", symbol:"🌑" },
 };
 
 const ICONS = {
@@ -33,139 +33,177 @@ function getId(artist) {
 
 function SkeletonCard() {
   return (
-    <div style={{
-      aspectRatio:"1/1", borderRadius:0, overflow:"hidden",
-      background:"#1a1a2e", position:"relative",
-    }}>
-      <div style={{ width:"100%", height:"100%", background:"rgba(255,255,255,0.06)", animation:"shimmer 1.4s infinite" }} />
-      <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"8px", background:"linear-gradient(transparent,rgba(0,0,0,0.8))" }}>
-        <div style={{ height:10, width:"60%", borderRadius:4, background:"rgba(255,255,255,0.15)", marginBottom:4 }} />
-        <div style={{ height:8, width:"40%", borderRadius:4, background:"rgba(255,255,255,0.08)" }} />
+    <div style={{ width:"100%", aspectRatio:"2.5/3.5", borderRadius:16, background:"#111", border:"2px solid #1a1a1a", overflow:"hidden", animation:"shimmer 1.4s infinite" }}>
+      <div style={{ width:"100%", height:"55%", background:"#181818" }} />
+      <div style={{ padding:10, display:"flex", flexDirection:"column", gap:7 }}>
+        <div style={{ height:11, width:"65%", borderRadius:4, background:"#1e1e1e" }} />
+        <div style={{ height:9,  width:"45%", borderRadius:4, background:"#181818" }} />
+        <div style={{ height:3,  width:"80%", borderRadius:2, background:"#1e1e1e", marginTop:4 }} />
+        <div style={{ display:"flex", gap:4, marginTop:3 }}>
+          {[38,28].map((w,i) => <div key={i} style={{ height:14, width:w, borderRadius:4, background:"#1e1e1e" }} />)}
+        </div>
       </div>
     </div>
   );
 }
 
-function ArtistCard({ artist }) {
-  const [hov, setHov] = useState(false);
-  const p    = PALETTES[artist.category] || PALETTES.default;
-  const icon = ICONS[artist.category] || ICONS.default;
-  const artistId = getId(artist);
-  if (!artistId) return null;
+function TCGCard({ artist }) {
+  const [tilt,  setTilt]  = useState({ x:0, y:0 });
+  const [hov,   setHov]   = useState(false);
+  const [shine, setShine] = useState({ x:50, y:50 });
 
+  const t  = TCG[artist.category] || TCG.default;
+  const id = getId(artist);
+  if (!id) return null;
+
+  const hp    = Math.min(999, 100 + (artist.postCount || 0) * 20 + Math.floor((artist.rating || 5) * 10));
   const stars = Math.round(artist.rating || 5);
 
+  const onMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x  = ((e.clientX - rect.left) / rect.width  - 0.5) * 20;
+    const y  = ((e.clientY - rect.top)  / rect.height - 0.5) * -20;
+    const sx = ((e.clientX - rect.left) / rect.width)  * 100;
+    const sy = ((e.clientY - rect.top)  / rect.height) * 100;
+    setTilt({ x, y });
+    setShine({ x: sx, y: sy });
+  };
+
   return (
-    <Link to={`/artist/${artistId}`} style={{ textDecoration:"none", display:"block" }}>
+    <Link to={`/artist/${id}`} style={{ textDecoration:"none", display:"block" }}>
       <div
         onMouseEnter={() => setHov(true)}
-        onMouseLeave={() => setHov(false)}
+        onMouseLeave={() => { setHov(false); setTilt({ x:0, y:0 }); }}
+        onMouseMove={onMove}
         style={{
-          position:"relative", aspectRatio:"1/1", overflow:"hidden",
-          cursor:"pointer",
-          transform: hov ? "scale(0.97)" : "scale(1)",
-          transition: "transform 0.2s ease",
+          width:"100%", aspectRatio:"2.5/3.5", borderRadius:16,
+          background:`linear-gradient(160deg, ${t.bg} 0%, #080810 55%, ${t.bg}88 100%)`,
+          border:`2px solid ${hov ? t.border : t.border+"33"}`,
+          boxShadow: hov
+            ? `0 0 24px ${t.glow}88, 0 0 50px ${t.glow}33, inset 0 0 24px ${t.glow}11`
+            : `0 0 6px ${t.glow}22`,
+          transform: hov
+            ? `perspective(700px) rotateX(${tilt.y}deg) rotateY(${tilt.x}deg) scale(1.06) translateZ(10px)`
+            : "perspective(700px) rotateX(0) rotateY(0) scale(1)",
+          transition: hov ? "box-shadow 0.1s, border-color 0.1s" : "all 0.5s cubic-bezier(0.23,1,0.32,1)",
+          cursor:"pointer", position:"relative", overflow:"hidden",
         }}
       >
-        {/* Photo or gradient fallback */}
-        {artist.profileImage ? (
-          <img
-            src={artist.profileImage}
-            alt={artist.name}
-            style={{
-              width:"100%", height:"100%", objectFit:"cover", display:"block",
-              transform: hov ? "scale(1.06)" : "scale(1)",
-              transition: "transform 0.4s ease",
-            }}
-          />
-        ) : (
+        {/* Shine layer */}
+        {hov && (
           <div style={{
-            width:"100%", height:"100%",
-            background:`linear-gradient(135deg, ${p.a} 0%, ${p.b} 100%)`,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:"clamp(28px,6vw,44px)",
-          }}>
-            {icon}
-          </div>
+            position:"absolute", inset:0, zIndex:6, pointerEvents:"none", borderRadius:16,
+            background:`radial-gradient(circle at ${shine.x}% ${shine.y}%, ${t.glow}30 0%, transparent 55%)`,
+          }} />
         )}
 
-        {/* Always-visible gradient overlay */}
+        {/* Scanlines */}
         <div style={{
-          position:"absolute", inset:0,
-          background:"linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%)",
+          position:"absolute", inset:0, zIndex:5, pointerEvents:"none",
+          backgroundImage:"repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 3px,rgba(0,0,0,0.07) 4px)",
+          borderRadius:16,
         }} />
 
-        {/* Category badge top-left */}
+        {/* TOP BAR */}
         <div style={{
-          position:"absolute", top:6, left:6,
-          background:`linear-gradient(135deg,${p.a},${p.b})`,
-          color:"#fff", fontSize:9, fontWeight:800,
-          padding:"3px 7px", borderRadius:4,
-          fontFamily:"'Nunito',sans-serif", letterSpacing:0.5,
-          textTransform:"uppercase",
+          position:"absolute", top:0, left:0, right:0, zIndex:10,
+          display:"flex", justifyContent:"space-between", alignItems:"center",
+          padding:"7px 9px",
+          background:`linear-gradient(180deg,${t.bg}ff 0%,transparent 100%)`,
         }}>
-          {artist.category || "Artist"}
-        </div>
-
-        {/* Online dot / post count top-right */}
-        {artist.postCount > 0 && (
-          <div style={{
-            position:"absolute", top:6, right:6,
-            background:"rgba(0,0,0,0.55)", backdropFilter:"blur(6px)",
-            color:"#fff", fontSize:9, fontWeight:700,
-            padding:"3px 7px", borderRadius:4,
-            fontFamily:"'Nunito',sans-serif",
-          }}>
-            {artist.postCount} works
-          </div>
-        )}
-
-        {/* Bottom info */}
-        <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"8px 10px 10px" }}>
           <div style={{
             fontFamily:"'Nunito',sans-serif", fontWeight:900,
-            fontSize:"clamp(11px,2.5vw,14px)", color:"#fff",
-            lineHeight:1.1, marginBottom:2,
-            textShadow:"0 1px 6px rgba(0,0,0,0.8)",
-            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+            fontSize:"clamp(8px,1.7vw,11px)", color:"#fff",
+            textShadow:`0 0 10px ${t.glow}`, letterSpacing:0.5,
+            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:"58%",
           }}>
-            {artist.name}
+            {(artist.name || "ARTIST").toUpperCase()}
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+          <div style={{
+            background:`${t.glow}20`, border:`1px solid ${t.glow}55`,
+            borderRadius:5, padding:"2px 6px",
+            fontSize:"clamp(6px,1.2vw,8px)", fontWeight:900,
+            color:t.typeColor, fontFamily:"'Nunito',sans-serif",
+            letterSpacing:0.5, flexShrink:0, display:"flex", alignItems:"center", gap:2,
+          }}>
+            {t.symbol} {t.type}
+          </div>
+        </div>
+
+        {/* PHOTO */}
+        <div style={{
+          position:"absolute", top:24, left:7, right:7,
+          height:"50%", borderRadius:9, overflow:"hidden",
+          border:`1px solid ${t.border}33`,
+          background:`radial-gradient(ellipse at center,${t.bg}88,#080810)`,
+        }}>
+          {artist.profileImage ? (
+            <img src={artist.profileImage} alt={artist.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+          ) : (
+            <div style={{ width:"100%", height:"100%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:"clamp(24px,5vw,42px)", opacity:0.5 }}>
+              {ICONS[artist.category] || ICONS.default}
+            </div>
+          )}
+          <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg,transparent 50%,${t.glow}10)`, pointerEvents:"none" }} />
+        </div>
+
+        {/* BOTTOM */}
+        <div style={{
+          position:"absolute", bottom:0, left:0, right:0,
+          padding:"7px 9px 9px",
+          background:`linear-gradient(0deg,${t.bg}ff 0%,${t.bg}bb 50%,transparent 100%)`,
+        }}>
+          {artist.city && (
+            <div style={{ fontSize:"clamp(6px,1.1vw,8px)", color:`${t.typeColor}99`, fontFamily:"'Nunito',sans-serif", fontWeight:700, marginBottom:3, letterSpacing:0.3 }}>
+              📍 {artist.city.toUpperCase()}
+            </div>
+          )}
+
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
             <div style={{ display:"flex", gap:1 }}>
               {Array.from({ length:5 }).map((_,i) => (
-                <span key={i} style={{ fontSize:8, color: i < stars ? "#ffd60a" : "rgba(255,255,255,0.25)" }}>★</span>
+                <span key={i} style={{ fontSize:"clamp(6px,1.2vw,9px)", color: i < stars ? "#ffd600" : "rgba(255,255,255,0.12)" }}>★</span>
               ))}
             </div>
-            {artist.city && (
-              <span style={{ fontSize:9, color:"rgba(255,255,255,0.65)", fontFamily:"'Nunito',sans-serif", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                · {artist.city}
+            <span style={{ fontSize:"clamp(6px,1.1vw,8px)", color:`${t.typeColor}88`, fontFamily:"'Nunito',sans-serif", fontWeight:700 }}>{hp} HP</span>
+          </div>
+
+          {/* HP bar */}
+          <div style={{ height:2, borderRadius:1, background:"rgba(255,255,255,0.06)", marginBottom:6, overflow:"hidden" }}>
+            <div style={{
+              height:"100%", borderRadius:1,
+              width:`${Math.min(100,(hp/350)*100)}%`,
+              background:`linear-gradient(90deg,${t.glow},${t.accent}66)`,
+              boxShadow:`0 0 5px ${t.glow}`,
+            }} />
+          </div>
+
+          <div style={{ display:"flex", gap:3, flexWrap:"wrap" }}>
+            <span style={{
+              background:`${t.glow}15`, border:`1px solid ${t.glow}40`,
+              color:t.typeColor, fontSize:"clamp(5px,1.1vw,8px)", fontWeight:800,
+              padding:"1px 6px", borderRadius:3, fontFamily:"'Nunito',sans-serif",
+            }}>
+              {ICONS[artist.category] || "✨"} {artist.category || "Artist"}
+            </span>
+            {artist.postCount > 0 && (
+              <span style={{
+                background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)",
+                color:"rgba(255,255,255,0.45)", fontSize:"clamp(5px,1.1vw,8px)", fontWeight:700,
+                padding:"1px 6px", borderRadius:3, fontFamily:"'Nunito',sans-serif",
+              }}>
+                {artist.postCount} works
               </span>
             )}
           </div>
         </div>
 
-        {/* Hover overlay */}
-        {hov && (
-          <div style={{
-            position:"absolute", inset:0,
-            background:"rgba(0,0,0,0.35)",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            backdropFilter:"blur(1px)",
-          }}>
-            <div style={{
-              background:"rgba(255,255,255,0.2)",
-              backdropFilter:"blur(12px)",
-              border:"1px solid rgba(255,255,255,0.4)",
-              color:"#fff",
-              fontFamily:"'Nunito',sans-serif", fontWeight:800,
-              fontSize:11, padding:"7px 16px", borderRadius:20,
-              letterSpacing:0.5,
-            }}>
-              VIEW PROFILE
-            </div>
-          </div>
-        )}
+        {/* Corner foil */}
+        <div style={{
+          position:"absolute", top:0, right:0, width:36, height:36, pointerEvents:"none", zIndex:4,
+          background:`conic-gradient(from 45deg,${t.glow}44,transparent,${t.glow}22)`,
+          borderTopRightRadius:16, opacity: hov ? 1 : 0.3, transition:"opacity 0.3s",
+        }} />
       </div>
     </Link>
   );
@@ -193,12 +231,9 @@ export default function Artists() {
           .map(a => {
             const id = getId(a);
             return {
-              ...a,
-              _id:          id,
+              ...a, _id: id,
               postCount:    postData.filter(p => p.artistId === id).length,
-              profileImage: a.profileImage
-                || postData.find(p => p.artistId === id && p.type === "image")?.media
-                || null,
+              profileImage: a.profileImage || postData.find(p => p.artistId === id && p.type === "image")?.media || null,
             };
           })
           .filter(a => a._id)
@@ -223,159 +258,138 @@ export default function Artists() {
   });
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0d0d14", color:"#fff", overflowX:"hidden" }}>
+    <div style={{ minHeight:"100vh", background:"#080810", color:"#fff", overflowX:"hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         * { box-sizing:border-box; }
-        @keyframes shimmer { 0%{opacity:.4} 50%{opacity:.9} 100%{opacity:.4} }
-        @keyframes fadeUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .search-input::placeholder { color:rgba(255,255,255,0.35); }
-        .search-input:focus { outline:none; border-color:rgba(255,255,255,0.5)!important; }
-        .cat-pill { transition:all 0.18s ease; }
-        .cat-pill:hover { opacity:1!important; }
-        ::-webkit-scrollbar { width:4px; height:4px; }
-        ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:4px; }
+        @keyframes shimmer { 0%{opacity:.3} 50%{opacity:.6} 100%{opacity:.3} }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        .search-input::placeholder { color:rgba(255,255,255,0.22); }
+        .search-input:focus { outline:none; border-color:rgba(255,255,255,0.35)!important; }
+        ::-webkit-scrollbar { width:3px; height:3px; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.08); border-radius:3px; }
+        .cat-btn:hover { opacity:1!important; transform:translateY(-1px); }
+        .tcg-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+        @media(min-width:480px)  { .tcg-grid { grid-template-columns:repeat(3,1fr)!important; gap:12px!important; } }
+        @media(min-width:720px)  { .tcg-grid { grid-template-columns:repeat(4,1fr)!important; gap:14px!important; } }
+        @media(min-width:1024px) { .tcg-grid { grid-template-columns:repeat(5,1fr)!important; gap:16px!important; } }
+        @media(min-width:1280px) { .tcg-grid { grid-template-columns:repeat(6,1fr)!important; } }
       `}</style>
 
-      {/* Video BG */}
-      <video autoPlay loop muted playsInline style={{ position:"fixed", inset:0, width:"100%", height:"100%", objectFit:"cover", zIndex:0, opacity:0.3 }}>
-        <source src="/artbg.mp4" type="video/mp4" />
-      </video>
-      <div style={{ position:"fixed", inset:0, background:"rgba(13,13,20,0.7)", zIndex:1, pointerEvents:"none" }} />
+      {/* ambient bg */}
+      <div style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none" }}>
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 15% 50%,rgba(157,78,221,0.06),transparent 60%)" }} />
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 85% 20%,rgba(0,207,255,0.05),transparent 60%)" }} />
+        <div style={{ position:"absolute", inset:0, background:"radial-gradient(ellipse at 55% 85%,rgba(255,77,109,0.05),transparent 60%)" }} />
+      </div>
 
       <div style={{ position:"relative", zIndex:100 }}><Navbar /></div>
 
-      <div style={{ position:"relative", zIndex:10 }}>
+      <div style={{ position:"relative", zIndex:10, paddingBottom:80 }}>
 
-        {/* ── HEADER ── */}
-        <div style={{ padding:"100px 16px 20px", maxWidth:680, margin:"0 auto", animation:"fadeUp 0.4s ease" }}>
-          <button
-            onClick={() => navigate("/")}
-            style={{ background:"none", border:"none", color:"rgba(255,255,255,0.4)", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif", marginBottom:10, padding:0 }}
-          >
-            ← Home
+        {/* HEADER */}
+        <div style={{ textAlign:"center", padding:"88px 20px 20px", animation:"fadeUp 0.5s ease" }}>
+          <button onClick={() => navigate("/")} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.25)", fontSize:11, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif", marginBottom:14, padding:0, letterSpacing:2 }}>
+            ← HOME
           </button>
-          <h1 style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:"clamp(24px,6vw,38px)", margin:"0 0 4px", letterSpacing:-0.5 }}>
-            Discover Artists
+          <div style={{ fontSize:11, fontWeight:900, color:"rgba(255,255,255,0.2)", letterSpacing:7, textTransform:"uppercase", marginBottom:8, fontFamily:"'Nunito',sans-serif" }}>
+            ARTSPIRE TCG
+          </div>
+          <h1 style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:"clamp(26px,6vw,50px)", margin:"0 0 6px", letterSpacing:-1, background:"linear-gradient(135deg,#fff 30%,rgba(255,255,255,0.35))", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>
+            ARTIST CARDS
           </h1>
-          <p style={{ margin:0, color:"rgba(255,255,255,0.4)", fontSize:13, fontWeight:600, fontFamily:"'Nunito',sans-serif" }}>
-            {loading ? "Finding artists..." : error ? "Failed to load." : `${filtered.length} artist${filtered.length !== 1 ? "s" : ""} found`}
+          <p style={{ color:"rgba(255,255,255,0.25)", fontSize:12, fontWeight:700, margin:0, fontFamily:"'Nunito',sans-serif" }}>
+            {loading ? "Shuffling deck..." : error ? "Failed to load." : `${filtered.length} card${filtered.length !== 1 ? "s" : ""} in collection`}
           </p>
         </div>
 
-        {/* ── SEARCH + FILTERS ── */}
-        <div style={{ padding:"0 16px 16px", maxWidth:680, margin:"0 auto", animation:"fadeUp 0.4s ease 0.05s both" }}>
-          {/* Search */}
+        {/* SEARCH + FILTER */}
+        <div style={{ maxWidth:680, margin:"0 auto", padding:"0 14px 20px", animation:"fadeUp 0.5s ease 0.07s both" }}>
           <div style={{ position:"relative", marginBottom:12 }}>
-            <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:15, pointerEvents:"none" }}>🔍</span>
+            <span style={{ position:"absolute", left:13, top:"50%", transform:"translateY(-50%)", fontSize:13, pointerEvents:"none" }}>🔍</span>
             <input
               className="search-input"
-              placeholder="Search by name or city..."
+              placeholder="Search cards by name or city..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
-                width:"100%", padding:"11px 40px 11px 42px",
-                borderRadius:12, border:"1.5px solid rgba(255,255,255,0.12)",
-                background:"rgba(255,255,255,0.07)", backdropFilter:"blur(12px)",
-                color:"#fff", fontFamily:"'Nunito',sans-serif", fontSize:14, fontWeight:600,
+                width:"100%", padding:"10px 38px 10px 40px",
+                borderRadius:10, border:"1.5px solid rgba(255,255,255,0.07)",
+                background:"rgba(255,255,255,0.04)", backdropFilter:"blur(12px)",
+                color:"#fff", fontFamily:"'Nunito',sans-serif", fontSize:13, fontWeight:700,
               }}
             />
-            {search && (
-              <button onClick={() => setSearch("")} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:15 }}>✕</button>
-            )}
+            {search && <button onClick={() => setSearch("")} style={{ position:"absolute", right:11, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"rgba(255,255,255,0.3)", cursor:"pointer", fontSize:13 }}>✕</button>}
           </div>
 
-          {/* Category pills — scrollable on mobile */}
-          <div style={{ display:"flex", gap:7, overflowX:"auto", paddingBottom:4 }}>
+          <div style={{ display:"flex", gap:5, overflowX:"auto", paddingBottom:2 }}>
             {CATEGORIES.map(cat => {
+              const t = TCG[cat] || TCG.default;
               const isActive = activeCategory === cat;
-              const p = PALETTES[cat] || PALETTES.default;
               return (
-                <button
-                  key={cat}
-                  className="cat-pill"
-                  onClick={() => setActiveCategory(cat)}
-                  style={{
-                    padding:"7px 14px", borderRadius:8, border:"1.5px solid",
-                    borderColor: isActive ? p.a : "rgba(255,255,255,0.12)",
-                    background: isActive ? `linear-gradient(135deg,${p.a}44,${p.b}22)` : "rgba(255,255,255,0.05)",
-                    color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
-                    fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12,
-                    cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
-                    opacity: isActive ? 1 : 0.8,
-                  }}
-                >
-                  {cat !== "All" && (ICONS[cat] || "✨") + " "}{cat}
+                <button key={cat} className="cat-btn" onClick={() => setActiveCategory(cat)} style={{
+                  padding:"5px 12px", borderRadius:7, border:"1.5px solid",
+                  borderColor: isActive ? t.glow : "rgba(255,255,255,0.07)",
+                  background:  isActive ? `${t.glow}1a` : "rgba(255,255,255,0.02)",
+                  color:       isActive ? t.typeColor : "rgba(255,255,255,0.35)",
+                  fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:10,
+                  cursor:"pointer", whiteSpace:"nowrap", flexShrink:0, letterSpacing:0.3,
+                  boxShadow: isActive ? `0 0 10px ${t.glow}44` : "none",
+                  transition:"all 0.18s ease",
+                }}>
+                  {cat !== "All" ? `${TCG[cat]?.symbol || "✨"} ${cat}` : "◼ All"}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* ── GRID ── */}
-        <div style={{ padding:"0 0 80px" }}>
+        {/* GRID */}
+        <div style={{ maxWidth:1400, margin:"0 auto", padding:"0 10px" }}>
           {error ? (
-            <div style={{ textAlign:"center", padding:"60px 20px", fontFamily:"'Nunito',sans-serif" }}>
-              <div style={{ fontSize:44, marginBottom:12 }}>⚠️</div>
-              <div style={{ color:"rgba(255,255,255,0.4)", fontSize:15, fontWeight:700, marginBottom:16 }}>Failed to load artists</div>
-              <button
-                onClick={() => window.location.reload()}
-                style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", padding:"10px 24px", borderRadius:10, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}
-              >
-                Try Again
-              </button>
+            <div style={{ textAlign:"center", padding:"60px 20px" }}>
+              <div style={{ fontSize:40, marginBottom:10 }}>⚠️</div>
+              <div style={{ color:"rgba(255,255,255,0.3)", fontSize:13, fontWeight:700, marginBottom:14 }}>Failed to load cards</div>
+              <button onClick={() => window.location.reload()} style={{ background:"rgba(255,255,255,0.06)", border:"1px solid rgba(255,255,255,0.12)", color:"#fff", padding:"9px 22px", borderRadius:8, fontSize:12, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>Retry</button>
             </div>
           ) : filtered.length === 0 && !loading ? (
-            <div style={{ textAlign:"center", padding:"60px 20px", fontFamily:"'Nunito',sans-serif" }}>
-              <div style={{ fontSize:44, marginBottom:12 }}>🎭</div>
-              <div style={{ color:"rgba(255,255,255,0.4)", fontSize:15, fontWeight:700 }}>
-                No artists found{search ? ` for "${search}"` : activeCategory !== "All" ? ` in ${activeCategory}` : ""}
-              </div>
+            <div style={{ textAlign:"center", padding:"60px 20px" }}>
+              <div style={{ fontSize:40, marginBottom:10 }}>🃏</div>
+              <div style={{ color:"rgba(255,255,255,0.3)", fontSize:13, fontWeight:700 }}>No cards found{search ? ` for "${search}"` : ""}</div>
             </div>
           ) : (
-            <div style={{
-              display:"grid",
-              gridTemplateColumns:"repeat(3, 1fr)",
-              gap:2,
-            }}>
-              <style>{`
-                @media(min-width:600px)  { .ag { grid-template-columns:repeat(4,1fr)!important; } }
-                @media(min-width:900px)  { .ag { grid-template-columns:repeat(5,1fr)!important; } }
-                @media(min-width:1200px) { .ag { grid-template-columns:repeat(6,1fr)!important; } }
-              `}</style>
+            <div className="tcg-grid">
               {loading
-                ? Array.from({ length:12 }).map((_, i) => <SkeletonCard key={i} />)
-                : filtered.map(artist => <ArtistCard key={artist._id} artist={artist} />)
+                ? Array.from({ length:12 }).map((_,i) => <SkeletonCard key={i} />)
+                : filtered.map(artist => <TCGCard key={artist._id} artist={artist} />)
               }
             </div>
           )}
         </div>
-
-        {/* ── STATS BAR ── */}
-        {!loading && !error && artists.length > 0 && (
-          <div style={{
-            position:"fixed", bottom:0, left:0, right:0, zIndex:50,
-            background:"rgba(13,13,20,0.92)", backdropFilter:"blur(20px)",
-            borderTop:"1px solid rgba(255,255,255,0.08)",
-            display:"flex", justifyContent:"center", gap:"clamp(16px,5vw,48px)",
-            padding:"10px 20px 12px",
-            animation:"fadeUp 0.4s ease",
-          }}>
-            {[
-              { label:"Artists",    value:artists.length },
-              { label:"Categories", value:[...new Set(artists.map(a=>a.category).filter(Boolean))].length },
-              { label:"Works",      value:artists.reduce((s,a) => s+(a.postCount||0), 0) },
-              { label:"Cities",     value:[...new Set(artists.map(a=>a.city).filter(Boolean))].length },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ textAlign:"center" }}>
-                <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:"clamp(15px,3vw,20px)", color:"#fff" }}>{value}</div>
-                <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:9, color:"rgba(255,255,255,0.35)", fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>{label}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* BOTTOM STATS */}
+      {!loading && !error && artists.length > 0 && (
+        <div style={{
+          position:"fixed", bottom:0, left:0, right:0, zIndex:50,
+          background:"rgba(8,8,16,0.96)", backdropFilter:"blur(20px)",
+          borderTop:"1px solid rgba(255,255,255,0.05)",
+          display:"flex", justifyContent:"center",
+          gap:"clamp(18px,5vw,56px)", padding:"9px 20px 11px",
+        }}>
+          {[
+            { label:"Cards",  value:artists.length },
+            { label:"Types",  value:[...new Set(artists.map(a=>a.category).filter(Boolean))].length },
+            { label:"Works",  value:artists.reduce((s,a)=>s+(a.postCount||0),0) },
+            { label:"Cities", value:[...new Set(artists.map(a=>a.city).filter(Boolean))].length },
+          ].map(({ label, value }) => (
+            <div key={label} style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:"clamp(14px,3vw,20px)", color:"#fff" }}>{value}</div>
+              <div style={{ fontSize:8, color:"rgba(255,255,255,0.2)", fontWeight:800, letterSpacing:1, textTransform:"uppercase", fontFamily:"'Nunito',sans-serif" }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
