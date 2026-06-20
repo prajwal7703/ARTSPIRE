@@ -5,15 +5,15 @@ import Navbar from "../Navbar";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-const CATEGORY_COLORS = {
-  Singer:       { pill:"#fce4ec", text:"#c2185b", border:"#f48fb1", bg:"#fff5f7" },
-  Dancer:       { pill:"#ede7f6", text:"#6a1b9a", border:"#ce93d8", bg:"#faf5ff" },
-  Musician:     { pill:"#e3f2fd", text:"#0d47a1", border:"#90caf9", bg:"#f5f9ff" },
-  Painter:      { pill:"#fff3e0", text:"#e65100", border:"#ffcc80", bg:"#fffaf5" },
-  Photographer: { pill:"#e8f5e9", text:"#1b5e20", border:"#a5d6a7", bg:"#f5fff7" },
-  Actor:        { pill:"#fffde7", text:"#f57f17", border:"#fff176", bg:"#fffff5" },
-  Comedian:     { pill:"#e0f7fa", text:"#006064", border:"#80deea", bg:"#f5feff" },
-  default:      { pill:"#ede7f6", text:"#4a148c", border:"#ce93d8", bg:"#faf5ff" },
+const CAT_ACCENT = {
+  Singer:       "#ff4d6d",
+  Dancer:       "#b44fff",
+  Musician:     "#00cfff",
+  Painter:      "#ff9f43",
+  Photographer: "#00e676",
+  Actor:        "#ffd600",
+  Comedian:     "#00e5ff",
+  default:      "#ff8c00",
 };
 
 const ICONS = {
@@ -33,15 +33,14 @@ function getId(artist) {
 
 function SkeletonCard() {
   return (
-    <div style={{ background: "#fff", borderRadius: 16, overflow: "hidden", border: "1px solid #e8eaf6", boxShadow: "0 2px 8px rgba(0,0,0,0.05)", animation: "shimmer 1.4s infinite" }}>
-      <div style={{ width: "100%", aspectRatio: "1/1", background: "#f0f2ff" }} />
-      <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ height: 12, width: "65%", borderRadius: 6, background: "#e8eaf6" }} />
-        <div style={{ height: 10, width: "45%", borderRadius: 6, background: "#f0f2ff" }} />
-        <div style={{ height: 8, width: "80%", borderRadius: 6, background: "#e8eaf6", marginTop: 4 }} />
+    <div style={{ background: "#111827", borderRadius: 20, overflow: "hidden", border: "1px solid #1f2937", animation: "shimmer 1.4s infinite" }}>
+      <div style={{ width: "100%", aspectRatio: "1/1", background: "#1f2937" }} />
+      <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ height: 13, width: "65%", borderRadius: 6, background: "#1f2937" }} />
+        <div style={{ height: 10, width: "45%", borderRadius: 6, background: "#374151" }} />
         <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-          <div style={{ height: 20, width: 50, borderRadius: 10, background: "#f0f2ff" }} />
-          <div style={{ height: 20, width: 40, borderRadius: 10, background: "#e8eaf6" }} />
+          <div style={{ height: 22, width: 55, borderRadius: 10, background: "#1f2937" }} />
+          <div style={{ height: 22, width: 40, borderRadius: 10, background: "#374151" }} />
         </div>
       </div>
     </div>
@@ -51,10 +50,10 @@ function SkeletonCard() {
 function ArtistCard({ artist }) {
   const [hov, setHov] = useState(false);
   const [imgErr, setImgErr] = useState(false);
-  const t  = CATEGORY_COLORS[artist.category] || CATEGORY_COLORS.default;
-  const id = getId(artist);
+  const accent  = CAT_ACCENT[artist.category] || CAT_ACCENT.default;
+  const id      = getId(artist);
   if (!id) return null;
-  const stars = Math.round(artist.rating || 5);
+  const stars   = Math.round(artist.rating || 5);
   const initials = artist.name ? artist.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "A";
 
   return (
@@ -63,74 +62,85 @@ function ArtistCard({ artist }) {
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
-          background: "#fff",
-          borderRadius: 16,
+          background: "#111827",
+          borderRadius: 20,
           overflow: "hidden",
-          border: hov ? `1.5px solid ${t.border}` : "1.5px solid #e8eaf6",
-          boxShadow: hov ? `0 8px 32px rgba(0,0,0,0.12)` : "0 2px 8px rgba(0,0,0,0.05)",
-          transform: hov ? "translateY(-4px)" : "translateY(0)",
+          border: hov ? `1.5px solid ${accent}` : "1.5px solid #1f2937",
+          boxShadow: hov ? `0 8px 32px ${accent}33, 0 2px 8px rgba(0,0,0,0.4)` : "0 2px 8px rgba(0,0,0,0.3)",
+          transform: hov ? "translateY(-5px)" : "translateY(0)",
           transition: "all 0.22s ease",
           cursor: "pointer",
         }}
       >
-        {/* Photo */}
-        <div style={{ width: "100%", aspectRatio: "1/1", overflow: "hidden", background: t.bg, position: "relative" }}>
+        {/* Photo area */}
+        <div style={{ width: "100%", aspectRatio: "1/1", overflow: "hidden", background: "#1a1a2e", position: "relative" }}>
           {artist.profileImage && !imgErr ? (
             <img
               src={artist.profileImage}
               alt={artist.name}
               onError={() => setImgErr(true)}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s", transform: hov ? "scale(1.05)" : "scale(1)" }}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.3s", transform: hov ? "scale(1.06)" : "scale(1)" }}
             />
           ) : (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "clamp(28px,6vw,44px)", color: t.text }}>
-              {ICONS[artist.category] || ICONS.default}
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+              <span style={{ fontSize: "clamp(32px,7vw,52px)" }}>{ICONS[artist.category] || ICONS.default}</span>
+              <span style={{ fontSize: "clamp(16px,3vw,22px)", fontWeight: 900, color: "#fff", fontFamily: "'Nunito',sans-serif", letterSpacing: 1 }}>{initials}</span>
             </div>
           )}
-          {/* Category badge */}
+          {/* Orange gradient overlay at bottom */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "45%", background: "linear-gradient(transparent, rgba(0,0,0,0.85))", pointerEvents: "none" }} />
+          {/* Category badge top-left */}
           <div style={{
-            position: "absolute", top: 8, left: 8,
-            background: t.pill, color: t.text,
-            fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
+            position: "absolute", top: 10, left: 10,
+            background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+            border: `1px solid ${accent}55`,
+            color: accent, fontSize: 11, fontWeight: 800,
+            padding: "4px 10px", borderRadius: 20,
             fontFamily: "'Nunito',sans-serif",
           }}>
             {ICONS[artist.category] || "✨"} {artist.category || "Artist"}
           </div>
+          {/* Rating badge top-right */}
+          <div style={{
+            position: "absolute", top: 10, right: 10,
+            background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)",
+            color: "#ffd600", fontSize: 11, fontWeight: 800,
+            padding: "4px 10px", borderRadius: 20,
+            fontFamily: "'Nunito',sans-serif",
+            display: "flex", alignItems: "center", gap: 3,
+          }}>
+            ★ {(artist.rating || 5).toFixed(1)}
+          </div>
+          {/* Name over image bottom */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "10px 12px" }}>
+            <div style={{ fontFamily: "'Nunito',sans-serif", fontWeight: 900, fontSize: "clamp(13px,2.8vw,16px)", color: "#fff", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
+              {artist.name}
+            </div>
+            {artist.city && (
+              <div style={{ fontFamily: "'Nunito',sans-serif", fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: 700, marginTop: 2 }}>
+                📍 {artist.city}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Info */}
-        <div style={{ padding: "12px 14px 14px" }}>
-          <div style={{ fontFamily: "'Nunito',sans-serif", fontWeight: 900, fontSize: "clamp(13px,2.5vw,15px)", color: "#1a1a2e", marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {artist.name}
-          </div>
-
-          {artist.city && (
-            <div style={{ fontFamily: "'Nunito',sans-serif", fontSize: 11, color: "#9e9e9e", fontWeight: 700, marginBottom: 8 }}>
-              📍 {artist.city}
-            </div>
-          )}
-
+        {/* Info strip */}
+        <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${hov ? accent + "33" : "#1f2937"}` }}>
           {/* Stars */}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 10 }}>
-            <div style={{ display: "flex", gap: 1 }}>
-              {Array.from({ length: 5 }).map((_, i) => (
-                <span key={i} style={{ fontSize: 11, color: i < stars ? "#f59e0b" : "#e0e0e0" }}>★</span>
-              ))}
-            </div>
-            <span style={{ fontSize: 10, color: "#bdbdbd", fontFamily: "'Nunito',sans-serif", fontWeight: 700 }}>
-              {(artist.rating || 5).toFixed(1)}
-            </span>
+          <div style={{ display: "flex", gap: 1 }}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <span key={i} style={{ fontSize: 11, color: i < stars ? "#ffd600" : "#374151" }}>★</span>
+            ))}
           </div>
-
           {/* Badges */}
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 5 }}>
             {artist.postCount > 0 && (
-              <span style={{ background: "#e8f5e9", color: "#2e7d32", fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 8, fontFamily: "'Nunito',sans-serif" }}>
-                🎨 {artist.postCount} works
+              <span style={{ background: "#1f2937", color: "rgba(255,255,255,0.5)", fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 8, fontFamily: "'Nunito',sans-serif" }}>
+                🎨 {artist.postCount}
               </span>
             )}
             {artist.price && (
-              <span style={{ background: "#fce4ec", color: "#c2185b", fontSize: 10, fontWeight: 800, padding: "3px 9px", borderRadius: 8, fontFamily: "'Nunito',sans-serif" }}>
+              <span style={{ background: `${accent}22`, color: accent, fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 8, fontFamily: "'Nunito',sans-serif", border: `1px solid ${accent}44` }}>
                 ₹{Number(artist.price).toLocaleString("en-IN")}
               </span>
             )}
@@ -186,45 +196,43 @@ export default function Artists() {
   });
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f2ff", color: "#1a1a2e", fontFamily: "'Nunito',sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#0d1117", color: "#fff", fontFamily: "'Nunito',sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
         * { box-sizing: border-box; }
-        @keyframes shimmer { 0%{opacity:.5} 50%{opacity:.9} 100%{opacity:.5} }
+        @keyframes shimmer { 0%{opacity:.4} 50%{opacity:.8} 100%{opacity:.4} }
         @keyframes fadeUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        .search-input::placeholder { color: #bdbdbd; }
-        .search-input:focus { outline: none; border-color: #9fa8da !important; box-shadow: 0 0 0 3px rgba(61,90,254,0.08); }
-        .cat-pill:hover { transform: translateY(-1px); box-shadow: 0 3px 12px rgba(0,0,0,0.1); }
+        .search-input::placeholder { color: rgba(255,255,255,0.25); }
+        .search-input:focus { outline: none; border-color: #ff8c00 !important; box-shadow: 0 0 0 3px rgba(255,140,0,0.12); }
+        .cat-pill { transition: all 0.18s ease; }
+        .cat-pill:hover { transform: translateY(-1px); }
         .artist-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px; }
         @media(min-width:480px)  { .artist-grid { grid-template-columns: repeat(3,1fr) !important; gap: 14px !important; } }
         @media(min-width:720px)  { .artist-grid { grid-template-columns: repeat(4,1fr) !important; gap: 16px !important; } }
         @media(min-width:1024px) { .artist-grid { grid-template-columns: repeat(5,1fr) !important; } }
         @media(min-width:1280px) { .artist-grid { grid-template-columns: repeat(6,1fr) !important; } }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-thumb { background: #c5cae9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
       `}</style>
 
       <div style={{ position: "relative", zIndex: 100 }}><Navbar /></div>
 
       <div style={{ paddingBottom: 100 }}>
         {/* HEADER */}
-        <div style={{ textAlign: "center", padding: "80px 20px 24px", animation: "fadeUp 0.4s ease" }}>
-          <button onClick={() => navigate("/")} style={{ background: "none", border: "none", color: "#bdbdbd", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "'Nunito',sans-serif", marginBottom: 14, letterSpacing: 2 }}>
+        <div style={{ textAlign: "center", padding: "80px 20px 28px", animation: "fadeUp 0.4s ease" }}>
+          <button onClick={() => navigate("/")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "'Nunito',sans-serif", marginBottom: 14, letterSpacing: 2 }}>
             ← HOME
           </button>
-          <div style={{ fontSize: 11, fontWeight: 900, color: "#bdbdbd", letterSpacing: 6, textTransform: "uppercase", marginBottom: 8 }}>
-            DISCOVER TALENT
-          </div>
-          <h1 style={{ fontWeight: 900, fontSize: "clamp(26px,6vw,46px)", margin: "0 0 8px", letterSpacing: -1, color: "#1a1a2e" }}>
-            Find Artists
+          <h1 style={{ fontWeight: 900, fontSize: "clamp(28px,6vw,50px)", margin: "0 0 8px", letterSpacing: -1, color: "#fff" }}>
+            Find <span style={{ color: "#ff8c00" }}>Artists</span>
           </h1>
-          <p style={{ color: "#9e9e9e", fontSize: 13, fontWeight: 700, margin: 0 }}>
+          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, fontWeight: 700, margin: 0 }}>
             {loading ? "Loading artists..." : error ? "Failed to load." : `${filtered.length} artist${filtered.length !== 1 ? "s" : ""} found`}
           </p>
         </div>
 
         {/* SEARCH + FILTERS */}
-        <div style={{ maxWidth: 700, margin: "0 auto", padding: "0 16px 24px", animation: "fadeUp 0.4s ease 0.06s both" }}>
+        <div style={{ maxWidth: 700, margin: "0 auto", padding: "0 16px 28px", animation: "fadeUp 0.4s ease 0.06s both" }}>
           {/* Search */}
           <div style={{ position: "relative", marginBottom: 14 }}>
             <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 15, pointerEvents: "none" }}>🔍</span>
@@ -234,22 +242,22 @@ export default function Artists() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
-                width: "100%", padding: "12px 40px 12px 42px",
-                borderRadius: 12, border: "1.5px solid #e8eaf6",
-                background: "#fff", color: "#1a1a2e",
+                width: "100%", padding: "13px 40px 13px 44px",
+                borderRadius: 14, border: "1.5px solid #1f2937",
+                background: "#111827", color: "#fff",
                 fontFamily: "'Nunito',sans-serif", fontSize: 13, fontWeight: 700,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.05)", transition: "border-color 0.2s, box-shadow 0.2s",
+                transition: "border-color 0.2s, box-shadow 0.2s",
               }}
             />
             {search && (
-              <button onClick={() => setSearch("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "#f0f2ff", border: "none", color: "#9e9e9e", cursor: "pointer", fontSize: 13, width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+              <button onClick={() => setSearch("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "#1f2937", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 12, width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
             )}
           </div>
 
           {/* Category pills */}
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 4 }}>
             {CATEGORIES.map(cat => {
-              const t = CATEGORY_COLORS[cat] || CATEGORY_COLORS.default;
+              const accent = CAT_ACCENT[cat] || CAT_ACCENT.default;
               const isActive = activeCategory === cat;
               return (
                 <button
@@ -258,13 +266,12 @@ export default function Artists() {
                   onClick={() => setActiveCategory(cat)}
                   style={{
                     padding: "6px 14px", borderRadius: 20,
-                    border: isActive ? `1.5px solid ${t.border || "#c5cae9"}` : "1.5px solid #e8eaf6",
-                    background: isActive ? t.pill : "#fff",
-                    color: isActive ? t.text : "#9e9e9e",
+                    border: isActive ? `1.5px solid ${accent}` : "1.5px solid #1f2937",
+                    background: isActive ? `${accent}22` : "#111827",
+                    color: isActive ? accent : "rgba(255,255,255,0.35)",
                     fontFamily: "'Nunito',sans-serif", fontWeight: 800, fontSize: 11,
                     cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
-                    transition: "all 0.18s ease",
-                    boxShadow: isActive ? "0 2px 8px rgba(0,0,0,0.08)" : "none",
+                    boxShadow: isActive ? `0 0 12px ${accent}33` : "none",
                   }}
                 >
                   {cat !== "All" ? `${ICONS[cat] || "✨"} ${cat}` : "◼ All"}
@@ -277,15 +284,15 @@ export default function Artists() {
         {/* GRID */}
         <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 14px" }}>
           {error ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", background: "#fff", borderRadius: 20, border: "1px solid #e8eaf6" }}>
+            <div style={{ textAlign: "center", padding: "60px 20px", background: "#111827", borderRadius: 20, border: "1px solid #1f2937" }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>⚠️</div>
-              <div style={{ color: "#9e9e9e", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>Failed to load artists</div>
-              <button onClick={() => window.location.reload()} style={{ background: "linear-gradient(135deg,#3d5afe,#7c4dff)", border: "none", color: "#fff", padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "'Nunito',sans-serif" }}>Retry</button>
+              <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: 700, marginBottom: 16 }}>Failed to load artists</div>
+              <button onClick={() => window.location.reload()} style={{ background: "#ff8c00", border: "none", color: "#fff", padding: "10px 24px", borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "'Nunito',sans-serif" }}>Retry</button>
             </div>
           ) : filtered.length === 0 && !loading ? (
-            <div style={{ textAlign: "center", padding: "60px 20px", background: "#fff", borderRadius: 20, border: "1px solid #e8eaf6" }}>
+            <div style={{ textAlign: "center", padding: "60px 20px", background: "#111827", borderRadius: 20, border: "1px solid #1f2937" }}>
               <div style={{ fontSize: 40, marginBottom: 10 }}>🎭</div>
-              <div style={{ color: "#9e9e9e", fontSize: 13, fontWeight: 700 }}>No artists found{search ? ` for "${search}"` : ""}</div>
+              <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: 700 }}>No artists found{search ? ` for "${search}"` : ""}</div>
             </div>
           ) : (
             <div className="artist-grid">
@@ -302,9 +309,8 @@ export default function Artists() {
       {!loading && !error && artists.length > 0 && (
         <div style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
-          background: "#fff",
-          borderTop: "1px solid #e8eaf6",
-          boxShadow: "0 -4px 20px rgba(0,0,0,0.06)",
+          background: "rgba(13,17,23,0.96)", backdropFilter: "blur(20px)",
+          borderTop: "1px solid #1f2937",
           display: "flex", justifyContent: "center",
           gap: "clamp(20px,6vw,60px)", padding: "10px 20px 12px",
         }}>
@@ -315,8 +321,8 @@ export default function Artists() {
             { label: "Cities",  value: [...new Set(artists.map(a => a.city).filter(Boolean))].length, emoji: "📍" },
           ].map(({ label, value, emoji }) => (
             <div key={label} style={{ textAlign: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: "clamp(14px,3vw,20px)", color: "#1a1a2e" }}>{value}</div>
-              <div style={{ fontSize: 9, color: "#bdbdbd", fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase", fontFamily: "'Nunito',sans-serif" }}>{emoji} {label}</div>
+              <div style={{ fontWeight: 900, fontSize: "clamp(14px,3vw,20px)", color: "#ff8c00" }}>{value}</div>
+              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.25)", fontWeight: 800, letterSpacing: 0.5, textTransform: "uppercase" }}>{emoji} {label}</div>
             </div>
           ))}
         </div>

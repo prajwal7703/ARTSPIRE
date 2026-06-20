@@ -85,7 +85,7 @@ function ChatTab({ artist, currentUser, artistId }) {
           </div>
         )}
         {messages.map((msg, i) => {
-          const isMe = msg.senderId === myId || getId(msg.sender) === myId;
+const isMe = String(msg.senderId) === String(myId) || String(getId(msg.sender)) === String(myId);
           return (
             <div key={i} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
               <div style={{
