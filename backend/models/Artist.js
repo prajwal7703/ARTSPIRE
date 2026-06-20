@@ -1,23 +1,24 @@
 const mongoose = require("mongoose");
 
-const artistSchema = new mongoose.Schema({
-  name: String,
-  email: String,
-  password: { type: String, select: false },
-  category: String,
-  bio: String,
-  city: String,
-  role: String,
-  location: String,
-  profileImage: String,
-  instagram: String,
-  skills: {
-    type: [String],
-    default: []
+const artistSchema = new mongoose.Schema(
+  {
+    name:          { type: String, required: true },
+    email:         { type: String, required: true, unique: true },
+    password:      { type: String, required: true },
+    role:          { type: String, default: "artist" },
+    bio:           { type: String, default: "" },
+    city:          { type: String, default: "" },
+    instagram:     { type: String, default: "" },
+    category:      { type: String, default: "" },
+    experience:    { type: String, default: "" },
+    profileImage:  { type: String, default: "" },
+    rating:        { type: Number, default: 5 },
+    skills:        { type: [String], default: [] },
+    works:         { type: [String], default: [] },
+    profileViews:  { type: Number, default: 0 },
+    passwordResetToken: { type: String, default: null },
   },
-  rating: { type: Number, default: 5 },
-  works: [String],
-  passwordResetToken: { type: String, default: null },
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-module.exports = mongoose.model("Artist", artistSchema);
+module.exports = mongoose.model("Artist", artistSchema); // → "artists" collection

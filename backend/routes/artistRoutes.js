@@ -1,11 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/User");
-const upload = require("../middleware/upload");
+const Artist = require("../models/Artist"); // ← changed
 
 router.get("/", async (req, res) => {
   try {
-    const artists = await User.find();
+    const artists = await Artist.find().select("-password");
     res.json(artists);
   } catch (err) {
     res.status(500).json(err);
@@ -14,7 +13,7 @@ router.get("/", async (req, res) => {
 
 router.get("/only-artists", async (req, res) => {
   try {
-    const artists = await User.find({ role: "artist" });
+    const artists = await Artist.find();
     res.json(artists);
   } catch (err) {
     res.status(500).json(err);
@@ -23,7 +22,7 @@ router.get("/only-artists", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
-    const artist = await User.findById(req.params.id);
+    const artist = await Artist.findById(req.params.id).select("-password");
     if (!artist) return res.status(404).json({ message: "Artist not found" });
     res.json(artist);
   } catch (err) {
@@ -31,11 +30,10 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// ── Update profile ──────────────────────────────────────────────────────────
 router.put("/:id", async (req, res) => {
   try {
     const { name, bio, city, instagram, category, skills } = req.body;
-    const updated = await User.findByIdAndUpdate(   // ← User, not Artist
+    const updated = await Artist.findByIdAndUpdate(
       req.params.id,
       { name, bio, city, instagram, category, skills },
       { new: true }
@@ -43,25 +41,52 @@ router.put("/:id", async (req, res) => {
     if (!updated) return res.status(404).json({ message: "Artist not found" });
     res.json(updated);
   } catch (err) {
-    console.log("UPDATE ERROR:", err.message);
     res.status(500).json({ message: err.message });
   }
 });
 
-// ── Update photo ────────────────────────────────────────────────────────────
+// ── Update via PATCH (used by the dashboard) ──
+router.patch("/:id", async (req, res) => {
+  try {
+    const { password, ...updateData } = req.body;
+    const updated = await Artist.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true }
+    ).select("-password");
+    if (!updated) return res.status(404).json({ message: "Artist not found" });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 router.put("/:id/photo", upload.single("profileImage"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-    const imageUrl = req.file.path;
-    const artist = await User.findByIdAndUpdate(
+    const artist = await Artist.findByIdAndUpdate(
       req.params.id,
-      { profileImage: imageUrl },
+      { profileImage: req.file.path },
       { new: true }
     );
     res.json(artist);
   } catch (err) {
-    console.log("PHOTO ERROR:", err.message);
     res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Profile view counter ──
+router.post("/:id/view", async (req, res) => {
+  try {
+    const artist = await Artist.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { profileViews: 1 } },
+      { new: true }
+    ).select("profileViews");
+    if (!artist) return res.status(404).json({ message: "Artist not found" });
+    res.json({ profileViews: artist.profileViews });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
   }
 });
 
