@@ -1,92 +1,88 @@
 const express = require("express");
-const router = express.Router();
-const Artist = require("../models/Artist"); // ← changed
-const upload = require("../middleware/upload");
+const router  = express.Router();
+const User    = require("../models/User");
+const Artist  = require("../models/Artist");
+const upload  = require("../middleware/upload");
+
+// ── GET /api/artists  →  all artists from BOTH collections ───────────
+// Primary source: User collection (role:"artist")  ← where vinay lives
+// Secondary:      Artist collection (future signups)
 router.get("/", async (req, res) => {
   try {
-    const artists = await Artist.find().select("-password");
-    res.json(artists);
+    // Artists in User collection
+    const usersAsArtists = await User.find({ role: "artist" }).select("-password");
+
+    // Artists in Artist collection (may be empty, handle gracefully)
+    let artistDocs = [];
+    try { artistDocs = await Artist.find().select("-password"); } catch {}
+
+    const artistEmails = new Set(artistDocs.map(a => a.email));
+
+    const merged = [
+      // User-collection artists not duplicated in Artist collection
+      ...usersAsArtists
+        .filter(u => !artistEmails.has(u.email))
+        .map(u => u.toObject()),
+      // Artist collection docs
+      ...artistDocs.map(a => ({ ...a.toObject(), role: "artist" })),
+    ];
+
+    res.json(merged);
   } catch (err) {
-    res.status(500).json(err);
+    console.error("GET /api/artists error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-router.get("/only-artists", async (req, res) => {
-  try {
-    const artists = await Artist.find();
-    res.json(artists);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
-
+// ── GET /api/artists/:id ──────────────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {
-    const artist = await Artist.findById(req.params.id).select("-password");
+    let artist = await User.findOne({ _id: req.params.id, role: "artist" }).select("-password");
+    if (!artist) {
+      try { artist = await Artist.findById(req.params.id).select("-password"); } catch {}
+    }
     if (!artist) return res.status(404).json({ message: "Artist not found" });
     res.json(artist);
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-router.put("/:id", async (req, res) => {
-  try {
-    const { name, bio, city, instagram, category, skills } = req.body;
-    const updated = await Artist.findByIdAndUpdate(
-      req.params.id,
-      { name, bio, city, instagram, category, skills },
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ message: "Artist not found" });
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// ── Update via PATCH (used by the dashboard) ──
+// ── PATCH /api/artists/:id  (profile update) ─────────────────────────
 router.patch("/:id", async (req, res) => {
   try {
     const { password, ...updateData } = req.body;
-    const updated = await Artist.findByIdAndUpdate(
-      req.params.id,
+
+    let artist = await User.findOneAndUpdate(
+      { _id: req.params.id, role: "artist" },
       { $set: updateData },
       { new: true }
     ).select("-password");
-    if (!updated) return res.status(404).json({ message: "Artist not found" });
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
 
-router.put("/:id/photo", upload.single("profileImage"), async (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
-    const artist = await Artist.findByIdAndUpdate(
-      req.params.id,
-      { profileImage: req.file.path },
-      { new: true }
-    );
+    if (!artist) {
+      try {
+        artist = await Artist.findByIdAndUpdate(
+          req.params.id,
+          { $set: updateData },
+          { new: true }
+        ).select("-password");
+      } catch {}
+    }
+
+    if (!artist) return res.status(404).json({ message: "Artist not found" });
     res.json(artist);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// ── Profile view counter ──
-router.post("/:id/view", async (req, res) => {
+// ── POST /api/artists/upload  (profile image) ────────────────────────
+router.post("/upload", upload.single("image"), async (req, res) => {
   try {
-    const artist = await Artist.findByIdAndUpdate(
-      req.params.id,
-      { $inc: { profileViews: 1 } },
-      { new: true }
-    ).select("profileViews");
-    if (!artist) return res.status(404).json({ message: "Artist not found" });
-    res.json({ profileViews: artist.profileViews });
+    if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+    res.json({ url: req.file.path || req.file.location });
   } catch (err) {
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Upload failed" });
   }
 });
 

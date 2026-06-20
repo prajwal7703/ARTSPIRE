@@ -3,8 +3,15 @@ const router  = express.Router();
 const User    = require("../models/User");
 const Artist  = require("../models/Artist");
 
-// ── Get all users ──────────────────────────────────────────────────
-router.get("/", async (req, res) => {
+// ── Helper: safely fetch Artist collection (model may be empty) ──────
+async function getArtistDocs() {
+  try { return await Artist.find().select("-password"); }
+  catch { return []; }
+}
+
+// ── Get all users (User collection only) ─────────────────────────────
+// Used by admin / internal checks
+router.get("/only-users", async (req, res) => {
   try {
     const users = await User.find().select("-password");
     res.json(users);
@@ -13,21 +20,58 @@ router.get("/", async (req, res) => {
   }
 });
 
-// ── Everyone: clients + artists (for chat / live users / messages) ──
-// IMPORTANT: this must come BEFORE "/:id", or Express will treat
-// "all-people" as an :id value and never reach this route.
+// ── GET /  →  merged User + Artist collections ────────────────────────
+// Discover page calls this and filters by role === "artist".
+// By merging both collections we cover:
+//   • artists stored in User collection (role:"artist")  ← vinay right now
+//   • artists stored in Artist collection (future)
+// Duplicates (same email) are de-duped, Artist record wins.
+router.get("/", async (req, res) => {
+  try {
+    const [users, artists] = await Promise.all([
+      User.find().select("-password"),
+      getArtistDocs(),
+    ]);
+
+    const artistEmails = new Set(artists.map(a => a.email));
+
+    const merged = [
+      // Users who are NOT already in the Artist collection
+      ...users
+        .filter(u => !artistEmails.has(u.email))
+        .map(u => ({ ...u.toObject(), role: u.role || "user" })),
+      // Everyone in Artist collection
+      ...artists.map(a => ({ ...a.toObject(), role: "artist" })),
+    ];
+
+    res.json(merged);
+  } catch (err) {
+    console.error("GET /api/users error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ── GET /all-people  →  same merged list (used by Chat, ArtistProfile) ──
+// MUST be before /:id
 router.get("/all-people", async (req, res) => {
   try {
     const [users, artists] = await Promise.all([
       User.find().select("-password"),
-      Artist.find().select("-password"),
+      getArtistDocs(),
     ]);
+
+    const artistEmails = new Set(artists.map(a => a.email));
+
     const merged = [
-      ...users.map(u => ({ ...u.toObject(), role: u.role || "user" })),
+      ...users
+        .filter(u => !artistEmails.has(u.email))
+        .map(u => ({ ...u.toObject(), role: u.role || "user" })),
       ...artists.map(a => ({ ...a.toObject(), role: "artist" })),
     ];
+
     res.json(merged);
   } catch (err) {
+    console.error("GET /api/users/all-people error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
@@ -35,7 +79,12 @@ router.get("/all-people", async (req, res) => {
 // ── Get user by ID ────────────────────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select("-password");
+    // Check User collection first
+    let user = await User.findById(req.params.id).select("-password");
+    if (!user) {
+      // Fallback: check Artist collection
+      try { user = await Artist.findById(req.params.id).select("-password"); } catch {}
+    }
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user);
   } catch (err) {
@@ -46,13 +95,25 @@ router.get("/:id", async (req, res) => {
 // ── Increment profile view ────────────────────────────────────────────
 router.post("/:id/view", async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(
+    let updated = await User.findByIdAndUpdate(
       req.params.id,
       { $inc: { profileViews: 1 } },
       { new: true }
     ).select("profileViews");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json({ profileViews: user.profileViews });
+
+    if (!updated) {
+      // Try Artist collection
+      try {
+        updated = await Artist.findByIdAndUpdate(
+          req.params.id,
+          { $inc: { profileViews: 1 } },
+          { new: true }
+        ).select("profileViews");
+      } catch {}
+    }
+
+    if (!updated) return res.status(404).json({ message: "User not found" });
+    res.json({ profileViews: updated.profileViews });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
@@ -62,11 +123,24 @@ router.post("/:id/view", async (req, res) => {
 router.patch("/:id", async (req, res) => {
   try {
     const { password, ...updateData } = req.body;
-    const user = await User.findByIdAndUpdate(
+
+    let user = await User.findByIdAndUpdate(
       req.params.id,
       { $set: updateData },
       { new: true }
     ).select("-password");
+
+    if (!user) {
+      // Try Artist collection
+      try {
+        user = await Artist.findByIdAndUpdate(
+          req.params.id,
+          { $set: updateData },
+          { new: true }
+        ).select("-password");
+      } catch {}
+    }
+
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json(user);
   } catch (err) {
