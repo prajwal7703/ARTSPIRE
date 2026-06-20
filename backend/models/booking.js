@@ -1,24 +1,56 @@
+// backend/models/Booking.js
 const mongoose = require("mongoose");
 
-const bookingSchema = new mongoose.Schema({
-  artistId:    { type: String, required: true },
-  artistName:  { type: String, required: true },
-  userId:      { type: String, required: true },
-  userName:    { type: String, required: true },
-  userEmail:   { type: String, required: true },
-  date:        { type: String, required: true },
-  time:        { type: String, required: true },
-  eventType:   { type: String, required: true },
-  location:    { type: String, required: true },
-  message:     { type: String, default: "" },
-  amount:      { type: Number, required: true },        // total amount charged to user
-  commissionRate:   { type: Number, default: 0 },        // % taken by platform for this category
-  commissionAmount: { type: Number, default: 0 },        // ₹ taken by platform
-  artistAmount:      { type: Number, default: 0 },       // ₹ artist actually earns
-  payoutStatus: { type: String, default: "held", enum: ["held","released_to_withdrawal"] },
-  status:      { type: String, default: "pending", enum: ["pending","confirmed","cancelled","completed"] },
-  paymentId:   { type: String, default: null },
-  paymentStatus: { type: String, default: "pending", enum: ["pending","paid","failed"] },
-}, { timestamps: true });
+const NegotiationEntrySchema = new mongoose.Schema({
+  from:      { type: String, enum: ["user", "artist"], required: true },
+  price:     { type: Number, required: true },
+  message:   { type: String, default: "" },
+  timestamp: { type: Date,   default: Date.now },
+}, { _id: false });
 
-module.exports = mongoose.model("Booking", bookingSchema);
+const BookingSchema = new mongoose.Schema({
+  // Parties
+  artistId:    { type: String, required: true, index: true },
+  artistName:  { type: String, required: true },
+  userId:      { type: String, required: true, index: true },
+  userName:    { type: String, required: true },
+  userEmail:   { type: String, default: "" },
+
+  // Event details
+  eventType:   { type: String, required: true },
+  eventDate:   { type: String, required: true },
+  eventTime:   { type: String, default: "" },
+  location:    { type: String, required: true },
+  duration:    { type: String, default: "2 hours" },
+
+  // Pricing
+  basePrice:    { type: Number, required: true },   // artist's profile price
+  agreedPrice:  { type: Number, default: null },    // final agreed price
+  paidAmount:   { type: Number, default: null },    // amount actually paid now
+  payMode:      { type: String, enum: ["advance", "full"], default: null },
+
+  // Negotiation thread
+  negotiation: { type: [NegotiationEntrySchema], default: [] },
+
+  // Status flow:
+  // pending_approval → negotiating → price_agreed → payment_pending → confirmed → cancelled
+  status: {
+    type: String,
+    enum: ["pending_approval", "negotiating", "price_agreed", "payment_pending", "confirmed", "cancelled"],
+    default: "pending_approval",
+    index: true,
+  },
+
+  // Payment
+  paymentId:   { type: String, default: null },
+  orderId:     { type: String, default: null },
+  confirmedAt: { type: Date,   default: null },
+}, {
+  timestamps: true,
+});
+
+// Compound index for artist dashboard queries
+BookingSchema.index({ artistId: 1, status: 1, createdAt: -1 });
+BookingSchema.index({ userId:   1, createdAt: -1 });
+
+module.exports = mongoose.model("Booking", BookingSchema);

@@ -1,241 +1,172 @@
+// backend/routes/bookingRoutes.js
 const express  = require("express");
 const router   = express.Router();
 const Booking  = require("../models/Booking");
-const Notification = require("../models/Notification");
-const Razorpay = require("razorpay");
-const crypto   = require("crypto");
-const User     = require("../models/User");
-let Artist = null;
-try { Artist = require("../models/Artist"); } catch {}
-const { splitAmount } = require("../config/commission");
+const { createRazorpayOrder } = require("../utils/razorpay");
 
-const razorpay = new Razorpay({
-  key_id:     process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
-
-// ── CREATE RAZORPAY ORDER ────────────────────────────────────────────────────
-// POST /api/bookings/create-order
-router.post("/create-order", async (req, res) => {
-  try {
-    const { amount } = req.body; // amount in rupees
-    const order = await razorpay.orders.create({
-      amount:   Math.round(amount * 100), // convert to paise
-      currency: "INR",
-      receipt:  `receipt_${Date.now()}`,
-    });
-    res.json({ success: true, order, orderId: order.id, amount: order.amount });
-  } catch (err) {
-    console.error("Razorpay order error:", err);
-    res.status(500).json({ success: false, message: "Payment initiation failed" });
-  }
-});
-
-// ── VERIFY PAYMENT & CONFIRM BOOKING (legacy flow) ───────────────────────────
-// POST /api/bookings/verify-payment
-router.post("/verify-payment", async (req, res) => {
+// ── POST /api/bookings/request ────────────────────────────────────────────
+// User submits booking request. Status = pending_approval.
+router.post("/request", async (req, res) => {
   try {
     const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      bookingData,
+      artistId, artistName,
+      userId,   userName, userEmail,
+      eventType, eventDate, eventTime,
+      location,  duration,  message,
+      basePrice,
     } = req.body;
 
-    const body      = razorpay_order_id + "|" + razorpay_payment_id;
-    const expected  = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body)
-      .digest("hex");
-
-    if (expected !== razorpay_signature) {
-      return res.status(400).json({ success: false, message: "Payment verification failed" });
-    }
-
-    let artistDoc = await User.findById(bookingData.artistId).catch(() => null);
-    if (!artistDoc && Artist) artistDoc = await Artist.findById(bookingData.artistId).catch(() => null);
-    const category = artistDoc?.category || "default";
-    const { rate, commissionAmount, artistAmount } = splitAmount(bookingData.amount, category);
-
-    const booking = new Booking({
-      ...bookingData,
-      commissionRate: rate,
-      commissionAmount,
-      artistAmount,
-      paymentId:     razorpay_payment_id,
-      paymentStatus: "paid",
-      status:        "confirmed",
+    const booking = await Booking.create({
+      artistId, artistName,
+      userId,   userName, userEmail,
+      eventType, eventDate, eventTime,
+      location,  duration,
+      basePrice,
+      agreedPrice: null,
+      status: "pending_approval",
+      negotiation: [
+        { from: "user", price: basePrice, message: message || "", timestamp: new Date() },
+      ],
     });
+
+    res.json({ bookingId: booking._id });
+  } catch (err) {
+    console.error("booking/request error:", err);
+    res.status(500).json({ error: "Failed to create booking request." });
+  }
+});
+
+// ── POST /api/bookings/:id/offer ──────────────────────────────────────────
+// Artist sets / adjusts their price. Called from the ARTIST dashboard.
+// status → negotiating
+router.post("/:id/offer", async (req, res) => {
+  try {
+    const { price, message } = req.body;
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    booking.negotiation.push({ from: "artist", price, message, timestamp: new Date() });
+    booking.status = "negotiating";
     await booking.save();
 
-    await Notification.create({
-      toArtist: bookingData.artistId,
-      fromName: bookingData.userName,
-      type:     "booking",
-      message:  `${bookingData.userName} booked you for ${bookingData.eventType} on ${bookingData.date}. You'll earn ₹${artistAmount} after platform fee.`,
-      read:     false,
-    });
+    // Emit to user via socket (done in socket handler or here via io)
+    // io.to(booking.userId).emit("booking_offer", { bookingId: booking._id, price, message, status: "negotiating" });
 
-    await Notification.create({
-      toArtist: "admin",
-      fromName: bookingData.userName,
-      type:     "payment_received",
-      message:  `₹${bookingData.amount} received from ${bookingData.userName} for booking with ${bookingData.artistName}. Artist share: ₹${artistAmount}, Platform fee: ₹${commissionAmount}.`,
-      read:     false,
-    });
-
-    const io = req.app.get("io");
-    if (io) {
-      io.to(bookingData.artistId).emit("new_notification", {
-        type:    "booking",
-        message: `New booking from ${bookingData.userName}! You'll earn ₹${artistAmount}`,
-      });
-      io.emit("admin_payment", {
-        amount: bookingData.amount, artistAmount, commissionAmount,
-        artistName: bookingData.artistName, userName: bookingData.userName,
-      });
-    }
-
-    res.json({ success: true, booking });
+    res.json({ ok: true });
   } catch (err) {
-    console.error("Payment verify error:", err);
-    res.status(500).json({ success: false, message: "Booking failed" });
+    console.error("booking/offer error:", err);
+    res.status(500).json({ error: "Failed to send offer." });
   }
 });
 
-// ── CONFIRM BOOKING (called by BookingModal.jsx after Razorpay success) ─────
-// POST /api/bookings/confirm
-router.post("/confirm", async (req, res) => {
+// ── POST /api/bookings/:id/counter ───────────────────────────────────────
+// User sends a counter price back to artist.
+router.post("/:id/counter", async (req, res) => {
   try {
-    const { artistId, amount, paymentId, orderId, ...rest } = req.body;
+    const { from, price, message } = req.body;
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
 
-    let artistDoc = await User.findById(artistId).catch(() => null);
-    if (!artistDoc && Artist) artistDoc = await Artist.findById(artistId).catch(() => null);
-    const category = artistDoc?.category || "default";
-
-    const { rate, commissionAmount, artistAmount } = splitAmount(amount, category);
-
-    const booking = new Booking({
-      artistId, amount,
-      commissionRate: rate,
-      commissionAmount,
-      artistAmount,
-      paymentId, orderId,
-      paymentStatus: "paid",
-      status: "confirmed",
-      ...rest,
-    });
+    booking.negotiation.push({ from, price, message, timestamp: new Date() });
+    booking.status = "negotiating";
     await booking.save();
 
-    await Notification.create({
-      toArtist: artistId,
-      fromName: rest.userName,
-      type: "booking",
-      message: `${rest.userName} booked you for ${rest.eventType} on ${rest.eventDate || rest.date}. You'll earn ₹${artistAmount} after platform fee.`,
-      read: false,
-    });
+    // io.to(booking.artistId).emit("user_counter", { bookingId: booking._id, price, message });
 
-    await Notification.create({
-      toArtist: "admin",
-      fromName: rest.userName,
-      type: "payment_received",
-      message: `₹${amount} received from ${rest.userName} for booking with ${rest.artistName}. Artist share: ₹${artistAmount}, Platform fee: ₹${commissionAmount}.`,
-      read: false,
-    });
-
-    const io = req.app.get("io");
-    if (io) {
-      io.to(artistId).emit("new_notification", { type: "booking", message: `New booking — you'll earn ₹${artistAmount}!` });
-      io.emit("admin_payment", { amount, artistAmount, commissionAmount, artistName: rest.artistName, userName: rest.userName });
-    }
-
-    res.json({ success: true, booking });
+    res.json({ ok: true });
   } catch (err) {
-    console.error("Booking confirm error:", err);
-    res.status(500).json({ success: false, message: "Booking confirmation failed" });
+    console.error("booking/counter error:", err);
+    res.status(500).json({ error: "Failed to send counter." });
   }
 });
 
-// ── CREATE BOOKING WITHOUT PAYMENT (free/offline) ───────────────────────────
-// POST /api/bookings/create
-router.post("/create", async (req, res) => {
+// ── POST /api/bookings/:id/accept ─────────────────────────────────────────
+// User accepts the artist's price. status → price_agreed.
+router.post("/:id/accept", async (req, res) => {
   try {
-    const booking = new Booking(req.body);
+    const { price } = req.body;
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    booking.agreedPrice = price;
+    booking.status = "price_agreed";
     await booking.save();
 
-    await Notification.create({
-      toArtist: req.body.artistId,
-      fromName: req.body.userName,
-      type:     "booking",
-      message:  `${req.body.userName} sent a booking request for ${req.body.eventType} on ${req.body.date}`,
-      read:     false,
-    });
+    // io.to(booking.artistId).emit("price_accepted", { bookingId: booking._id, price });
 
-    const io = req.app.get("io");
-    if (io) {
-      io.to(req.body.artistId).emit("new_notification", {
-        type:    "booking",
-        message: `New booking request from ${req.body.userName}!`,
-      });
+    res.json({ ok: true, agreedPrice: price });
+  } catch (err) {
+    console.error("booking/accept error:", err);
+    res.status(500).json({ error: "Failed to accept price." });
+  }
+});
+
+// ── POST /api/bookings/create-order ───────────────────────────────────────
+// Creates a Razorpay order (or demo order if not configured).
+router.post("/create-order", async (req, res) => {
+  try {
+    const { amount } = req.body;
+
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      // Demo mode — no real payment
+      return res.json({ orderId: `demo_${Date.now()}`, amount, demo: true });
     }
 
-    res.json({ success: true, booking });
+    const order = await createRazorpayOrder(amount);
+    res.json({ orderId: order.id, amount: order.amount, demo: false });
   } catch (err) {
-    console.error("Booking error:", err);
-    res.status(500).json({ success: false });
+    console.error("create-order error:", err);
+    res.status(500).json({ error: "Failed to create payment order." });
   }
 });
 
-// ── GET BOOKINGS BY ARTIST ───────────────────────────────────────────────────
-router.get("/artist/:id", async (req, res) => {
+// ── POST /api/bookings/:id/confirm-payment ────────────────────────────────
+// Finalises booking after payment. status → confirmed.
+router.post("/:id/confirm-payment", async (req, res) => {
   try {
-    const bookings = await Booking.find({ artistId: req.params.id }).sort({ createdAt: -1 });
+    const { paymentId, orderId, amount, payMode, agreedPrice } = req.body;
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    booking.agreedPrice  = agreedPrice;
+    booking.paidAmount   = amount;
+    booking.payMode      = payMode;           // "advance" | "full"
+    booking.paymentId    = paymentId;
+    booking.orderId      = orderId;
+    booking.status       = "confirmed";
+    booking.confirmedAt  = new Date();
+    await booking.save();
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("confirm-payment error:", err);
+    res.status(500).json({ error: "Failed to confirm booking." });
+  }
+});
+
+// ── GET /api/bookings/artist/:artistId ───────────────────────────────────
+// Artist dashboard — fetch all pending/negotiating bookings.
+router.get("/artist/:artistId", async (req, res) => {
+  try {
+    const { status } = req.query; // optional filter
+    const query = { artistId: req.params.artistId };
+    if (status) query.status = status;
+
+    const bookings = await Booking.find(query).sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
-    res.status(500).json({ success: false });
+    res.status(500).json({ error: "Failed to fetch bookings." });
   }
 });
 
-// ── GET BOOKINGS BY USER ─────────────────────────────────────────────────────
-router.get("/user/:id", async (req, res) => {
+// ── GET /api/bookings/user/:userId ────────────────────────────────────────
+// User's booking history.
+router.get("/user/:userId", async (req, res) => {
   try {
-    const bookings = await Booking.find({ userId: req.params.id }).sort({ createdAt: -1 });
+    const bookings = await Booking.find({ userId: req.params.userId }).sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-// ── UPDATE BOOKING STATUS ────────────────────────────────────────────────────
-router.put("/status/:id", async (req, res) => {
-  try {
-    const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: req.body.status },
-      { new: true }
-    );
-
-    const io = req.app.get("io");
-    if (io && booking) {
-      io.to(booking.userId).emit("new_notification", {
-        type:    "booking_update",
-        message: `Your booking with ${booking.artistName} is ${req.body.status}!`,
-      });
-    }
-
-    res.json({ success: true, booking });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-// ── GET ALL BOOKINGS (admin) ─────────────────────────────────────────────────
-router.get("/", async (req, res) => {
-  try {
-    const bookings = await Booking.find().sort({ createdAt: -1 });
-    res.json(bookings);
-  } catch (err) {
-    res.status(500).json({ success: false });
+    res.status(500).json({ error: "Failed to fetch bookings." });
   }
 });
 
