@@ -5,15 +5,15 @@ import BookingModal from "../components/BookingModal";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-const PALETTES = {
-  Singer:       { a:"#ff4d6d", b:"#c9184a" },
-  Dancer:       { a:"#7209b7", b:"#f72585" },
-  Musician:     { a:"#0096c7", b:"#48cae4" },
-  Painter:      { a:"#f4a261", b:"#e76f51" },
-  Photographer: { a:"#2d6a4f", b:"#74c69d" },
-  Actor:        { a:"#ffd60a", b:"#f48c06" },
-  Comedian:     { a:"#06d6a0", b:"#118ab2" },
-  default:      { a:"#9d4edd", b:"#c77dff" },
+const CATEGORY_COLORS = {
+  Singer:       { pill:"#fce4ec", text:"#c2185b", dot:"#e91e63" },
+  Dancer:       { pill:"#ede7f6", text:"#6a1b9a", dot:"#9c27b0" },
+  Musician:     { pill:"#e3f2fd", text:"#0d47a1", dot:"#1976d2" },
+  Painter:      { pill:"#fff3e0", text:"#e65100", dot:"#ff9800" },
+  Photographer: { pill:"#e8f5e9", text:"#1b5e20", dot:"#4caf50" },
+  Actor:        { pill:"#fffde7", text:"#f57f17", dot:"#fdd835" },
+  Comedian:     { pill:"#e0f7fa", text:"#006064", dot:"#00bcd4" },
+  default:      { pill:"#ede7f6", text:"#4a148c", dot:"#9c27b0" },
 };
 
 const ICONS = {
@@ -35,7 +35,6 @@ function ChatTab({ artist, currentUser, artistId }) {
   const [input,    setInput]    = useState("");
   const [sending,  setSending]  = useState(false);
   const bottomRef = useRef(null);
-
   const myId = getId(currentUser);
 
   useEffect(() => {
@@ -46,7 +45,7 @@ function ChatTab({ artist, currentUser, artistId }) {
   }, [myId, artistId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const fetchMessages = async () => {
@@ -61,9 +60,7 @@ function ChatTab({ artist, currentUser, artistId }) {
     setSending(true);
     try {
       await axios.post(`${API}/api/chat/send`, {
-        senderId:   myId,
-        receiverId: artistId,
-        message:    input.trim(),
+        senderId: myId, receiverId: artistId, message: input.trim(),
       });
       setInput("");
       fetchMessages();
@@ -72,35 +69,37 @@ function ChatTab({ artist, currentUser, artistId }) {
   };
 
   if (!currentUser) return (
-    <div style={S.emptyState}>
-      <div style={{ fontSize:40, marginBottom:12 }}>💬</div>
-      <div style={{ color:"rgba(255,255,255,0.5)", fontSize:14, fontWeight:700 }}>Login to chat with {artist.name}</div>
+    <div style={S.emptyBox}>
+      <div style={{ fontSize: 40, marginBottom: 10 }}>💬</div>
+      <p style={S.emptyText}>Login to chat with {artist.name}</p>
     </div>
   );
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", height:"100%", minHeight:0 }}>
-      {/* Messages */}
-      <div style={{ flex:1, overflowY:"auto", padding:"12px 16px", display:"flex", flexDirection:"column", gap:8, minHeight:0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: 480 }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {messages.length === 0 && (
-          <div style={S.emptyState}>
-            <div style={{ fontSize:36, marginBottom:8 }}>👋</div>
-            <div style={{ color:"rgba(255,255,255,0.4)", fontSize:13, fontWeight:600 }}>Start the conversation!</div>
+          <div style={S.emptyBox}>
+            <div style={{ fontSize: 36, marginBottom: 8 }}>👋</div>
+            <p style={S.emptyText}>Start the conversation!</p>
           </div>
         )}
         {messages.map((msg, i) => {
           const isMe = msg.senderId === myId || getId(msg.sender) === myId;
           return (
-            <div key={i} style={{ display:"flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
+            <div key={i} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
               <div style={{
-                maxWidth:"72%", padding:"9px 14px", borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                background: isMe ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(255,255,255,0.1)",
-                color:"#fff", fontSize:13, fontWeight:600, lineHeight:1.5,
-                fontFamily:"'Nunito',sans-serif", wordBreak:"break-word",
+                maxWidth: "72%", padding: "10px 14px",
+                borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                background: isMe ? "linear-gradient(135deg,#3d5afe,#7c4dff)" : "#f0f2ff",
+                color: isMe ? "#fff" : "#333",
+                fontSize: 13, fontWeight: 600, lineHeight: 1.5,
+                fontFamily: "'Nunito',sans-serif", wordBreak: "break-word",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
               }}>
                 {msg.message || msg.text || msg.content}
-                <div style={{ fontSize:9, color:"rgba(255,255,255,0.4)", marginTop:3, textAlign: isMe ? "right" : "left" }}>
-                  {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }) : ""}
+                <div style={{ fontSize: 10, opacity: 0.55, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+                  {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
                 </div>
               </div>
             </div>
@@ -108,34 +107,30 @@ function ChatTab({ artist, currentUser, artistId }) {
         })}
         <div ref={bottomRef} />
       </div>
-
-      {/* Input */}
-      <div style={{ padding:"12px 16px", borderTop:"1px solid rgba(255,255,255,0.08)", display:"flex", gap:10, alignItems:"center", flexShrink:0 }}>
+      <div style={{ padding: "12px 16px", borderTop: "1px solid #e8eaf6", display: "flex", gap: 10, alignItems: "center", background: "#fff", borderRadius: "0 0 16px 16px" }}>
         <input
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
           placeholder={`Message ${artist.name?.split(" ")[0]}...`}
           style={{
-            flex:1, padding:"11px 16px", borderRadius:24,
-            border:"1.5px solid rgba(255,255,255,0.12)",
-            background:"rgba(255,255,255,0.07)", color:"#fff",
-            fontFamily:"'Nunito',sans-serif", fontSize:13, fontWeight:600,
+            flex: 1, padding: "11px 16px", borderRadius: 24,
+            border: "1.5px solid #e0e0e0", background: "#f8f9ff",
+            color: "#333", fontFamily: "'Nunito',sans-serif", fontSize: 13, fontWeight: 600,
+            outline: "none",
           }}
         />
         <button
           onClick={send}
           disabled={sending || !input.trim()}
           style={{
-            width:42, height:42, borderRadius:"50%", border:"none",
-            background: input.trim() ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "rgba(255,255,255,0.1)",
-            color:"#fff", fontSize:16, cursor: input.trim() ? "pointer" : "default",
-            display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0,
-            transition:"background 0.2s",
+            width: 42, height: 42, borderRadius: "50%", border: "none",
+            background: input.trim() ? "linear-gradient(135deg,#3d5afe,#7c4dff)" : "#e0e0e0",
+            color: "#fff", fontSize: 16, cursor: input.trim() ? "pointer" : "default",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            transition: "background 0.2s",
           }}
-        >
-          {sending ? "⏳" : "➤"}
-        </button>
+        >{sending ? "⏳" : "➤"}</button>
       </div>
     </div>
   );
@@ -143,11 +138,10 @@ function ChatTab({ artist, currentUser, artistId }) {
 
 // ── BOOKING TAB ───────────────────────────────────────────────────────────────
 function BookingTab({ artist, currentUser, artistId }) {
-  const [bookings, setBookings] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [done, setDone] = useState(false);
-  const [loading, setLoading] = useState(true);
-
+  const [bookings,   setBookings]   = useState([]);
+  const [showModal,  setShowModal]  = useState(false);
+  const [done,       setDone]       = useState(false);
+  const [loading,    setLoading]    = useState(true);
   const myId = getId(currentUser);
 
   useEffect(() => {
@@ -163,62 +157,62 @@ function BookingTab({ artist, currentUser, artistId }) {
   }, [myId, artistId, done]);
 
   if (!currentUser) return (
-    <div style={S.emptyState}>
-      <div style={{ fontSize:40, marginBottom:12 }}>📅</div>
-      <div style={{ color:"rgba(255,255,255,0.4)", fontSize:14, fontWeight:700 }}>Login to book {artist.name}</div>
+    <div style={S.emptyBox}>
+      <div style={{ fontSize: 40, marginBottom: 10 }}>📅</div>
+      <p style={S.emptyText}>Login to book {artist.name}</p>
     </div>
   );
 
-  const p = PALETTES[artist.category] || PALETTES.default;
-  const statusColor = { confirmed:"#22c55e", pending:"#f59e0b", cancelled:"#ef4444" };
+  const statusColor = { confirmed: "#22c55e", pending: "#f59e0b", cancelled: "#ef4444" };
+  const statusBg    = { confirmed: "#f0fdf4", pending: "#fffbeb", cancelled: "#fef2f2" };
 
   return (
-    <div style={{ padding:"16px", overflowY:"auto", height:"100%" }}>
-      {/* Book button */}
+    <div style={{ padding: 16 }}>
       <button
         onClick={() => setShowModal(true)}
         style={{
-          width:"100%", padding:"14px", borderRadius:14, border:"none",
-          background:`linear-gradient(135deg,${p.a},${p.b})`,
-          color:"#fff", fontFamily:"'Nunito',sans-serif", fontWeight:900,
-          fontSize:15, cursor:"pointer", marginBottom:20,
-          boxShadow:`0 8px 24px ${p.a}44`,
+          width: "100%", padding: "14px", borderRadius: 14, border: "none",
+          background: "linear-gradient(135deg,#3d5afe,#7c4dff)",
+          color: "#fff", fontFamily: "'Nunito',sans-serif", fontWeight: 900,
+          fontSize: 15, cursor: "pointer", marginBottom: 20,
+          boxShadow: "0 6px 20px rgba(61,90,254,0.3)",
         }}
       >
         📅 Book {artist.name?.split(" ")[0]} Now
-        {artist.price && <span style={{ opacity:0.8, fontSize:12, marginLeft:8 }}>· From ₹{Number(artist.price).toLocaleString("en-IN")}</span>}
+        {artist.price && <span style={{ opacity: 0.8, fontSize: 12, marginLeft: 8 }}>· From ₹{Number(artist.price).toLocaleString("en-IN")}</span>}
       </button>
 
       {done && (
-        <div style={{ background:"rgba(34,197,94,0.15)", border:"1px solid rgba(34,197,94,0.3)", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#22c55e", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13 }}>
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 16, color: "#16a34a", fontFamily: "'Nunito',sans-serif", fontWeight: 700, fontSize: 13 }}>
           ✅ Booking request sent!
         </div>
       )}
 
-      {/* Past bookings */}
-      <div style={{ fontSize:11, color:"rgba(255,255,255,0.35)", fontWeight:800, letterSpacing:1, textTransform:"uppercase", marginBottom:10, fontFamily:"'Nunito',sans-serif" }}>
-        Your Bookings
-      </div>
-
+      <div style={S.sectionLabel}>Your Bookings</div>
       {loading ? (
-        <div style={{ color:"rgba(255,255,255,0.3)", fontSize:13, fontFamily:"'Nunito',sans-serif", textAlign:"center", padding:"20px 0" }}>Loading...</div>
+        <p style={{ color: "#999", fontSize: 13, textAlign: "center", padding: "20px 0", fontFamily: "'Nunito',sans-serif" }}>Loading...</p>
       ) : bookings.length === 0 ? (
-        <div style={S.emptyState}>
-          <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
-          <div style={{ color:"rgba(255,255,255,0.35)", fontSize:13, fontWeight:600 }}>No bookings yet</div>
+        <div style={S.emptyBox}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
+          <p style={S.emptyText}>No bookings yet</p>
         </div>
       ) : (
-        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {bookings.map((b, i) => (
-            <div key={i} style={{ background:"rgba(255,255,255,0.06)", borderRadius:12, padding:"14px 16px", border:"1px solid rgba(255,255,255,0.08)" }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
-                <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:14, color:"#fff" }}>{b.eventType || "Event"}</div>
-                <span style={{ background: statusColor[b.status] + "22", color: statusColor[b.status] || "#fff", fontSize:10, fontWeight:800, padding:"3px 10px", borderRadius:20, fontFamily:"'Nunito',sans-serif", textTransform:"uppercase" }}>
+            <div key={i} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", border: "1px solid #e8eaf6", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                <div style={{ fontFamily: "'Nunito',sans-serif", fontWeight: 800, fontSize: 14, color: "#1a1a2e" }}>{b.eventType || "Event"}</div>
+                <span style={{
+                  background: statusBg[b.status] || "#f8f9fa",
+                  color: statusColor[b.status] || "#555",
+                  fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
+                  fontFamily: "'Nunito',sans-serif", textTransform: "uppercase",
+                }}>
                   {b.status || "pending"}
                 </span>
               </div>
-              <div style={{ fontSize:12, color:"rgba(255,255,255,0.5)", fontFamily:"'Nunito',sans-serif", fontWeight:600 }}>
-                {b.date && `📅 ${new Date(b.date).toLocaleDateString("en-IN", { day:"numeric", month:"short", year:"numeric" })}`}
+              <div style={{ fontSize: 12, color: "#888", fontFamily: "'Nunito',sans-serif", fontWeight: 600 }}>
+                {b.date && `📅 ${new Date(b.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`}
                 {b.amount && ` · ₹${Number(b.amount).toLocaleString("en-IN")}`}
               </div>
             </div>
@@ -247,9 +241,7 @@ function RatingTab({ artist, currentUser, artistId, onRatingUpdate }) {
   const [submitted, setSubmitted] = useState(false);
   const [loading,   setLoading]   = useState(false);
 
-  useEffect(() => {
-    fetchReviews();
-  }, [artistId]);
+  useEffect(() => { fetchReviews(); }, [artistId]);
 
   const fetchReviews = async () => {
     try {
@@ -263,10 +255,7 @@ function RatingTab({ artist, currentUser, artistId, onRatingUpdate }) {
     setLoading(true);
     try {
       await axios.post(`${API}/api/artists/${artistId}/reviews`, {
-        userId:   getId(currentUser),
-        userName: currentUser.name,
-        rating,
-        review:   review.trim(),
+        userId: getId(currentUser), userName: currentUser.name, rating, review: review.trim(),
       });
       setSubmitted(true);
       setReview("");
@@ -281,34 +270,31 @@ function RatingTab({ artist, currentUser, artistId, onRatingUpdate }) {
     : (artist.rating || 5).toFixed(1);
 
   return (
-    <div style={{ padding:"16px", overflowY:"auto", height:"100%" }}>
+    <div style={{ padding: 16 }}>
       {/* Average */}
-      <div style={{ textAlign:"center", marginBottom:20, padding:"16px", background:"rgba(255,255,255,0.04)", borderRadius:14, border:"1px solid rgba(255,255,255,0.07)" }}>
-        <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:48, color:"#ffd60a", lineHeight:1 }}>{avg}</div>
-        <div style={{ display:"flex", justifyContent:"center", gap:4, margin:"8px 0 4px" }}>
-          {Array.from({ length:5 }).map((_,i) => (
-            <span key={i} style={{ fontSize:20, color: i < Math.round(avg) ? "#ffd60a" : "rgba(255,255,255,0.2)" }}>★</span>
+      <div style={{ textAlign: "center", marginBottom: 20, padding: 20, background: "#f8f9ff", borderRadius: 16, border: "1px solid #e8eaf6" }}>
+        <div style={{ fontFamily: "'Nunito',sans-serif", fontWeight: 900, fontSize: 52, color: "#f59e0b", lineHeight: 1 }}>{avg}</div>
+        <div style={{ display: "flex", justifyContent: "center", gap: 4, margin: "8px 0 4px" }}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <span key={i} style={{ fontSize: 22, color: i < Math.round(avg) ? "#f59e0b" : "#e0e0e0" }}>★</span>
           ))}
         </div>
-        <div style={{ color:"rgba(255,255,255,0.4)", fontSize:12, fontFamily:"'Nunito',sans-serif", fontWeight:700 }}>
+        <div style={{ color: "#999", fontSize: 12, fontFamily: "'Nunito',sans-serif", fontWeight: 700 }}>
           {reviews.length} review{reviews.length !== 1 ? "s" : ""}
         </div>
       </div>
 
-      {/* Submit rating */}
       {currentUser && !submitted && (
-        <div style={{ background:"rgba(255,255,255,0.05)", borderRadius:14, padding:"16px", marginBottom:16, border:"1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:800, letterSpacing:1, textTransform:"uppercase", fontFamily:"'Nunito',sans-serif", marginBottom:10 }}>
-            Rate {artist.name?.split(" ")[0]}
-          </div>
-          <div style={{ display:"flex", gap:6, marginBottom:12, justifyContent:"center" }}>
-            {Array.from({ length:5 }).map((_,i) => (
+        <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 16, border: "1px solid #e8eaf6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+          <div style={S.sectionLabel}>Rate {artist.name?.split(" ")[0]}</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, justifyContent: "center" }}>
+            {Array.from({ length: 5 }).map((_, i) => (
               <span
                 key={i}
-                onMouseEnter={() => setHover(i+1)}
+                onMouseEnter={() => setHover(i + 1)}
                 onMouseLeave={() => setHover(0)}
-                onClick={() => setRating(i+1)}
-                style={{ fontSize:32, cursor:"pointer", color: i < (hover || rating) ? "#ffd60a" : "rgba(255,255,255,0.2)", transition:"color 0.1s, transform 0.1s", transform: i < (hover || rating) ? "scale(1.15)" : "scale(1)" }}
+                onClick={() => setRating(i + 1)}
+                style={{ fontSize: 34, cursor: "pointer", color: i < (hover || rating) ? "#f59e0b" : "#e0e0e0", transition: "transform 0.1s", transform: i < (hover || rating) ? "scale(1.15)" : "scale(1)", display: "inline-block" }}
               >★</span>
             ))}
           </div>
@@ -317,24 +303,12 @@ function RatingTab({ artist, currentUser, artistId, onRatingUpdate }) {
             onChange={e => setReview(e.target.value)}
             placeholder="Write a review (optional)..."
             rows={3}
-            style={{
-              width:"100%", padding:"10px 14px", borderRadius:10,
-              border:"1.5px solid rgba(255,255,255,0.1)",
-              background:"rgba(255,255,255,0.06)", color:"#fff",
-              fontFamily:"'Nunito',sans-serif", fontSize:13, fontWeight:600,
-              resize:"none", marginBottom:10,
-            }}
+            style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1.5px solid #e0e0e0", background: "#f8f9ff", color: "#333", fontFamily: "'Nunito',sans-serif", fontSize: 13, fontWeight: 600, resize: "none", marginBottom: 10, outline: "none", boxSizing: "border-box" }}
           />
           <button
             onClick={submit}
             disabled={!rating || loading}
-            style={{
-              width:"100%", padding:"11px", borderRadius:10, border:"none",
-              background: rating ? "linear-gradient(135deg,#ffd60a,#f48c06)" : "rgba(255,255,255,0.08)",
-              color: rating ? "#000" : "rgba(255,255,255,0.3)",
-              fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:14,
-              cursor: rating ? "pointer" : "default",
-            }}
+            style={{ width: "100%", padding: 11, borderRadius: 10, border: "none", background: rating ? "linear-gradient(135deg,#f59e0b,#f97316)" : "#e0e0e0", color: rating ? "#fff" : "#aaa", fontFamily: "'Nunito',sans-serif", fontWeight: 900, fontSize: 14, cursor: rating ? "pointer" : "default" }}
           >
             {loading ? "Submitting..." : "Submit Review"}
           </button>
@@ -342,30 +316,29 @@ function RatingTab({ artist, currentUser, artistId, onRatingUpdate }) {
       )}
 
       {submitted && (
-        <div style={{ background:"rgba(34,197,94,0.12)", border:"1px solid rgba(34,197,94,0.25)", borderRadius:12, padding:"12px 16px", marginBottom:16, color:"#22c55e", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13 }}>
+        <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 16, color: "#16a34a", fontFamily: "'Nunito',sans-serif", fontWeight: 700, fontSize: 13 }}>
           ✅ Thanks for your review!
         </div>
       )}
 
-      {/* Reviews list */}
-      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {reviews.map((r, i) => (
-          <div key={i} style={{ background:"rgba(255,255,255,0.05)", borderRadius:12, padding:"14px 16px", border:"1px solid rgba(255,255,255,0.07)" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-              <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:13, color:"#fff" }}>{r.userName || "User"}</div>
-              <div style={{ display:"flex", gap:2 }}>
-                {Array.from({ length:5 }).map((_,j) => (
-                  <span key={j} style={{ fontSize:11, color: j < r.rating ? "#ffd60a" : "rgba(255,255,255,0.2)" }}>★</span>
+          <div key={i} style={{ background: "#fff", borderRadius: 12, padding: "14px 16px", border: "1px solid #e8eaf6", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ fontFamily: "'Nunito',sans-serif", fontWeight: 800, fontSize: 13, color: "#1a1a2e" }}>{r.userName || "User"}</div>
+              <div style={{ display: "flex", gap: 2 }}>
+                {Array.from({ length: 5 }).map((_, j) => (
+                  <span key={j} style={{ fontSize: 12, color: j < r.rating ? "#f59e0b" : "#e0e0e0" }}>★</span>
                 ))}
               </div>
             </div>
-            {r.review && <div style={{ color:"rgba(255,255,255,0.6)", fontSize:13, fontFamily:"'Nunito',sans-serif", lineHeight:1.5, fontWeight:600 }}>{r.review}</div>}
+            {r.review && <div style={{ color: "#666", fontSize: 13, fontFamily: "'Nunito',sans-serif", lineHeight: 1.5, fontWeight: 600 }}>{r.review}</div>}
           </div>
         ))}
         {reviews.length === 0 && (
-          <div style={S.emptyState}>
-            <div style={{ fontSize:32, marginBottom:8 }}>⭐</div>
-            <div style={{ color:"rgba(255,255,255,0.35)", fontSize:13, fontWeight:600 }}>No reviews yet. Be the first!</div>
+          <div style={S.emptyBox}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⭐</div>
+            <p style={S.emptyText}>No reviews yet. Be the first!</p>
           </div>
         )}
       </div>
@@ -378,58 +351,52 @@ function ArtTab({ posts, artist, isOwner, navigate }) {
   const [lightbox, setLightbox] = useState(null);
 
   return (
-    <div style={{ height:"100%", overflowY:"auto" }}>
+    <div>
       {lightbox && (
         <div
-          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.95)", zIndex:9999, display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(8px)" }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(6px)" }}
           onClick={() => setLightbox(null)}
         >
-          <button style={{ position:"absolute", top:16, right:16, background:"rgba(255,255,255,0.1)", border:"none", color:"#fff", width:40, height:40, borderRadius:"50%", fontSize:18, cursor:"pointer" }}>✕</button>
-          <div onClick={e => e.stopPropagation()} style={{ maxWidth:"90vw", maxHeight:"90vh", borderRadius:12, overflow:"hidden" }}>
+          <button style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 18, cursor: "pointer" }}>✕</button>
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "90vh", borderRadius: 12, overflow: "hidden" }}>
             {lightbox.type === "video"
-              ? <video src={lightbox.media} controls style={{ maxWidth:"85vw", maxHeight:"85vh" }} />
-              : <img src={lightbox.media} alt="" style={{ maxWidth:"85vw", maxHeight:"85vh", objectFit:"contain", display:"block" }} />
+              ? <video src={lightbox.media} controls style={{ maxWidth: "85vw", maxHeight: "85vh" }} />
+              : <img src={lightbox.media} alt="" style={{ maxWidth: "85vw", maxHeight: "85vh", objectFit: "contain", display: "block" }} />
             }
             {lightbox.title && (
-              <div style={{ background:"rgba(0,0,0,0.8)", color:"#fff", padding:"10px 16px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif" }}>{lightbox.title}</div>
+              <div style={{ background: "rgba(0,0,0,0.7)", color: "#fff", padding: "10px 16px", fontSize: 13, fontWeight: 700, fontFamily: "'Nunito',sans-serif" }}>{lightbox.title}</div>
             )}
           </div>
         </div>
       )}
 
       {posts.length === 0 ? (
-        <div style={{ ...S.emptyState, height:"100%" }}>
-          <div style={{ fontSize:44, marginBottom:12 }}>🎨</div>
-          <div style={{ color:"rgba(255,255,255,0.4)", fontSize:14, fontWeight:700, marginBottom:16 }}>No works uploaded yet</div>
+        <div style={{ ...S.emptyBox, padding: "60px 20px" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🎭</div>
+          <p style={S.emptyText}>No works uploaded yet</p>
           {isOwner && (
-            <button
-              onClick={() => navigate("/artist-dashboard")}
-              style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", padding:"10px 24px", borderRadius:24, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}
-            >
+            <button onClick={() => navigate("/artist-dashboard")} style={{ background: "linear-gradient(135deg,#3d5afe,#7c4dff)", border: "none", color: "#fff", padding: "10px 24px", borderRadius: 24, fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "'Nunito',sans-serif", marginTop: 12 }}>
               Upload Your First Work
             </button>
           )}
         </div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:2 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 3, borderRadius: "0 0 16px 16px", overflow: "hidden" }}>
           {posts.map((post, i) => (
             <div
               key={post._id || i}
               onClick={() => setLightbox(post)}
-              style={{
-                aspectRatio:"1/1", position:"relative", overflow:"hidden",
-                cursor:"pointer", background:"rgba(255,255,255,0.05)",
-              }}
+              style={{ aspectRatio: "1/1", position: "relative", overflow: "hidden", cursor: "pointer", background: "#f0f2ff" }}
             >
               {post.type === "video"
-                ? <video src={post.media} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} muted />
-                : <img src={post.media} alt="" style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                ? <video src={post.media} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} muted />
+                : <img src={post.media} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
               }
               {post.type === "video" && (
-                <div style={{ position:"absolute", top:6, right:6, background:"rgba(0,0,0,0.6)", borderRadius:4, padding:"2px 6px", fontSize:10, color:"#fff", fontWeight:700 }}>▶</div>
+                <div style={{ position: "absolute", top: 6, right: 6, background: "rgba(0,0,0,0.55)", borderRadius: 4, padding: "2px 6px", fontSize: 10, color: "#fff", fontWeight: 700 }}>▶</div>
               )}
               {post.title && (
-                <div style={{ position:"absolute", bottom:0, left:0, right:0, background:"linear-gradient(transparent,rgba(0,0,0,0.75))", padding:"12px 6px 6px", color:"#fff", fontSize:10, fontWeight:800, fontFamily:"'Nunito',sans-serif" }}>
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent,rgba(0,0,0,0.7))", padding: "12px 6px 6px", color: "#fff", fontSize: 10, fontWeight: 800, fontFamily: "'Nunito',sans-serif" }}>
                   {post.title}
                 </div>
               )}
@@ -441,7 +408,7 @@ function ArtTab({ posts, artist, isOwner, navigate }) {
   );
 }
 
-// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
+// ── MAIN ─────────────────────────────────────────────────────────────────────
 export default function ArtistProfile() {
   const { id }   = useParams();
   const navigate = useNavigate();
@@ -456,7 +423,6 @@ export default function ArtistProfile() {
   try { loggedUser   = JSON.parse(localStorage.getItem("user")   || "null"); } catch {}
 
   const currentUser = loggedUser || loggedArtist;
-  const isLoggedIn  = !!(loggedArtist || loggedUser);
   const role        = loggedArtist ? "artist" : loggedUser ? "user" : null;
   const isOwner     = role === "artist" && getId(loggedArtist) === id;
 
@@ -468,7 +434,6 @@ export default function ArtistProfile() {
 
   const fetchArtist = async () => {
     try {
-      // Try direct artist fetch first
       const res = await axios.get(`${API}/api/artists/${id}`);
       if (res.data) { setArtist(res.data); return; }
     } catch {}
@@ -496,234 +461,194 @@ export default function ArtistProfile() {
   };
 
   if (!artist) return (
-    <div style={{ background:"#0d0d14", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
-      <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:18, color:"rgba(255,255,255,0.5)" }}>Loading...</div>
+    <div style={{ background: "#f0f2ff", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+      <div style={{ fontFamily: "'Nunito',sans-serif", fontWeight: 800, fontSize: 16, color: "#9e9e9e" }}>Loading profile...</div>
     </div>
   );
 
-  const p       = PALETTES[artist.category] || PALETTES.default;
+  const cat     = CATEGORY_COLORS[artist.category] || CATEGORY_COLORS.default;
   const icon    = ICONS[artist.category] || ICONS.default;
-  const initials = artist.name ? artist.name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) : "A";
+  const initials = artist.name ? artist.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2) : "A";
   const stars   = Math.round(artist.rating || 5);
 
   const TABS = [
-    { id:"art",     label:"Art",     emoji:"🎨", count:posts.length },
-    { id:"chat",    label:"Chat",    emoji:"💬", count:null },
-    { id:"book",    label:"Book",    emoji:"📅", count:null },
-    { id:"rating",  label:"Rating",  emoji:"⭐", count:null },
+    { id: "art",    label: "Portfolio", emoji: "🎨" },
+    { id: "chat",   label: "Messages",  emoji: "💬" },
+    { id: "book",   label: "Bookings",  emoji: "📅" },
+    { id: "rating", label: "Reviews",   emoji: "⭐" },
   ];
 
   return (
-    <div style={{ background:"#0d0d14", minHeight:"100vh", color:"#fff", fontFamily:"'Nunito',sans-serif", overflowX:"hidden" }}>
+    <div style={{ background: "#f0f2ff", minHeight: "100vh", fontFamily: "'Nunito',sans-serif", color: "#1a1a2e" }}>
       <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
-        * { box-sizing:border-box; }
-        @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        textarea:focus, input:focus { outline:none; border-color:rgba(255,255,255,0.3)!important; }
-        textarea::placeholder, input::placeholder { color:rgba(255,255,255,0.3); }
-        ::-webkit-scrollbar { width:3px; }
-        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:3px; }
+        * { box-sizing: border-box; }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+        textarea:focus, input:focus { outline: none; border-color: #9fa8da !important; }
+        textarea::placeholder, input::placeholder { color: #bdbdbd; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c5cae9; border-radius: 4px; }
+        .ap-tab-btn:hover { background: #e8eaf6 !important; color: #3d5afe !important; }
+        @media (max-width: 600px) {
+          .ap-header-row { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
+          .ap-pill-row { flex-wrap: wrap !important; }
+          .ap-stat-grid { grid-template-columns: repeat(2,1fr) !important; }
+          .ap-action-grid { grid-template-columns: 1fr !important; }
+          .ap-tabs-row { overflow-x: auto !important; }
+          .ap-tab-btn { min-width: 80px !important; flex-shrink: 0 !important; }
+        }
       `}</style>
 
-      {/* ── TOP BAR ── */}
+      {/* ── TOP NAV ── */}
       <div style={{
-        position:"fixed", top:0, left:0, right:0, zIndex:200,
-        background:"rgba(13,13,20,0.9)", backdropFilter:"blur(20px)",
-        borderBottom:"1px solid rgba(255,255,255,0.07)",
-        display:"flex", alignItems:"center", gap:12, padding:"10px 16px",
+        position: "sticky", top: 0, zIndex: 200,
+        background: "#fff",
+        borderBottom: "1px solid #e8eaf6",
+        display: "flex", alignItems: "center", gap: 12,
+        padding: "12px 20px",
+        boxShadow: "0 2px 8px rgba(61,90,254,0.07)",
       }}>
         <button
           onClick={() => navigate("/artists")}
-          style={{ background:"rgba(255,255,255,0.08)", border:"none", color:"#fff", width:34, height:34, borderRadius:10, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}
-        >
-          ←
-        </button>
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontWeight:900, fontSize:15, color:"#fff", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{artist.name}</div>
-          <div style={{ fontSize:11, color:"rgba(255,255,255,0.4)", fontWeight:700 }}>{artist.category}{artist.city ? ` · ${artist.city}` : ""}</div>
+          style={{ background: "#f0f2ff", border: "none", color: "#3d5afe", width: 36, height: 36, borderRadius: 10, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, flexShrink: 0 }}
+        >←</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 900, fontSize: 15, color: "#1a1a2e", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{artist.name}</div>
+          <div style={{ fontSize: 11, color: "#9e9e9e", fontWeight: 700 }}>{artist.category}{artist.city ? ` · ${artist.city}` : ""}</div>
         </div>
         {isOwner ? (
-          <button onClick={() => navigate("/artist-dashboard")} style={S.topBtn}>🛠 Edit</button>
+          <button onClick={() => navigate("/artist-dashboard")} style={S.navBtn}>🛠 Edit</button>
         ) : (
-          <button onClick={handleLogout} style={{ ...S.topBtn, background:"rgba(239,68,68,0.15)", color:"#ef4444" }}>Logout</button>
+          <button onClick={handleLogout} style={{ ...S.navBtn, background: "#fef2f2", color: "#ef4444", border: "1px solid #fecaca" }}>Logout</button>
         )}
       </div>
 
-      {/* ── PROFILE HERO ── */}
-      <div style={{ paddingTop:56 }}>
-        <div style={{ position:"relative", width:"100%", aspectRatio:"4/3", maxHeight:340, overflow:"hidden" }}>
-          {/* Background blur */}
-          {artist.profileImage && !imgError && (
-            <div style={{ position:"absolute", inset:0, backgroundImage:`url(${artist.profileImage})`, backgroundSize:"cover", backgroundPosition:"center", filter:"blur(20px) brightness(0.4)", transform:"scale(1.1)" }} />
-          )}
-          <div style={{ position:"absolute", inset:0, background:`linear-gradient(135deg,${p.a}22,${p.b}11)` }} />
+      {/* ── PROFILE CARD ── */}
+      <div style={{ maxWidth: 720, margin: "24px auto 0", padding: "0 14px", animation: "fadeUp 0.4s ease" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: "24px 20px 20px", boxShadow: "0 2px 16px rgba(61,90,254,0.08)", border: "1px solid #e8eaf6", marginBottom: 16 }}>
 
-          {/* Photo */}
-          <div style={{ position:"relative", zIndex:2, display:"flex", justifyContent:"center", alignItems:"center", height:"100%", padding:"20px 0 0" }}>
+          {/* Header row */}
+          <div className="ap-header-row" style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+            {/* Avatar */}
             <div style={{
-              width:"clamp(100px,30vw,140px)", height:"clamp(100px,30vw,140px)",
-              borderRadius:"50%", overflow:"hidden",
-              border:`3px solid ${p.a}`,
-              boxShadow:`0 0 40px ${p.a}55, 0 8px 32px rgba(0,0,0,0.6)`,
-              background:"#1a1a2e", flexShrink:0,
+              width: 88, height: 88, borderRadius: "50%", flexShrink: 0, overflow: "hidden",
+              border: "3px solid #e8eaf6",
+              background: "linear-gradient(135deg,#3d5afe,#7c4dff)",
+              boxShadow: "0 4px 16px rgba(61,90,254,0.2)",
             }}>
               {artist.profileImage && !imgError
-                ? <img src={artist.profileImage} alt="" onError={() => setImgError(true)} style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                : <div style={{ width:"100%", height:"100%", background:`linear-gradient(135deg,${p.a},${p.b})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"clamp(28px,8vw,44px)", fontWeight:900, color:"#fff" }}>{initials}</div>
+                ? <img src={artist.profileImage} alt="" onError={() => setImgError(true)} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 900, color: "#fff" }}>{initials}</div>
               }
             </div>
-          </div>
 
-          {/* Gradient fade to dark */}
-          <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"50%", background:"linear-gradient(transparent,#0d0d14)", zIndex:3 }} />
-        </div>
-
-        {/* ── NAME + INFO ── */}
-        <div style={{ padding:"0 16px 0", marginTop:-20, position:"relative", zIndex:10, animation:"fadeUp 0.4s ease" }}>
-          {/* Category badge */}
-          <div style={{ display:"flex", justifyContent:"center", marginBottom:10 }}>
-            <span style={{
-              background:`linear-gradient(135deg,${p.a},${p.b})`,
-              color:"#fff", fontSize:11, fontWeight:800,
-              padding:"5px 14px", borderRadius:20,
-              letterSpacing:0.5, textTransform:"uppercase",
-            }}>
-              {icon} {artist.category || "Artist"}
-            </span>
-          </div>
-
-          <h1 style={{ textAlign:"center", fontWeight:900, fontSize:"clamp(22px,6vw,32px)", margin:"0 0 4px", letterSpacing:-0.5 }}>
-            {artist.name}
-          </h1>
-
-          {/* Stars + city */}
-          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:8, marginBottom:12 }}>
-            <div style={{ display:"flex", gap:2 }}>
-              {Array.from({ length:5 }).map((_,i) => (
-                <span key={i} style={{ fontSize:13, color: i < stars ? "#ffd60a" : "rgba(255,255,255,0.2)" }}>★</span>
-              ))}
+            {/* Name + pills */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h1 style={{ fontWeight: 900, fontSize: "clamp(20px,5vw,28px)", margin: "0 0 8px", color: "#1a1a2e", letterSpacing: -0.5 }}>{artist.name}</h1>
+              <div className="ap-pill-row" style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {/* Category */}
+                <span style={{ background: cat.pill, color: cat.text, fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20 }}>
+                  {icon} {artist.category || "Artist"}
+                </span>
+                {/* City */}
+                {artist.city && (
+                  <span style={{ background: "#fce4ec", color: "#c2185b", fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20 }}>
+                    📍 {artist.city}
+                  </span>
+                )}
+                {/* Rating */}
+                <span style={{ background: "#fffde7", color: "#f57f17", fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20 }}>
+                  ⭐ {(artist.rating || 5).toFixed(1)}
+                </span>
+                {/* Posts */}
+                <span style={{ background: "#e8f5e9", color: "#2e7d32", fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20 }}>
+                  🎨 {posts.length} Posts
+                </span>
+                {/* Views */}
+                <span style={{ background: "#e3f2fd", color: "#0d47a1", fontSize: 11, fontWeight: 800, padding: "4px 12px", borderRadius: 20 }}>
+                  👁 {artist.profileViews || 0} Views
+                </span>
+              </div>
             </div>
-            <span style={{ fontSize:12, color:"rgba(255,255,255,0.4)", fontWeight:700 }}>{(artist.rating||5).toFixed(1)}</span>
-            {artist.city && <span style={{ fontSize:12, color:"rgba(255,255,255,0.35)", fontWeight:600 }}>· 📍 {artist.city}</span>}
           </div>
 
           {/* Bio */}
           {artist.bio && (
-            <p style={{ textAlign:"center", color:"rgba(255,255,255,0.55)", fontSize:13, lineHeight:1.6, fontWeight:600, margin:"0 0 14px", maxWidth:400, marginLeft:"auto", marginRight:"auto" }}>
+            <p style={{ color: "#666", fontSize: 13, lineHeight: 1.7, fontWeight: 600, margin: "0 0 16px", padding: "12px 16px", background: "#f8f9ff", borderRadius: 12, border: "1px solid #e8eaf6" }}>
               {artist.bio}
             </p>
           )}
 
-          {/* Stats row */}
-          <div style={{
-            display:"grid", gridTemplateColumns:"repeat(3,1fr)",
-            background:"rgba(255,255,255,0.05)", borderRadius:14,
-            border:"1px solid rgba(255,255,255,0.08)",
-            marginBottom:14, overflow:"hidden",
-          }}>
+          {/* Stat cards */}
+          <div className="ap-stat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
             {[
-              { num:posts.length,           lbl:"Works" },
-              { num:artist.profileViews||0, lbl:"Views" },
-              { num:artist.price ? `₹${Number(artist.price).toLocaleString("en-IN")}` : "—", lbl:"From" },
+              { emoji: "🎨", num: posts.length,           label: "Total Posts",    bg: "#e8eaf6", color: "#3d5afe" },
+              { emoji: "👁",  num: artist.profileViews||0, label: "Profile Views",  bg: "#e8f5e9", color: "#2e7d32" },
+              { emoji: "⭐", num: (artist.rating||5).toFixed(1), label: "Rating",  bg: "#fffde7", color: "#f57f17" },
+              { emoji: "💰", num: artist.price ? `₹${Number(artist.price).toLocaleString("en-IN")}` : "—", label: "Starting Fee", bg: "#fce4ec", color: "#c2185b" },
             ].map((st, i) => (
-              <div key={i} style={{ textAlign:"center", padding:"12px 8px", borderRight: i < 2 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
-                <div style={{ fontWeight:900, fontSize:"clamp(15px,4vw,20px)", color:"#fff" }}>{st.num}</div>
-                <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontWeight:700, letterSpacing:0.5, textTransform:"uppercase" }}>{st.lbl}</div>
+              <div key={i} style={{ background: st.bg, borderRadius: 14, padding: "14px 10px", textAlign: "center" }}>
+                <div style={{ fontSize: 22, marginBottom: 6 }}>{st.emoji}</div>
+                <div style={{ fontWeight: 900, fontSize: "clamp(14px,3vw,20px)", color: st.color }}>{st.num}</div>
+                <div style={{ fontSize: 10, color: "#888", fontWeight: 700, marginTop: 2, textTransform: "uppercase", letterSpacing: 0.4 }}>{st.label}</div>
               </div>
             ))}
           </div>
 
-          {/* Quick action buttons */}
+          {/* Action buttons */}
           {!isOwner && (
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:4 }}>
+            <div className="ap-action-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <button
                 onClick={() => setActiveTab("book")}
-                style={{
-                  padding:"12px", borderRadius:12, border:"none",
-                  background:`linear-gradient(135deg,${p.a},${p.b})`,
-                  color:"#fff", fontWeight:900, fontSize:14, cursor:"pointer",
-                  boxShadow:`0 6px 20px ${p.a}44`,
-                }}
-              >
-                📅 Book Now
-              </button>
+                style={{ padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#3d5afe,#7c4dff)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(61,90,254,0.3)" }}
+              >📅 Book Now</button>
               <button
                 onClick={() => setActiveTab("chat")}
-                style={{
-                  padding:"12px", borderRadius:12,
-                  border:"1.5px solid rgba(255,255,255,0.15)",
-                  background:"rgba(255,255,255,0.06)",
-                  color:"#fff", fontWeight:900, fontSize:14, cursor:"pointer",
-                }}
-              >
-                💬 Chat
-              </button>
+                style={{ padding: "13px", borderRadius: 12, border: "1.5px solid #e8eaf6", background: "#f8f9ff", color: "#3d5afe", fontWeight: 900, fontSize: 14, cursor: "pointer" }}
+              >💬 Send Message</button>
             </div>
           )}
           {isOwner && (
             <button
               onClick={() => navigate("/artist-dashboard")}
-              style={{
-                width:"100%", padding:"12px", borderRadius:12, border:"none",
-                background:`linear-gradient(135deg,${p.a},${p.b})`,
-                color:"#fff", fontWeight:900, fontSize:14, cursor:"pointer",
-                marginBottom:4,
-              }}
-            >
-              🛠 Go to Dashboard
-            </button>
+              style={{ width: "100%", padding: "13px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#3d5afe,#7c4dff)", color: "#fff", fontWeight: 900, fontSize: 14, cursor: "pointer", boxShadow: "0 4px 14px rgba(61,90,254,0.3)" }}
+            >🛠 Go to Dashboard</button>
           )}
         </div>
 
-        {/* ── TABS ── */}
-        <div style={{
-          display:"grid", gridTemplateColumns:`repeat(${TABS.length},1fr)`,
-          borderTop:"1px solid rgba(255,255,255,0.08)",
-          borderBottom:"1px solid rgba(255,255,255,0.08)",
-          marginTop:16, background:"rgba(255,255,255,0.02)",
-          position:"sticky", top:56, zIndex:100,
-        }}>
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding:"12px 4px", border:"none",
-                background: activeTab === tab.id ? "rgba(255,255,255,0.07)" : "transparent",
-                color: activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.4)",
-                fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12,
-                cursor:"pointer", display:"flex", flexDirection:"column",
-                alignItems:"center", gap:3,
-                borderBottom: activeTab === tab.id ? `2px solid ${p.a}` : "2px solid transparent",
-                transition:"all 0.2s",
-              }}
-            >
-              <span style={{ fontSize:16 }}>{tab.emoji}</span>
-              <span>{tab.label}{tab.count !== null ? ` (${tab.count})` : ""}</span>
-            </button>
-          ))}
-        </div>
+        {/* ── TABS CARD ── */}
+        <div style={{ background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 2px 16px rgba(61,90,254,0.08)", border: "1px solid #e8eaf6", marginBottom: 40 }}>
+          {/* Tab bar */}
+          <div className="ap-tabs-row" style={{ display: "flex", borderBottom: "1px solid #e8eaf6", background: "#f8f9ff" }}>
+            {TABS.map(tab => (
+              <button
+                key={tab.id}
+                className="ap-tab-btn"
+                onClick={() => setActiveTab(tab.id)}
+                style={{
+                  flex: 1, padding: "14px 8px", border: "none", cursor: "pointer",
+                  background: activeTab === tab.id ? "#fff" : "transparent",
+                  color: activeTab === tab.id ? "#3d5afe" : "#9e9e9e",
+                  fontFamily: "'Nunito',sans-serif", fontWeight: 800, fontSize: 12,
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                  borderBottom: activeTab === tab.id ? "2px solid #3d5afe" : "2px solid transparent",
+                  transition: "all 0.18s",
+                }}
+              >
+                <span style={{ fontSize: 18 }}>{tab.emoji}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
 
-        {/* ── TAB CONTENT ── */}
-        <div style={{ minHeight:"50vh" }}>
-          {activeTab === "art" && (
-            <ArtTab posts={posts} artist={artist} isOwner={isOwner} navigate={navigate} />
-          )}
-          {activeTab === "chat" && (
-            <ChatTab artist={artist} currentUser={currentUser} artistId={id} />
-          )}
-          {activeTab === "book" && (
-            <BookingTab artist={artist} currentUser={currentUser} artistId={id} />
-          )}
-          {activeTab === "rating" && (
-            <RatingTab
-              artist={artist}
-              currentUser={currentUser}
-              artistId={id}
-              onRatingUpdate={fetchArtist}
-            />
-          )}
+          {/* Tab content */}
+          <div>
+            {activeTab === "art"    && <ArtTab posts={posts} artist={artist} isOwner={isOwner} navigate={navigate} />}
+            {activeTab === "chat"   && <ChatTab artist={artist} currentUser={currentUser} artistId={id} />}
+            {activeTab === "book"   && <BookingTab artist={artist} currentUser={currentUser} artistId={id} />}
+            {activeTab === "rating" && <RatingTab artist={artist} currentUser={currentUser} artistId={id} onRatingUpdate={fetchArtist} />}
+          </div>
         </div>
       </div>
     </div>
@@ -731,13 +656,22 @@ export default function ArtistProfile() {
 }
 
 const S = {
-  topBtn: {
-    background:"rgba(255,255,255,0.08)", border:"1px solid rgba(255,255,255,0.12)",
-    color:"#fff", padding:"7px 14px", borderRadius:10,
-    fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12, cursor:"pointer",
+  navBtn: {
+    background: "#f0f2ff", border: "1px solid #e8eaf6",
+    color: "#3d5afe", padding: "8px 16px", borderRadius: 10,
+    fontFamily: "'Nunito',sans-serif", fontWeight: 800, fontSize: 12, cursor: "pointer",
   },
-  emptyState: {
-    display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-    padding:"40px 20px", textAlign:"center",
+  sectionLabel: {
+    fontSize: 11, color: "#9e9e9e", fontWeight: 800,
+    letterSpacing: 1, textTransform: "uppercase",
+    marginBottom: 10, fontFamily: "'Nunito',sans-serif",
+  },
+  emptyBox: {
+    display: "flex", flexDirection: "column", alignItems: "center",
+    justifyContent: "center", padding: "40px 20px", textAlign: "center",
+  },
+  emptyText: {
+    color: "#bdbdbd", fontSize: 13, fontWeight: 700, margin: 0,
+    fontFamily: "'Nunito',sans-serif",
   },
 };
