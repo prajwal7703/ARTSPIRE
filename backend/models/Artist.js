@@ -16,6 +16,7 @@ const artistSchema = new mongoose.Schema(
     skills:        { type: [String], default: [] },
     works:         { type: [String], default: [] },
     profileViews:  { type: Number, default: 0 },
+    price:         { type: Number, default: 0 },   // ✅ added — artist's base price for booking
     passwordResetToken: { type: String, default: null },
   },
   { timestamps: true }

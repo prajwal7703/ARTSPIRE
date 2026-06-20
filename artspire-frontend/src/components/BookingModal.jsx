@@ -8,6 +8,13 @@ const RAZORPAY_KEY = import.meta.env.VITE_RAZORPAY_KEY_ID;
 const EVENT_TYPES = ["Wedding","Birthday Party","Corporate Event","Concert","Private Party","Photoshoot","Art Exhibition","Festival","Other"];
 const DURATIONS   = ["1 hour","2 hours","3 hours","4 hours","Half Day","Full Day"];
 
+// Mirrors backend/config/commission.js — for display only, not security-relevant.
+const COMMISSION_RATES = {
+  Singer: 15, Dancer: 12, Musician: 10, Painter: 8,
+  Photographer: 10, Actor: 15, Comedian: 12, default: 12,
+};
+function getRate(category) { return COMMISSION_RATES[category] ?? COMMISSION_RATES.default; }
+
 export default function BookingModal({ artist, currentUser, onClose, onSuccess }) {
   const [step, setStep]   = useState(1);
   const [loading, setLoading] = useState(false);
@@ -25,6 +32,11 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
 
   const change = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const totalAmount = artist.price || 500;
+  const rate = getRate(artist.category);
+  const commissionAmount = Math.round((totalAmount * rate) / 100);
+  const artistEarns = totalAmount - commissionAmount;
+
   const handlePay = async () => {
     if (!form.eventType || !form.eventDate || !form.location) {
       setError("Please fill all required fields."); return;
@@ -33,17 +45,14 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
     setLoading(true);
 
     try {
-      // Create order
-      const orderRes = await axios.post(`${API}/api/bookings/create-order`, { amount: artist.price || 500 });
+      const orderRes = await axios.post(`${API}/api/bookings/create-order`, { amount: totalAmount });
       const { orderId, amount, demo } = orderRes.data;
 
       if (demo || !RAZORPAY_KEY) {
-        // Demo mode — confirm directly without Razorpay
         await confirmBooking(null, orderId);
         return;
       }
 
-      // Load Razorpay script
       if (!window.Razorpay) {
         await new Promise((res, rej) => {
           const s = document.createElement("script");
@@ -88,14 +97,15 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
         userName:   currentUser?.name || "Guest",
         userEmail:  currentUser?.email || "",
         ...form,
-        amount:    artist.price || 500,
+        date: form.eventDate,
+        time: form.eventTime,
+        amount: totalAmount,
         paymentId,
         orderId,
       };
 
       await axios.post(`${API}/api/bookings/confirm`, payload);
 
-      // Notify artist via socket
       socket.emit("new_booking", {
         artistId:  artist._id,
         userName:  currentUser?.name || "Someone",
@@ -137,6 +147,12 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
     <div style={s.overlay} onClick={onClose}>
       <div style={s.modal} onClick={e => e.stopPropagation()}>
         <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+        <style>{`
+          @media (max-width: 480px) {
+            .booking-field-grid { grid-template-columns: 1fr !important; }
+            .booking-footer { flex-direction: column !important; }
+          }
+        `}</style>
 
         {/* Header */}
         <div style={s.header}>
@@ -163,7 +179,7 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
         {/* Step 1 */}
         {step === 1 && (
           <div style={s.body}>
-            <div style={s.fieldGrid}>
+            <div className="booking-field-grid" style={s.fieldGrid}>
               <div style={s.field}>
                 <label style={s.label}>Event Type *</label>
                 <select value={form.eventType} onChange={e => change("eventType", e.target.value)} style={s.input}>
@@ -195,7 +211,7 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
               <textarea value={form.message} onChange={e => change("message", e.target.value)} placeholder="Tell the artist about your event..." rows={3} style={{ ...s.input, resize:"none", height:"auto" }} />
             </div>
             {error && <div style={s.errorBox}>{error}</div>}
-            <div style={s.footer}>
+            <div className="booking-footer" style={s.footer}>
               <button onClick={onClose} style={s.secondaryBtn}>Cancel</button>
               <button onClick={() => { if (!form.eventType || !form.eventDate || !form.location) { setError("Fill all required fields"); return; } setError(""); setStep(2); }} style={s.primaryBtn}>
                 Next →
@@ -217,7 +233,22 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
               ))}
               <div style={{ borderTop:"1px solid #e2e8f0", marginTop:12, paddingTop:12, display:"flex", justifyContent:"space-between" }}>
                 <span style={{ fontFamily:"'Nunito',sans-serif", fontWeight:800, color:"#1e293b", fontSize:14 }}>Total Amount</span>
-                <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#1e3a8a", letterSpacing:0.5 }}>₹{(artist.price || 500).toLocaleString()}</span>
+                <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#1e3a8a", letterSpacing:0.5 }}>₹{totalAmount.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Transparency breakdown — how the payment is split */}
+            <div style={s.breakdownCard}>
+              <div style={{ fontSize:12, fontWeight:800, color:"#64748b", marginBottom:8, fontFamily:"'Nunito',sans-serif", textTransform:"uppercase", letterSpacing:0.5 }}>
+                Payment Breakdown
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, fontFamily:"'Nunito',sans-serif", marginBottom:6 }}>
+                <span style={{ color:"#64748b" }}>Artist receives</span>
+                <span style={{ fontWeight:800, color:"#15803d" }}>₹{artistEarns.toLocaleString()}</span>
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:13, fontFamily:"'Nunito',sans-serif" }}>
+                <span style={{ color:"#64748b" }}>Platform service fee ({rate}%)</span>
+                <span style={{ fontWeight:800, color:"#92400e" }}>₹{commissionAmount.toLocaleString()}</span>
               </div>
             </div>
 
@@ -235,15 +266,15 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
             </div>
 
             <div style={{ fontSize:12, color:"#94a3b8", fontFamily:"'Nunito',sans-serif", textAlign:"center", marginBottom:4 }}>
-              🔒 Secure payment · Free cancellation within 24 hours
+              🔒 Payment is held securely by ArtSpire and released to the artist after the event.
             </div>
 
             {error && <div style={s.errorBox}>{error}</div>}
 
-            <div style={s.footer}>
+            <div className="booking-footer" style={s.footer}>
               <button onClick={() => setStep(1)} style={s.secondaryBtn}>← Back</button>
               <button onClick={handlePay} disabled={loading} style={{ ...s.primaryBtn, opacity: loading ? 0.7 : 1 }}>
-                {loading ? "Processing..." : `Pay ₹${(artist.price||500).toLocaleString()} →`}
+                {loading ? "Processing..." : `Pay ₹${totalAmount.toLocaleString()} →`}
               </button>
             </div>
           </div>
@@ -265,6 +296,7 @@ const s = {
   label:      { fontSize:11, fontWeight:800, color:"#64748b", letterSpacing:"1px", textTransform:"uppercase" },
   input:      { padding:"11px 13px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:14, fontWeight:600, fontFamily:"'Nunito',sans-serif", outline:"none", boxSizing:"border-box", width:"100%", transition:"border-color 0.2s" },
   summaryCard:{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:16, padding:"18px 20px" },
+  breakdownCard: { background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:14, padding:"14px 16px" },
   artistCard: { display:"flex", alignItems:"center", gap:12, background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:14, padding:"12px 16px" },
   artistAvatar: { width:44, height:44, borderRadius:"50%", objectFit:"cover", flexShrink:0 },
   errorBox:   { background:"#fee2e2", color:"#7f1d1d", borderRadius:10, padding:"10px 14px", fontSize:13, fontWeight:600 },

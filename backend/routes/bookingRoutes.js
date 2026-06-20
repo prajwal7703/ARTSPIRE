@@ -4,6 +4,10 @@ const Booking  = require("../models/Booking");
 const Notification = require("../models/Notification");
 const Razorpay = require("razorpay");
 const crypto   = require("crypto");
+const User     = require("../models/User");
+let Artist = null;
+try { Artist = require("../models/Artist"); } catch {}
+const { splitAmount } = require("../config/commission");
 
 const razorpay = new Razorpay({
   key_id:     process.env.RAZORPAY_KEY_ID,
@@ -20,14 +24,14 @@ router.post("/create-order", async (req, res) => {
       currency: "INR",
       receipt:  `receipt_${Date.now()}`,
     });
-    res.json({ success: true, order });
+    res.json({ success: true, order, orderId: order.id, amount: order.amount });
   } catch (err) {
     console.error("Razorpay order error:", err);
     res.status(500).json({ success: false, message: "Payment initiation failed" });
   }
 });
 
-// ── VERIFY PAYMENT & CONFIRM BOOKING ────────────────────────────────────────
+// ── VERIFY PAYMENT & CONFIRM BOOKING (legacy flow) ───────────────────────────
 // POST /api/bookings/verify-payment
 router.post("/verify-payment", async (req, res) => {
   try {
@@ -38,7 +42,6 @@ router.post("/verify-payment", async (req, res) => {
       bookingData,
     } = req.body;
 
-    // Verify signature
     const body      = razorpay_order_id + "|" + razorpay_payment_id;
     const expected  = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -49,30 +52,47 @@ router.post("/verify-payment", async (req, res) => {
       return res.status(400).json({ success: false, message: "Payment verification failed" });
     }
 
-    // Save booking
+    let artistDoc = await User.findById(bookingData.artistId).catch(() => null);
+    if (!artistDoc && Artist) artistDoc = await Artist.findById(bookingData.artistId).catch(() => null);
+    const category = artistDoc?.category || "default";
+    const { rate, commissionAmount, artistAmount } = splitAmount(bookingData.amount, category);
+
     const booking = new Booking({
       ...bookingData,
+      commissionRate: rate,
+      commissionAmount,
+      artistAmount,
       paymentId:     razorpay_payment_id,
       paymentStatus: "paid",
       status:        "confirmed",
     });
     await booking.save();
 
-    // Send notification to artist
     await Notification.create({
       toArtist: bookingData.artistId,
       fromName: bookingData.userName,
       type:     "booking",
-      message:  `${bookingData.userName} booked you for ${bookingData.eventType} on ${bookingData.date}`,
+      message:  `${bookingData.userName} booked you for ${bookingData.eventType} on ${bookingData.date}. You'll earn ₹${artistAmount} after platform fee.`,
       read:     false,
     });
 
-    // Emit real-time notification via socket if available
+    await Notification.create({
+      toArtist: "admin",
+      fromName: bookingData.userName,
+      type:     "payment_received",
+      message:  `₹${bookingData.amount} received from ${bookingData.userName} for booking with ${bookingData.artistName}. Artist share: ₹${artistAmount}, Platform fee: ₹${commissionAmount}.`,
+      read:     false,
+    });
+
     const io = req.app.get("io");
     if (io) {
       io.to(bookingData.artistId).emit("new_notification", {
         type:    "booking",
-        message: `New booking from ${bookingData.userName}!`,
+        message: `New booking from ${bookingData.userName}! You'll earn ₹${artistAmount}`,
+      });
+      io.emit("admin_payment", {
+        amount: bookingData.amount, artistAmount, commissionAmount,
+        artistName: bookingData.artistName, userName: bookingData.userName,
       });
     }
 
@@ -83,6 +103,59 @@ router.post("/verify-payment", async (req, res) => {
   }
 });
 
+// ── CONFIRM BOOKING (called by BookingModal.jsx after Razorpay success) ─────
+// POST /api/bookings/confirm
+router.post("/confirm", async (req, res) => {
+  try {
+    const { artistId, amount, paymentId, orderId, ...rest } = req.body;
+
+    let artistDoc = await User.findById(artistId).catch(() => null);
+    if (!artistDoc && Artist) artistDoc = await Artist.findById(artistId).catch(() => null);
+    const category = artistDoc?.category || "default";
+
+    const { rate, commissionAmount, artistAmount } = splitAmount(amount, category);
+
+    const booking = new Booking({
+      artistId, amount,
+      commissionRate: rate,
+      commissionAmount,
+      artistAmount,
+      paymentId, orderId,
+      paymentStatus: "paid",
+      status: "confirmed",
+      ...rest,
+    });
+    await booking.save();
+
+    await Notification.create({
+      toArtist: artistId,
+      fromName: rest.userName,
+      type: "booking",
+      message: `${rest.userName} booked you for ${rest.eventType} on ${rest.eventDate || rest.date}. You'll earn ₹${artistAmount} after platform fee.`,
+      read: false,
+    });
+
+    await Notification.create({
+      toArtist: "admin",
+      fromName: rest.userName,
+      type: "payment_received",
+      message: `₹${amount} received from ${rest.userName} for booking with ${rest.artistName}. Artist share: ₹${artistAmount}, Platform fee: ₹${commissionAmount}.`,
+      read: false,
+    });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(artistId).emit("new_notification", { type: "booking", message: `New booking — you'll earn ₹${artistAmount}!` });
+      io.emit("admin_payment", { amount, artistAmount, commissionAmount, artistName: rest.artistName, userName: rest.userName });
+    }
+
+    res.json({ success: true, booking });
+  } catch (err) {
+    console.error("Booking confirm error:", err);
+    res.status(500).json({ success: false, message: "Booking confirmation failed" });
+  }
+});
+
 // ── CREATE BOOKING WITHOUT PAYMENT (free/offline) ───────────────────────────
 // POST /api/bookings/create
 router.post("/create", async (req, res) => {
@@ -90,7 +163,6 @@ router.post("/create", async (req, res) => {
     const booking = new Booking(req.body);
     await booking.save();
 
-    // Notify artist
     await Notification.create({
       toArtist: req.body.artistId,
       fromName: req.body.userName,
@@ -143,7 +215,6 @@ router.put("/status/:id", async (req, res) => {
       { new: true }
     );
 
-    // Notify user when artist confirms/cancels
     const io = req.app.get("io");
     if (io && booking) {
       io.to(booking.userId).emit("new_notification", {
