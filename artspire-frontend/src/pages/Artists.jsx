@@ -6,17 +6,17 @@ import Navbar from "../Navbar";
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 const PALETTES = {
-  Singer:       { a: "#ff4d6d", b: "#c9184a", c: "#590d22" },
-  Dancer:       { a: "#7209b7", b: "#f72585", c: "#3a0ca3" },
-  Musician:     { a: "#0096c7", b: "#48cae4", c: "#03045e" },
-  Painter:      { a: "#f4a261", b: "#e76f51", c: "#264653" },
-  Photographer: { a: "#2d6a4f", b: "#74c69d", c: "#081c15" },
-  Actor:        { a: "#ffd60a", b: "#f48c06", c: "#370617" },
-  Comedian:     { a: "#06d6a0", b: "#118ab2", c: "#073b4c" },
-  default:      { a: "#9d4edd", b: "#c77dff", c: "#10002b" },
+  Singer:       { a: "#ff4d6d", b: "#c9184a" },
+  Dancer:       { a: "#7209b7", b: "#f72585" },
+  Musician:     { a: "#0096c7", b: "#48cae4" },
+  Painter:      { a: "#f4a261", b: "#e76f51" },
+  Photographer: { a: "#2d6a4f", b: "#74c69d" },
+  Actor:        { a: "#ffd60a", b: "#f48c06" },
+  Comedian:     { a: "#06d6a0", b: "#118ab2" },
+  default:      { a: "#9d4edd", b: "#c77dff" },
 };
 
-const CATEGORY_ICONS = {
+const ICONS = {
   Singer:"🎤", Dancer:"💃", Musician:"🎵", Painter:"🎨",
   Photographer:"📸", Actor:"🎭", Comedian:"😂", default:"✨",
 };
@@ -33,82 +33,139 @@ function getId(artist) {
 
 function SkeletonCard() {
   return (
-    <div style={{ borderRadius:"20px", overflow:"hidden", background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.07)", aspectRatio:"3/4" }}>
-      <div style={{ width:"100%", height:"60%", background:"rgba(255,255,255,0.06)", animation:"shimmer 1.4s infinite" }} />
-      <div style={{ padding:"16px", display:"flex", flexDirection:"column", gap:"10px" }}>
-        <div style={{ height:"16px", width:"60%", borderRadius:"6px", background:"rgba(255,255,255,0.07)" }} />
-        <div style={{ height:"11px", width:"40%", borderRadius:"6px", background:"rgba(255,255,255,0.05)" }} />
+    <div style={{
+      aspectRatio:"1/1", borderRadius:0, overflow:"hidden",
+      background:"#1a1a2e", position:"relative",
+    }}>
+      <div style={{ width:"100%", height:"100%", background:"rgba(255,255,255,0.06)", animation:"shimmer 1.4s infinite" }} />
+      <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"8px", background:"linear-gradient(transparent,rgba(0,0,0,0.8))" }}>
+        <div style={{ height:10, width:"60%", borderRadius:4, background:"rgba(255,255,255,0.15)", marginBottom:4 }} />
+        <div style={{ height:8, width:"40%", borderRadius:4, background:"rgba(255,255,255,0.08)" }} />
       </div>
     </div>
   );
 }
 
-function ArtistCard({ artist, idx }) {
+function ArtistCard({ artist }) {
   const [hov, setHov] = useState(false);
   const p    = PALETTES[artist.category] || PALETTES.default;
-  const icon = CATEGORY_ICONS[artist.category] || CATEGORY_ICONS.default;
+  const icon = ICONS[artist.category] || ICONS.default;
   const artistId = getId(artist);
   if (!artistId) return null;
 
+  const stars = Math.round(artist.rating || 5);
+
   return (
-    <Link to={`/artist/${artistId}`} style={{ textDecoration:"none" }}>
+    <Link to={`/artist/${artistId}`} style={{ textDecoration:"none", display:"block" }}>
       <div
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
-          position:"relative", borderRadius:"20px", overflow:"hidden", aspectRatio:"3/4",
-          background:"#0d0d1a", border:`1px solid ${hov ? p.a+"66" : "rgba(255,255,255,0.08)"}`,
-          transform:hov ? "translateY(-6px) scale(1.02)" : "translateY(0) scale(1)",
-          transition:"all 0.35s cubic-bezier(0.34,1.4,0.64,1)",
-          boxShadow:hov ? `0 24px 60px rgba(0,0,0,0.7), 0 0 40px ${p.a}33` : "0 8px 32px rgba(0,0,0,0.5)",
-          cursor:"pointer", animation:"rise 0.5s ease both", animationDelay:`${idx * 0.07}s`,
+          position:"relative", aspectRatio:"1/1", overflow:"hidden",
+          cursor:"pointer",
+          transform: hov ? "scale(0.97)" : "scale(1)",
+          transition: "transform 0.2s ease",
         }}
       >
+        {/* Photo or gradient fallback */}
         {artist.profileImage ? (
-          <img src={artist.profileImage} alt={artist.name} style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", transform:hov?"scale(1.08)":"scale(1)", transition:"transform 0.5s ease" }} />
+          <img
+            src={artist.profileImage}
+            alt={artist.name}
+            style={{
+              width:"100%", height:"100%", objectFit:"cover", display:"block",
+              transform: hov ? "scale(1.06)" : "scale(1)",
+              transition: "transform 0.4s ease",
+            }}
+          />
         ) : (
-          <div style={{ position:"absolute", inset:0, background:`radial-gradient(ellipse at 40% 30%, ${p.a}cc 0%, ${p.b}66 50%, ${p.c} 100%)` }}>
-            <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:"64px", opacity:0.25 }}>{icon}</div>
+          <div style={{
+            width:"100%", height:"100%",
+            background:`linear-gradient(135deg, ${p.a} 0%, ${p.b} 100%)`,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:"clamp(28px,6vw,44px)",
+          }}>
+            {icon}
           </div>
         )}
-        <div style={{ position:"absolute", inset:0, background:"linear-gradient(to bottom, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0) 30%, rgba(0,0,0,0.5) 60%, rgba(0,0,0,0.95) 100%)" }} />
-        <div style={{ position:"absolute", bottom:0, left:0, right:0, height:"50%", background:`linear-gradient(to top, ${p.c}ee, transparent)`, opacity:0.7 }} />
 
-        <div style={{ position:"absolute", top:"12px", left:"12px", right:"12px", display:"flex", justifyContent:"space-between", alignItems:"center", zIndex:4 }}>
-          <span style={{ background:"rgba(0,0,0,0.5)", backdropFilter:"blur(12px)", color:"#fff", fontSize:"9px", fontFamily:"'Bebas Neue', sans-serif", letterSpacing:"2px", padding:"5px 10px", borderRadius:"6px", border:"0.5px solid rgba(255,255,255,0.15)" }}>
-            {icon} {artist.category || "Artist"}
-          </span>
-          {artist.postCount > 0 && (
-            <span style={{ background:`linear-gradient(135deg, ${p.a}, ${p.b})`, color:"#fff", fontSize:"9px", fontFamily:"'Bebas Neue', sans-serif", letterSpacing:"1.5px", padding:"5px 10px", borderRadius:"6px" }}>
-              {artist.postCount} WORKS
-            </span>
-          )}
+        {/* Always-visible gradient overlay */}
+        <div style={{
+          position:"absolute", inset:0,
+          background:"linear-gradient(to bottom, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%)",
+        }} />
+
+        {/* Category badge top-left */}
+        <div style={{
+          position:"absolute", top:6, left:6,
+          background:`linear-gradient(135deg,${p.a},${p.b})`,
+          color:"#fff", fontSize:9, fontWeight:800,
+          padding:"3px 7px", borderRadius:4,
+          fontFamily:"'Nunito',sans-serif", letterSpacing:0.5,
+          textTransform:"uppercase",
+        }}>
+          {artist.category || "Artist"}
         </div>
 
-        {hov && (
-          <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", zIndex:4 }}>
-            <div style={{ background:"rgba(255,255,255,0.15)", backdropFilter:"blur(16px)", border:"1px solid rgba(255,255,255,0.3)", color:"#fff", fontFamily:"'Bebas Neue', sans-serif", letterSpacing:"2px", fontSize:"13px", padding:"10px 24px", borderRadius:"30px" }}>
-              VIEW PROFILE →
-            </div>
+        {/* Online dot / post count top-right */}
+        {artist.postCount > 0 && (
+          <div style={{
+            position:"absolute", top:6, right:6,
+            background:"rgba(0,0,0,0.55)", backdropFilter:"blur(6px)",
+            color:"#fff", fontSize:9, fontWeight:700,
+            padding:"3px 7px", borderRadius:4,
+            fontFamily:"'Nunito',sans-serif",
+          }}>
+            {artist.postCount} works
           </div>
         )}
 
-        <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"14px 16px 18px", zIndex:3 }}>
-          {artist.city && (
-            <div style={{ marginBottom:"6px" }}>
-              <span style={{ background:"rgba(255,255,255,0.12)", backdropFilter:"blur(8px)", color:"rgba(255,255,255,0.8)", fontSize:"9px", fontWeight:700, padding:"3px 10px", borderRadius:"20px", letterSpacing:"0.5px" }}>
-                📍 {artist.city.trim()}
-              </span>
-            </div>
-          )}
-          <div style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:"22px", color:"#fff", letterSpacing:"1.5px", lineHeight:1.05, textShadow:"0 2px 12px rgba(0,0,0,0.9)", marginBottom:"5px" }}>
+        {/* Bottom info */}
+        <div style={{ position:"absolute", bottom:0, left:0, right:0, padding:"8px 10px 10px" }}>
+          <div style={{
+            fontFamily:"'Nunito',sans-serif", fontWeight:900,
+            fontSize:"clamp(11px,2.5vw,14px)", color:"#fff",
+            lineHeight:1.1, marginBottom:2,
+            textShadow:"0 1px 6px rgba(0,0,0,0.8)",
+            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+          }}>
             {artist.name}
           </div>
-          <div style={{ fontSize:"11px", color:"rgba(255,255,255,0.5)", lineHeight:1.5, fontWeight:500, display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical", overflow:"hidden" }}>
-            {artist.bio || `${artist.category || "Artist"} · Available for bookings`}
+          <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+            <div style={{ display:"flex", gap:1 }}>
+              {Array.from({ length:5 }).map((_,i) => (
+                <span key={i} style={{ fontSize:8, color: i < stars ? "#ffd60a" : "rgba(255,255,255,0.25)" }}>★</span>
+              ))}
+            </div>
+            {artist.city && (
+              <span style={{ fontSize:9, color:"rgba(255,255,255,0.65)", fontFamily:"'Nunito',sans-serif", fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                · {artist.city}
+              </span>
+            )}
           </div>
-          <div style={{ marginTop:"10px", height:"2px", borderRadius:"2px", background:`linear-gradient(90deg, ${p.a}, ${p.b}44)`, transform:hov?"scaleX(1)":"scaleX(0.4)", transformOrigin:"left", transition:"transform 0.35s ease" }} />
         </div>
+
+        {/* Hover overlay */}
+        {hov && (
+          <div style={{
+            position:"absolute", inset:0,
+            background:"rgba(0,0,0,0.35)",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            backdropFilter:"blur(1px)",
+          }}>
+            <div style={{
+              background:"rgba(255,255,255,0.2)",
+              backdropFilter:"blur(12px)",
+              border:"1px solid rgba(255,255,255,0.4)",
+              color:"#fff",
+              fontFamily:"'Nunito',sans-serif", fontWeight:800,
+              fontSize:11, padding:"7px 16px", borderRadius:20,
+              letterSpacing:0.5,
+            }}>
+              VIEW PROFILE
+            </div>
+          </div>
+        )}
       </div>
     </Link>
   );
@@ -129,8 +186,6 @@ export default function Artists() {
           axios.get(`${API}/api/artists/only-artists`),
           axios.get(`${API}/api/posts`),
         ]);
-
-        // Defensive: ensure arrays
         const artData  = Array.isArray(artRes.data)  ? artRes.data  : [];
         const postData = Array.isArray(postRes.data) ? postRes.data : [];
 
@@ -141,7 +196,9 @@ export default function Artists() {
               ...a,
               _id:          id,
               postCount:    postData.filter(p => p.artistId === id).length,
-              profileImage: a.profileImage || postData.find(p => p.artistId === id && p.type === "image")?.media || null,
+              profileImage: a.profileImage
+                || postData.find(p => p.artistId === id && p.type === "image")?.media
+                || null,
             };
           })
           .filter(a => a._id)
@@ -159,113 +216,161 @@ export default function Artists() {
 
   const filtered = artists.filter(a => {
     const matchCat    = activeCategory === "All" || a.category === activeCategory;
-    const matchSearch = !search || a.name?.toLowerCase().includes(search.toLowerCase()) || a.city?.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = !search
+      || a.name?.toLowerCase().includes(search.toLowerCase())
+      || a.city?.toLowerCase().includes(search.toLowerCase());
     return matchCat && matchSearch;
   });
 
   return (
-    <div style={{ position:"relative", minHeight:"100vh", color:"#fff", overflow:"hidden" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+    <div style={{ minHeight:"100vh", background:"#0d0d14", color:"#fff", overflowX:"hidden" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
       <style>{`
-        @keyframes rise    { from{opacity:0;transform:translateY(24px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
-        @keyframes shimmer { 0%{opacity:.5} 50%{opacity:1} 100%{opacity:.5} }
-        @keyframes fadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-        .search-input:focus { outline:none; border-color:rgba(255,255,255,0.4)!important; }
-        @media(max-width:768px){
-          .artists-padding { padding:110px 16px 60px !important; }
-          .artists-grid    { grid-template-columns:repeat(2, 1fr) !important; gap:12px !important; }
-          .stats-bar       { gap:20px !important; padding:16px !important; }
-          .filter-row      { flex-direction:column !important; gap:12px !important; }
-          .search-wrap     { max-width:100% !important; }
-          .cat-pills       { gap:6px !important; }
-          .cat-pill        { font-size:11px !important; padding:6px 12px !important; }
-          .page-title      { font-size:clamp(36px,10vw,60px) !important; }
-        }
-        @media(max-width:400px){
-          .artists-grid { grid-template-columns:1fr !important; }
-        }
+        * { box-sizing:border-box; }
+        @keyframes shimmer { 0%{opacity:.4} 50%{opacity:.9} 100%{opacity:.4} }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        .search-input::placeholder { color:rgba(255,255,255,0.35); }
+        .search-input:focus { outline:none; border-color:rgba(255,255,255,0.5)!important; }
+        .cat-pill { transition:all 0.18s ease; }
+        .cat-pill:hover { opacity:1!important; }
+        ::-webkit-scrollbar { width:4px; height:4px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.15); border-radius:4px; }
       `}</style>
 
-      <video autoPlay loop muted playsInline style={{ position:"fixed", inset:0, width:"100%", height:"100%", objectFit:"cover", zIndex:0 }}>
+      {/* Video BG */}
+      <video autoPlay loop muted playsInline style={{ position:"fixed", inset:0, width:"100%", height:"100%", objectFit:"cover", zIndex:0, opacity:0.3 }}>
         <source src="/artbg.mp4" type="video/mp4" />
       </video>
-      <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.68)", backdropFilter:"blur(2px)", zIndex:1, pointerEvents:"none" }} />
+      <div style={{ position:"fixed", inset:0, background:"rgba(13,13,20,0.7)", zIndex:1, pointerEvents:"none" }} />
 
       <div style={{ position:"relative", zIndex:100 }}><Navbar /></div>
 
-      <div className="artists-padding" style={{ position:"relative", zIndex:10, padding:"140px 48px 80px" }}>
+      <div style={{ position:"relative", zIndex:10 }}>
 
-        {/* HEADER */}
-        <div style={{ marginBottom:"32px", animation:"fadeUp 0.5s ease" }}>
-          <button onClick={() => navigate("/")} style={{ background:"none", border:"none", color:"rgba(255,255,255,0.4)", fontFamily:"'Nunito', sans-serif", fontSize:"13px", fontWeight:700, cursor:"pointer", marginBottom:"12px", padding:0 }}>← Home</button>
-          <div style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:"11px", letterSpacing:"6px", color:"rgba(255,255,255,0.3)", marginBottom:"6px" }}>DISCOVER</div>
-          <h1 className="page-title" style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:"clamp(40px,7vw,80px)", margin:0, letterSpacing:"2px", lineHeight:0.95, color:"#fff" }}>
-            FEATURED<br /><span style={{ WebkitTextStroke:"1px rgba(255,255,255,0.4)", color:"transparent" }}>ARTISTS</span>
+        {/* ── HEADER ── */}
+        <div style={{ padding:"100px 16px 20px", maxWidth:680, margin:"0 auto", animation:"fadeUp 0.4s ease" }}>
+          <button
+            onClick={() => navigate("/")}
+            style={{ background:"none", border:"none", color:"rgba(255,255,255,0.4)", fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif", marginBottom:10, padding:0 }}
+          >
+            ← Home
+          </button>
+          <h1 style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:"clamp(24px,6vw,38px)", margin:"0 0 4px", letterSpacing:-0.5 }}>
+            Discover Artists
           </h1>
-          <div style={{ fontFamily:"'Nunito', sans-serif", fontSize:"14px", color:"rgba(255,255,255,0.35)", marginTop:"10px", fontWeight:600 }}>
-            {loading ? "Loading artists..." : error ? "Failed to load." : `${filtered.length} of ${artists.length} artists`}
-          </div>
+          <p style={{ margin:0, color:"rgba(255,255,255,0.4)", fontSize:13, fontWeight:600, fontFamily:"'Nunito',sans-serif" }}>
+            {loading ? "Finding artists..." : error ? "Failed to load." : `${filtered.length} artist${filtered.length !== 1 ? "s" : ""} found`}
+          </p>
         </div>
 
-        {/* FILTERS */}
-        <div className="filter-row" style={{ marginBottom:"32px", display:"flex", flexDirection:"column", gap:"14px", animation:"fadeUp 0.5s ease 0.1s both" }}>
-          <div className="search-wrap" style={{ position:"relative", maxWidth:"400px" }}>
-            <span style={{ position:"absolute", left:"16px", top:"50%", transform:"translateY(-50%)", fontSize:"16px", pointerEvents:"none" }}>🔍</span>
-            <input className="search-input" placeholder="Search by name or city..." value={search} onChange={e => setSearch(e.target.value)}
-              style={{ width:"100%", padding:"12px 16px 12px 44px", borderRadius:"40px", border:"1px solid rgba(255,255,255,0.15)", background:"rgba(255,255,255,0.07)", backdropFilter:"blur(12px)", color:"#fff", fontFamily:"'Nunito', sans-serif", fontSize:"14px", fontWeight:600, boxSizing:"border-box" }} />
-            {search && <button onClick={() => setSearch("")} style={{ position:"absolute", right:"14px", top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:"16px" }}>✕</button>}
+        {/* ── SEARCH + FILTERS ── */}
+        <div style={{ padding:"0 16px 16px", maxWidth:680, margin:"0 auto", animation:"fadeUp 0.4s ease 0.05s both" }}>
+          {/* Search */}
+          <div style={{ position:"relative", marginBottom:12 }}>
+            <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:15, pointerEvents:"none" }}>🔍</span>
+            <input
+              className="search-input"
+              placeholder="Search by name or city..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              style={{
+                width:"100%", padding:"11px 40px 11px 42px",
+                borderRadius:12, border:"1.5px solid rgba(255,255,255,0.12)",
+                background:"rgba(255,255,255,0.07)", backdropFilter:"blur(12px)",
+                color:"#fff", fontFamily:"'Nunito',sans-serif", fontSize:14, fontWeight:600,
+              }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"rgba(255,255,255,0.4)", cursor:"pointer", fontSize:15 }}>✕</button>
+            )}
           </div>
 
-          <div className="cat-pills" style={{ display:"flex", gap:"8px", flexWrap:"wrap", overflowX:"auto", paddingBottom:"4px" }}>
+          {/* Category pills — scrollable on mobile */}
+          <div style={{ display:"flex", gap:7, overflowX:"auto", paddingBottom:4 }}>
             {CATEGORIES.map(cat => {
               const isActive = activeCategory === cat;
               const p = PALETTES[cat] || PALETTES.default;
               return (
-                <button key={cat} onClick={() => setActiveCategory(cat)}
-                  style={{ padding:"8px 16px", borderRadius:"30px", border:"1px solid", borderColor:isActive?p.a:"rgba(255,255,255,0.15)", background:isActive?`linear-gradient(135deg, ${p.a}33, ${p.b}22)`:"rgba(255,255,255,0.06)", color:isActive?"#fff":"rgba(255,255,255,0.55)", fontFamily:"'Nunito', sans-serif", fontWeight:700, fontSize:"12px", cursor:"pointer", transition:"all 0.2s ease", backdropFilter:"blur(8px)", whiteSpace:"nowrap", flexShrink:0 }}>
-                  {cat !== "All" && (CATEGORY_ICONS[cat] || "✨") + " "}{cat}
+                <button
+                  key={cat}
+                  className="cat-pill"
+                  onClick={() => setActiveCategory(cat)}
+                  style={{
+                    padding:"7px 14px", borderRadius:8, border:"1.5px solid",
+                    borderColor: isActive ? p.a : "rgba(255,255,255,0.12)",
+                    background: isActive ? `linear-gradient(135deg,${p.a}44,${p.b}22)` : "rgba(255,255,255,0.05)",
+                    color: isActive ? "#fff" : "rgba(255,255,255,0.5)",
+                    fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12,
+                    cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+                    opacity: isActive ? 1 : 0.8,
+                  }}
+                >
+                  {cat !== "All" && (ICONS[cat] || "✨") + " "}{cat}
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* GRID */}
-        {error ? (
-          <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.4)", fontFamily:"'Nunito', sans-serif", fontSize:"16px", fontWeight:600 }}>
-            <div style={{ fontSize:"48px", marginBottom:"16px" }}>⚠️</div>
-            Failed to load artists.
-            <br />
-            <button onClick={() => window.location.reload()} style={{ marginTop:16, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", padding:"10px 24px", borderRadius:24, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
-              Try Again
-            </button>
-          </div>
-        ) : filtered.length === 0 && !loading ? (
-          <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.4)", fontFamily:"'Nunito', sans-serif", fontSize:"16px", fontWeight:600 }}>
-            <div style={{ fontSize:"48px", marginBottom:"16px" }}>🎭</div>
-            No artists found{search ? ` for "${search}"` : activeCategory !== "All" ? ` in ${activeCategory}` : ""}
-          </div>
-        ) : (
-          <div className="artists-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(210px, 1fr))", gap:"20px" }}>
-            {loading
-              ? Array.from({ length:8 }).map((_,i) => <SkeletonCard key={i} />)
-              : filtered.map((artist,i) => <ArtistCard key={artist._id} artist={artist} idx={i} />)
-            }
-          </div>
-        )}
+        {/* ── GRID ── */}
+        <div style={{ padding:"0 0 80px" }}>
+          {error ? (
+            <div style={{ textAlign:"center", padding:"60px 20px", fontFamily:"'Nunito',sans-serif" }}>
+              <div style={{ fontSize:44, marginBottom:12 }}>⚠️</div>
+              <div style={{ color:"rgba(255,255,255,0.4)", fontSize:15, fontWeight:700, marginBottom:16 }}>Failed to load artists</div>
+              <button
+                onClick={() => window.location.reload()}
+                style={{ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", padding:"10px 24px", borderRadius:10, fontSize:13, fontWeight:800, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : filtered.length === 0 && !loading ? (
+            <div style={{ textAlign:"center", padding:"60px 20px", fontFamily:"'Nunito',sans-serif" }}>
+              <div style={{ fontSize:44, marginBottom:12 }}>🎭</div>
+              <div style={{ color:"rgba(255,255,255,0.4)", fontSize:15, fontWeight:700 }}>
+                No artists found{search ? ` for "${search}"` : activeCategory !== "All" ? ` in ${activeCategory}` : ""}
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              display:"grid",
+              gridTemplateColumns:"repeat(3, 1fr)",
+              gap:2,
+            }}>
+              <style>{`
+                @media(min-width:600px)  { .ag { grid-template-columns:repeat(4,1fr)!important; } }
+                @media(min-width:900px)  { .ag { grid-template-columns:repeat(5,1fr)!important; } }
+                @media(min-width:1200px) { .ag { grid-template-columns:repeat(6,1fr)!important; } }
+              `}</style>
+              {loading
+                ? Array.from({ length:12 }).map((_, i) => <SkeletonCard key={i} />)
+                : filtered.map(artist => <ArtistCard key={artist._id} artist={artist} />)
+              }
+            </div>
+          )}
+        </div>
 
-        {/* STATS */}
+        {/* ── STATS BAR ── */}
         {!loading && !error && artists.length > 0 && (
-          <div className="stats-bar" style={{ marginTop:"48px", padding:"20px 28px", borderRadius:"20px", background:"rgba(255,255,255,0.04)", backdropFilter:"blur(16px)", border:"1px solid rgba(255,255,255,0.08)", display:"flex", gap:"32px", flexWrap:"wrap", justifyContent:"center", animation:"fadeUp 0.5s ease 0.3s both" }}>
+          <div style={{
+            position:"fixed", bottom:0, left:0, right:0, zIndex:50,
+            background:"rgba(13,13,20,0.92)", backdropFilter:"blur(20px)",
+            borderTop:"1px solid rgba(255,255,255,0.08)",
+            display:"flex", justifyContent:"center", gap:"clamp(16px,5vw,48px)",
+            padding:"10px 20px 12px",
+            animation:"fadeUp 0.4s ease",
+          }}>
             {[
-              { label:"Total Artists", value:artists.length },
-              { label:"Categories",    value:[...new Set(artists.map(a=>a.category).filter(Boolean))].length },
-              { label:"Total Works",   value:artists.reduce((s,a) => s+(a.postCount||0), 0) },
-              { label:"Cities",        value:[...new Set(artists.map(a=>a.city).filter(Boolean))].length },
+              { label:"Artists",    value:artists.length },
+              { label:"Categories", value:[...new Set(artists.map(a=>a.category).filter(Boolean))].length },
+              { label:"Works",      value:artists.reduce((s,a) => s+(a.postCount||0), 0) },
+              { label:"Cities",     value:[...new Set(artists.map(a=>a.city).filter(Boolean))].length },
             ].map(({ label, value }) => (
               <div key={label} style={{ textAlign:"center" }}>
-                <div style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:"28px", color:"#fff", letterSpacing:"1px" }}>{value}</div>
-                <div style={{ fontFamily:"'Nunito', sans-serif", fontSize:"11px", color:"rgba(255,255,255,0.4)", fontWeight:700, letterSpacing:"1px", textTransform:"uppercase" }}>{label}</div>
+                <div style={{ fontFamily:"'Nunito',sans-serif", fontWeight:900, fontSize:"clamp(15px,3vw,20px)", color:"#fff" }}>{value}</div>
+                <div style={{ fontFamily:"'Nunito',sans-serif", fontSize:9, color:"rgba(255,255,255,0.35)", fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>{label}</div>
               </div>
             ))}
           </div>
