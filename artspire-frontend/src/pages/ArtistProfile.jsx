@@ -61,11 +61,19 @@ export default function ArtistProfile() {
 
   const fetchArtist = async () => {
     try {
-      const res = await axios.get(`${API}/api/users`);
+      const res = await axios.get(`${API}/api/users/all-people`);
       const all = Array.isArray(res.data) ? res.data : [];
       const found = all.find(u => u._id === id || getId(u) === id);
       if (found) setArtist(found);
-    } catch(err) { console.log("fetchArtist error:", err); }
+    } catch (err) {
+      // fallback to /api/users if /api/users/all-people not available yet
+      try {
+        const res = await axios.get(`${API}/api/users`);
+        const all = Array.isArray(res.data) ? res.data : [];
+        const found = all.find(u => u._id === id || getId(u) === id);
+        if (found) setArtist(found);
+      } catch (e) { console.log("fetchArtist error:", e); }
+    }
   };
 
   const fetchPosts = async () => {
@@ -176,7 +184,7 @@ export default function ArtistProfile() {
             )}
             <button style={{ ...s.navBtn, background:"#dc2626" }} onClick={handleLogout}>Logout</button>
           </div>
-          <button className="nav-mobile-btn" style={{ background:"#1e3a8a", border:"none", color:"#fff", width:38, height:38, borderRadius:10, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }} onClick={()=>setMobileMenu(m=>!m)}>
+          <button className="nav-mobile-btn" style={{ background:"#1e3a8a", border:"none", color:"#fff", width:38, height:38, borderRadius:10, fontSize:18, cursor:"pointer", alignItems:"center", justifyContent:"center" }} onClick={()=>setMobileMenu(m=>!m)}>
             {mobileMenu ? "✕" : "☰"}
           </button>
         </div>

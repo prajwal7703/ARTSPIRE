@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const Artist = require("../models/Artist"); // ← changed
-
+const upload = require("../middleware/upload");
 router.get("/", async (req, res) => {
   try {
     const artists = await Artist.find().select("-password");

@@ -62,7 +62,6 @@ export default function ArtistLogin() {
         return;
       }
 
-      // ✅ FIXED: saveAuth correctly saves to "artist" key since role === "artist"
       saveAuth(res.data.token, res.data.user);
       showNotif("artist", `Welcome back, ${res.data.user.name}! 🎨`);
       setTimeout(() => navigate("/artist-dashboard"), 1200);
@@ -78,7 +77,7 @@ export default function ArtistLogin() {
       const user   = result.user;
       const res    = await axios.post(`${API}/api/auth/google`, {
         name: user.displayName, email: user.email, photo: user.photoURL,
-        role: "artist", // first Google signup on artist login → artist role
+        role: "artist",
       });
       saveAuth(res.data.token, res.data.user);
       showNotif("artist", `Welcome, ${user.displayName}! 🎨`);

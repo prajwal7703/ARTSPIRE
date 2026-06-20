@@ -48,6 +48,12 @@ export default function ArtistDashboard() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [profileViews, setProfileViews] = useState(0);
 
+  // ── Bookings & Earnings state ──
+  const [bookings, setBookings] = useState([]);
+  const [earnings, setEarnings] = useState({ totalEarned: 0, totalWithdrawn: 0, available: 0, withdrawals: [] });
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+
   const showToast = (msg, type = "info") => setToast({ msg, type });
 
   useEffect(() => {
@@ -73,14 +79,26 @@ export default function ArtistDashboard() {
     socket.on("user_online", id => setOnlineUsers(prev => new Set([...prev, id])));
     socket.on("user_offline", id => setOnlineUsers(prev => { const n = new Set(prev); n.delete(id); return n; }));
 
+    // Real-time booking/withdrawal notifications
+    socket.on("new_notification", (data) => {
+      if (data.type === "booking") {
+        showToast(data.message, "info");
+        fetchBookings(a._id);
+        fetchEarnings(a._id);
+      }
+    });
+
     fetchPosts(a._id);
     fetchAllUsers(a._id);
     fetchProfileViews(a._id);
+    fetchBookings(a._id);
+    fetchEarnings(a._id);
 
     return () => {
       socket.off("receive_message");
       socket.off("user_online");
       socket.off("user_offline");
+      socket.off("new_notification");
     };
   }, []);
 
@@ -106,6 +124,46 @@ export default function ArtistDashboard() {
     } catch {
       setProfileViews(0);
     }
+  };
+
+  // ── Bookings & Earnings ──
+  const fetchBookings = async (id) => {
+    try {
+      const res = await axios.get(`${API}/api/bookings/artist/${id}`);
+      setBookings(res.data || []);
+    } catch {}
+  };
+
+  const fetchEarnings = async (id) => {
+    try {
+      const res = await axios.get(`${API}/api/withdrawals/summary/${id}`);
+      setEarnings(res.data);
+    } catch {}
+  };
+
+  const updateBookingStatus = async (bookingId, status) => {
+    try {
+      await axios.put(`${API}/api/bookings/status/${bookingId}`, { status });
+      showToast(`Booking ${status}`, "success");
+      fetchBookings(artist._id);
+    } catch {
+      showToast("Failed to update booking", "error");
+    }
+  };
+
+  const requestWithdrawal = async () => {
+    const amount = Number(withdrawAmount);
+    if (!amount || amount <= 0) { showToast("Enter a valid amount", "error"); return; }
+    setWithdrawLoading(true);
+    try {
+      await axios.post(`${API}/api/withdrawals/request`, { artistId: artist._id, amount });
+      showToast("Withdrawal requested ✅", "success");
+      setWithdrawAmount("");
+      fetchEarnings(artist._id);
+    } catch (err) {
+      showToast(err.response?.data?.message || "Withdrawal failed", "error");
+    }
+    setWithdrawLoading(false);
   };
 
   const handlePhotoUpload = async (e) => {
@@ -181,11 +239,13 @@ export default function ArtistDashboard() {
   const getInitials = (n) => n ? n.split(" ").map(x => x[0]).join("").toUpperCase().slice(0, 2) : "A";
   const onlineCount = allUsers.filter(u => onlineUsers.has(u._id)).length;
   const chatUsers = allUsers;
+  const pendingBookings = bookings.filter(b => b.status === "pending").length;
 
   const TABS = [
     { id: "overview",  label: "📊 Overview" },
     { id: "profile",   label: "👤 Profile" },
     { id: "portfolio", label: "🎨 Portfolio" },
+    { id: "bookings",  label: `📅 Bookings${pendingBookings > 0 ? ` (${pendingBookings})` : ""}` },
     { id: "live",      label: `🔴 Live Users${onlineCount > 0 ? ` (${onlineCount})` : ""}` },
     { id: "messages",  label: `💬 Messages${unreadCount > 0 ? ` (${unreadCount})` : ""}` },
     { id: "upload",    label: "➕ Upload" },
@@ -203,6 +263,16 @@ export default function ArtistDashboard() {
         .live-row:hover  { background:#f0fdf4!important; }
         input:focus, textarea:focus, select:focus { border-color:#1e3a8a!important; outline:none; }
         .view-profile-btn:hover { background:#1e40af!important; transform:translateY(-1px); }
+
+        /* ── Mobile ── */
+        @media (max-width: 640px) {
+          .withdraw-row { grid-template-columns: 1fr !important; }
+          .dash-tabs-row { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
+          .dash-tabs-row::-webkit-scrollbar { display: none; }
+        }
+        @media (max-width: 768px) {
+          .profile-card-grid { grid-template-columns: 1fr !important; }
+        }
       `}</style>
 
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "info" })} />
@@ -252,7 +322,7 @@ export default function ArtistDashboard() {
           </div>
 
           {/* Tabs */}
-          <div style={s.tabsRow}>
+          <div className="dash-tabs-row" style={s.tabsRow}>
             {TABS.map(t => (
               <button key={t.id} className="dash-tab" onClick={() => setTab(t.id)} style={{ ...s.tab, ...(tab === t.id ? s.tabActive : {}) }}>
                 {t.label}
@@ -327,6 +397,97 @@ export default function ArtistDashboard() {
           </div>
         )}
 
+        {/* BOOKINGS & EARNINGS */}
+        {tab === "bookings" && (
+          <div style={{ animation: "fadeUp 0.4s ease both" }}>
+            <div style={s.sectionTitle}>Bookings & Earnings</div>
+
+            {/* Earnings summary */}
+            <div style={s.statsGrid}>
+              <div className="stat-card" style={{ ...s.statCard, background: "#dcfce7", transition: "all 0.2s" }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>💰</div>
+                <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 32, color: "#14532d" }}>₹{earnings.totalEarned}</div>
+                <div style={{ fontSize: 13, color: "#14532d", fontWeight: 700 }}>Total Earned</div>
+              </div>
+              <div className="stat-card" style={{ ...s.statCard, background: "#fef3c7", transition: "all 0.2s" }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>📤</div>
+                <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 32, color: "#92400e" }}>₹{earnings.totalWithdrawn}</div>
+                <div style={{ fontSize: 13, color: "#92400e", fontWeight: 700 }}>Withdrawn</div>
+              </div>
+              <div className="stat-card" style={{ ...s.statCard, background: "#e0e7ff", transition: "all 0.2s" }}>
+                <div style={{ fontSize: 36, marginBottom: 8 }}>💳</div>
+                <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 32, color: "#3730a3" }}>₹{earnings.available}</div>
+                <div style={{ fontSize: 13, color: "#3730a3", fontWeight: 700 }}>Available</div>
+              </div>
+            </div>
+
+            {/* Withdraw form */}
+            <div className="withdraw-row" style={{ ...s.profileCard, gridTemplateColumns: "1fr auto", marginBottom: 28 }}>
+              <input
+                type="number"
+                value={withdrawAmount}
+                onChange={e => setWithdrawAmount(e.target.value)}
+                placeholder={`Enter amount (max ₹${earnings.available})`}
+                style={s.input}
+              />
+              <button
+                style={{ ...s.primaryBtn, opacity: withdrawLoading ? 0.6 : 1 }}
+                onClick={requestWithdrawal}
+                disabled={withdrawLoading}
+              >
+                {withdrawLoading ? "Processing..." : "💸 Withdraw"}
+              </button>
+            </div>
+
+            {/* Bookings list */}
+            <div style={{ ...s.sectionTitle, fontSize: 20, marginBottom: 12 }}>Bookings</div>
+            {bookings.length === 0 ? (
+              <div style={s.empty}><div style={{ fontSize: 48, marginBottom: 12 }}>📭</div><div>No bookings yet</div></div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 28 }}>
+                {bookings.map(b => (
+                  <div key={b._id} style={{ background: "#fff", borderRadius: 16, padding: "16px 20px", boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 15 }}>{b.eventType}</div>
+                        <div style={{ fontSize: 13, color: "#64748b" }}>{b.userName} · {b.date}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: b.paymentStatus === "paid" ? "#dcfce7" : "#fef3c7", color: b.paymentStatus === "paid" ? "#14532d" : "#92400e" }}>
+                          {b.paymentStatus === "paid" ? `₹${b.amount} Paid` : "Unpaid"}
+                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: "#e0e7ff", color: "#3730a3" }}>{b.status}</span>
+                      </div>
+                    </div>
+                    {b.status === "pending" && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <button style={s.primaryBtn} onClick={() => updateBookingStatus(b._id, "confirmed")}>Confirm</button>
+                        <button style={s.secondaryBtn} onClick={() => updateBookingStatus(b._id, "cancelled")}>Decline</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Withdrawal history */}
+            <div style={{ ...s.sectionTitle, fontSize: 20, marginBottom: 12 }}>Withdrawal History</div>
+            {earnings.withdrawals.length === 0 ? (
+              <div style={s.empty}><div style={{ fontSize: 48, marginBottom: 12 }}>🧾</div><div>No withdrawals yet</div></div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {earnings.withdrawals.map(w => (
+                  <div key={w._id} style={{ background: "#fff", borderRadius: 12, padding: "12px 18px", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                    <span>₹{w.amount}</span>
+                    <span style={{ fontWeight: 700, color: w.status === "paid" ? "#22c55e" : w.status === "rejected" ? "#dc2626" : "#92400e" }}>{w.status}</span>
+                    <span style={{ color: "#94a3b8", fontSize: 12 }}>{new Date(w.createdAt).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* LIVE USERS */}
         {tab === "live" && (
           <div style={{ animation: "fadeUp 0.4s ease both" }}>
@@ -379,7 +540,7 @@ export default function ArtistDashboard() {
                   </div>
               }
             </div>
-            <div style={s.profileCard}>
+            <div className="profile-card-grid" style={s.profileCard}>
               {[
                 { key: "name",       label: "Full Name",  type: "text",   placeholder: "Your name" },
                 { key: "category",   label: "Category",   type: "select", options: ["Singer", "Dancer", "Musician", "Painter", "Photographer", "Actor", "Comedian", "Other"] },
@@ -552,7 +713,7 @@ const s = {
   viewProfileBtn: { background: "#1e3a8a", color: "#fff", border: "none", padding: "10px 22px", borderRadius: 22, fontFamily: "'Nunito',sans-serif", fontWeight: 700, fontSize: 13, cursor: "pointer", transition: "all 0.2s" },
   logoutBtn:      { background: "#dc2626", color: "#fff", border: "none", padding: "10px 22px", borderRadius: 22, fontFamily: "'Nunito',sans-serif", fontWeight: 700, fontSize: 13, cursor: "pointer" },
   tabsRow:        { display: "flex", gap: 4, borderTop: "1px solid #f1f5f9", flexWrap: "wrap" },
-  tab:            { padding: "12px 18px", border: "none", background: "transparent", fontFamily: "'Nunito',sans-serif", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#64748b", transition: "background 0.2s", borderBottom: "2px solid transparent" },
+  tab:            { padding: "12px 18px", border: "none", background: "transparent", fontFamily: "'Nunito',sans-serif", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#64748b", transition: "background 0.2s", borderBottom: "2px solid transparent", whiteSpace: "nowrap" },
   tabActive:      { color: "#1e3a8a", borderBottom: "2px solid #1e3a8a", background: "rgba(30,58,138,0.05)" },
   content:        { maxWidth: 1200, margin: "0 auto", padding: "32px 24px" },
   sectionTitle:   { fontFamily: "'Bebas Neue',sans-serif", fontSize: 28, color: "#1e3a8a", letterSpacing: 1, marginBottom: 20 },
