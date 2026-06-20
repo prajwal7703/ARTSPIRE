@@ -3,6 +3,8 @@ import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../Navbar";
 
+const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+
 const PALETTES = {
   Singer:       { a: "#ff4d6d", b: "#c9184a", c: "#590d22" },
   Dancer:       { a: "#7209b7", b: "#f72585", c: "#3a0ca3" },
@@ -95,7 +97,7 @@ function ArtistCard({ artist, idx }) {
           {artist.city && (
             <div style={{ marginBottom:"6px" }}>
               <span style={{ background:"rgba(255,255,255,0.12)", backdropFilter:"blur(8px)", color:"rgba(255,255,255,0.8)", fontSize:"9px", fontWeight:700, padding:"3px 10px", borderRadius:"20px", letterSpacing:"0.5px" }}>
-                📍 {artist.city}
+                📍 {artist.city.trim()}
               </span>
             </div>
           )}
@@ -114,30 +116,44 @@ function ArtistCard({ artist, idx }) {
 
 export default function Artists() {
   const navigate = useNavigate();
-  const [artists, setArtists]           = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(false);
-  const [search, setSearch]             = useState("");
+  const [artists,        setArtists]        = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState(false);
+  const [search,         setSearch]         = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
 
   useEffect(() => {
     (async () => {
       try {
         const [artRes, postRes] = await Promise.all([
-          axios.get(`${import.meta.env.VITE_API_URL}/api/artists/only-artists`),
-          axios.get(`${import.meta.env.VITE_API_URL}/api/posts`),
+          axios.get(`${API}/api/artists/only-artists`),
+          axios.get(`${API}/api/posts`),
         ]);
-        const posts = postRes.data;
-        const enriched = artRes.data
+
+        // Defensive: ensure arrays
+        const artData  = Array.isArray(artRes.data)  ? artRes.data  : [];
+        const postData = Array.isArray(postRes.data) ? postRes.data : [];
+
+        const enriched = artData
           .map(a => {
             const id = getId(a);
-            return { ...a, _id:id, postCount:posts.filter(p => p.artistId===id).length, profileImage:a.profileImage || posts.find(p => p.artistId===id && p.type==="image")?.media || null };
+            return {
+              ...a,
+              _id:          id,
+              postCount:    postData.filter(p => p.artistId === id).length,
+              profileImage: a.profileImage || postData.find(p => p.artistId === id && p.type === "image")?.media || null,
+            };
           })
           .filter(a => a._id)
-          .sort((a,b) => b.postCount - a.postCount);
+          .sort((a, b) => b.postCount - a.postCount);
+
         setArtists(enriched);
-      } catch { setError(true); }
-      finally  { setLoading(false); }
+      } catch (err) {
+        console.error("Artists fetch error:", err.response?.status, err.response?.data || err.message);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -200,7 +216,6 @@ export default function Artists() {
             {search && <button onClick={() => setSearch("")} style={{ position:"absolute", right:"14px", top:"50%", transform:"translateY(-50%)", background:"none", border:"none", color:"rgba(255,255,255,0.5)", cursor:"pointer", fontSize:"16px" }}>✕</button>}
           </div>
 
-          {/* CATEGORY PILLS — scrollable on mobile */}
           <div className="cat-pills" style={{ display:"flex", gap:"8px", flexWrap:"wrap", overflowX:"auto", paddingBottom:"4px" }}>
             {CATEGORIES.map(cat => {
               const isActive = activeCategory === cat;
@@ -218,15 +233,24 @@ export default function Artists() {
         {/* GRID */}
         {error ? (
           <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.4)", fontFamily:"'Nunito', sans-serif", fontSize:"16px", fontWeight:600 }}>
-            <div style={{ fontSize:"48px", marginBottom:"16px" }}>⚠️</div>Failed to load artists.
+            <div style={{ fontSize:"48px", marginBottom:"16px" }}>⚠️</div>
+            Failed to load artists.
+            <br />
+            <button onClick={() => window.location.reload()} style={{ marginTop:16, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"#fff", padding:"10px 24px", borderRadius:24, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif" }}>
+              Try Again
+            </button>
           </div>
         ) : filtered.length === 0 && !loading ? (
           <div style={{ textAlign:"center", padding:"60px 0", color:"rgba(255,255,255,0.4)", fontFamily:"'Nunito', sans-serif", fontSize:"16px", fontWeight:600 }}>
-            <div style={{ fontSize:"48px", marginBottom:"16px" }}>🎭</div>No artists found for "{search || activeCategory}"
+            <div style={{ fontSize:"48px", marginBottom:"16px" }}>🎭</div>
+            No artists found{search ? ` for "${search}"` : activeCategory !== "All" ? ` in ${activeCategory}` : ""}
           </div>
         ) : (
           <div className="artists-grid" style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(210px, 1fr))", gap:"20px" }}>
-            {loading ? Array.from({ length:8 }).map((_,i) => <SkeletonCard key={i} />) : filtered.map((artist,i) => <ArtistCard key={artist._id} artist={artist} idx={i} />)}
+            {loading
+              ? Array.from({ length:8 }).map((_,i) => <SkeletonCard key={i} />)
+              : filtered.map((artist,i) => <ArtistCard key={artist._id} artist={artist} idx={i} />)
+            }
           </div>
         )}
 
