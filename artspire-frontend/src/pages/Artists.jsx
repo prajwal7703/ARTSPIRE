@@ -5,23 +5,24 @@ import Navbar from "../Navbar";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-const CAT_THEME = {
-  Singer:       { color:"#e8a87c", fire:"#c0392b,#8b1a00", tagline:"The Voice of Souls" },
-  Dancer:       { color:"#c39bd3", fire:"#6c3483,#2c0e45", tagline:"Grace in Motion" },
-  Musician:     { color:"#7fb3d3", fire:"#1a5276,#0a2040", tagline:"Master of Melody" },
-  Painter:      { color:"#f0b27a", fire:"#935116,#4a2800", tagline:"Creator of Worlds" },
-  Photographer: { color:"#76d7c4", fire:"#1e8449,#0a3d20", tagline:"Keeper of Moments" },
-  Actor:        { color:"#f9e79f", fire:"#9a7d0a,#4d3b00", tagline:"Born of the Stage" },
-  Comedian:     { color:"#abebc6", fire:"#1a6b3c,#0a3520", tagline:"The Jester of Joy" },
-  default:      { color:"#e59866", fire:"#a04000,#4d1c00", tagline:"Creative Soul" },
-};
+const CATEGORIES = ["All","Singer","Dancer","Musician","Painter","Photographer","Actor","Comedian"];
 
 const ICONS = {
   Singer:"🎤", Dancer:"💃", Musician:"🎵", Painter:"🎨",
   Photographer:"📷", Actor:"🎭", Comedian:"😂", default:"✨",
 };
 
-const CATEGORIES = ["All","Singer","Dancer","Musician","Painter","Photographer","Actor","Comedian"];
+/* Each category gets a different "bounty" flavour text */
+const BOUNTY_LABEL = {
+  Singer:       "DEAD OR ALIVE",
+  Dancer:       "DEAD OR ALIVE",
+  Musician:     "DEAD OR ALIVE",
+  Painter:      "DEAD OR ALIVE",
+  Photographer: "DEAD OR ALIVE",
+  Actor:        "DEAD OR ALIVE",
+  Comedian:     "DEAD OR ALIVE",
+  default:      "DEAD OR ALIVE",
+};
 
 function getId(artist) {
   if (!artist) return undefined;
@@ -31,35 +32,40 @@ function getId(artist) {
   return String(raw);
 }
 
+/* Format price as bounty — ₹ price or rating-based "bounty" */
+function bounty(artist) {
+  if (artist.price) return `₹${Number(artist.price).toLocaleString("en-IN")}`;
+  const base = Math.round((artist.rating || 4.5) * 1000000 + (artist.postCount || 0) * 250000);
+  return `₹${base.toLocaleString("en-IN")}`;
+}
+
 function SkeletonCard() {
   return (
     <div style={{
-      borderRadius:0, overflow:"hidden",
-      background:"#0a0502", animation:"shimmer 1.6s infinite",
-      border:"1px solid rgba(180,120,60,0.15)",
+      background:"#d4a96a",
+      border:"3px solid #8b6914",
+      boxShadow:"3px 3px 0 #5a4008, 6px 6px 12px rgba(0,0,0,0.5)",
+      padding:"6px",
+      animation:"shimmer 1.4s infinite",
     }}>
-      <div style={{ width:"100%", aspectRatio:"3/4", background:"#150a04" }}/>
-      <div style={{ padding:"14px 12px 18px", display:"flex", flexDirection:"column", gap:8 }}>
-        <div style={{ height:18, width:"55%", borderRadius:2, background:"#1f1208" }}/>
-        <div style={{ height:10, width:"75%", borderRadius:2, background:"#150d05" }}/>
-        <div style={{ height:9,  width:"50%", borderRadius:2, background:"#100a03", marginTop:2 }}/>
-      </div>
+      {/* WANTED header skeleton */}
+      <div style={{ height:28, background:"#c49a55", marginBottom:4, borderRadius:1 }}/>
+      {/* Photo skeleton */}
+      <div style={{ width:"100%", aspectRatio:"1/1", background:"#c49a55", marginBottom:4 }}/>
+      {/* Text skeletons */}
+      <div style={{ height:10, background:"#c49a55", marginBottom:4, width:"80%", margin:"4px auto" }}/>
+      <div style={{ height:22, background:"#c49a55", margin:"4px auto", width:"90%" }}/>
+      <div style={{ height:14, background:"#c49a55", margin:"4px auto", width:"70%" }}/>
     </div>
   );
 }
 
-function ArtistCard({ artist }) {
-  const [hov, setHov] = useState(false);
+function WantedCard({ artist }) {
+  const [hov, setHov]     = useState(false);
   const [imgErr, setImgErr] = useState(false);
-  const theme   = CAT_THEME[artist.category] || CAT_THEME.default;
-  const icon    = ICONS[artist.category] || ICONS.default;
-  const id      = getId(artist);
+  const id = getId(artist);
   if (!id) return null;
-  const initials = artist.name
-    ? artist.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
-    : "A";
-
-  const [fireA, fireB] = theme.fire.split(",");
+  const icon = ICONS[artist.category] || ICONS.default;
 
   return (
     <Link to={`/artist/${id}`} style={{ textDecoration:"none", display:"block" }}>
@@ -67,217 +73,203 @@ function ArtistCard({ artist }) {
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
         style={{
-          position:"relative", overflow:"hidden",
-          border: hov
-            ? `1px solid ${theme.color}`
-            : "1px solid rgba(180,120,60,0.25)",
+          /* Aged parchment paper */
+          background: hov
+            ? "linear-gradient(145deg,#e8c87a,#d4a84a,#c49030,#d4a84a)"
+            : "linear-gradient(145deg,#e2c070,#ccaa50,#b89028,#ccaa50)",
+          border: hov ? "3px solid #6b4c0a" : "3px solid #8b6914",
           boxShadow: hov
-            ? `0 0 32px ${theme.color}55, 0 0 80px ${fireA}33, inset 0 0 24px rgba(0,0,0,0.6)`
-            : "0 4px 24px rgba(0,0,0,0.8), inset 0 0 16px rgba(0,0,0,0.5)",
-          transform: hov ? "scale(1.025)" : "scale(1)",
-          transition:"all 0.3s cubic-bezier(.22,.61,.36,1)",
+            ? "4px 4px 0 #3d2800, 8px 8px 20px rgba(0,0,0,0.7), inset 0 0 20px rgba(0,0,0,0.08)"
+            : "3px 3px 0 #5a4008, 6px 6px 14px rgba(0,0,0,0.55), inset 0 0 16px rgba(0,0,0,0.06)",
+          transform: hov ? "translateY(-4px) rotate(-0.3deg)" : "translateY(0) rotate(0deg)",
+          transition:"all 0.22s ease",
           cursor:"pointer",
-          background:"#080402",
+          padding:"5px 5px 8px",
+          position:"relative",
+          overflow:"hidden",
         }}
       >
-        {/* ── PORTRAIT ── */}
+        {/* Paper texture noise overlay */}
         <div style={{
-          width:"100%", aspectRatio:"3/4",
-          position:"relative", overflow:"hidden",
-          background: `radial-gradient(ellipse at 50% 20%, ${fireA}cc 0%, ${fireB}ee 50%, #020100 100%)`,
-        }}>
+          position:"absolute", inset:0, zIndex:1, pointerEvents:"none",
+          backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E\")",
+          mixBlendMode:"multiply",
+          opacity:0.6,
+        }}/>
 
-          {/* Texture grain overlay */}
+        {/* Inner content — above texture */}
+        <div style={{ position:"relative", zIndex:2 }}>
+
+          {/* ── WANTED HEADER ── */}
           <div style={{
-            position:"absolute", inset:0, zIndex:2, pointerEvents:"none", mixBlendMode:"overlay",
-            backgroundImage:"url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E\")",
-            backgroundSize:"180px", opacity:0.25,
-          }}/>
+            textAlign:"center",
+            fontFamily:"'Rye',serif",
+            fontSize:"clamp(18px,4.5vw,26px)",
+            fontWeight:900,
+            color:"#1a0800",
+            letterSpacing:4,
+            lineHeight:1,
+            marginBottom:3,
+            textShadow:"1px 1px 0 rgba(255,255,255,0.15)",
+            /* Stamp-like feel */
+            borderBottom:"2px solid #8b6914",
+            paddingBottom:4,
+          }}>
+            WANTED
+          </div>
 
-          {/* Photo */}
-          {artist.profileImage && !imgErr ? (
-            <>
+          {/* ── PHOTO BOX ── */}
+          <div style={{
+            width:"100%", aspectRatio:"1/1",
+            overflow:"hidden",
+            border:"2px solid #8b6914",
+            background:"linear-gradient(135deg,#c8a050,#a07828)",
+            position:"relative",
+            display:"flex", alignItems:"center", justifyContent:"center",
+          }}>
+            {artist.profileImage && !imgErr ? (
               <img
                 src={artist.profileImage}
                 alt={artist.name}
                 onError={() => setImgErr(true)}
                 style={{
-                  position:"absolute", inset:0,
                   width:"100%", height:"100%",
                   objectFit:"cover", objectPosition:"top center",
-                  display:"block", zIndex:1,
-                  transition:"transform 0.5s ease",
+                  display:"block",
+                  filter: "sepia(0.35) contrast(1.1) brightness(0.92)",
+                  transition:"transform 0.35s ease",
                   transform: hov ? "scale(1.07)" : "scale(1)",
-                  filter:"contrast(1.12) saturate(0.85) brightness(0.88)",
                 }}
               />
-              {/* Dark vignette bottom */}
+            ) : (
+              /* Placeholder — icon + initials on parchment */
               <div style={{
-                position:"absolute", inset:0, zIndex:3, pointerEvents:"none",
-                background:"linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, transparent 35%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0.95) 100%)",
-              }}/>
-              {/* Side vignettes */}
-              <div style={{
-                position:"absolute", inset:0, zIndex:3, pointerEvents:"none",
-                background:"linear-gradient(to right, rgba(0,0,0,0.35) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.35) 100%)",
-              }}/>
-            </>
-          ) : (
-            /* No-photo illustrated placeholder */
-            <div style={{
-              position:"absolute", inset:0, zIndex:1,
-              display:"flex", flexDirection:"column",
-              alignItems:"center", justifyContent:"center", gap:10,
-            }}>
-              {/* Ornate circle */}
-              <div style={{
-                width:100, height:100, borderRadius:"50%",
-                border:`2px solid ${theme.color}88`,
-                boxShadow:`0 0 40px ${theme.color}44, inset 0 0 30px rgba(0,0,0,0.6)`,
-                background:`radial-gradient(circle, ${fireA}55, ${fireB}99)`,
-                display:"flex", alignItems:"center", justifyContent:"center",
-                fontSize:44,
+                display:"flex", flexDirection:"column",
+                alignItems:"center", justifyContent:"center", gap:6,
+                width:"100%", height:"100%",
+                background:"linear-gradient(160deg,#d4aa60,#b8883a)",
               }}>
-                {icon}
-              </div>
-              <span style={{
-                fontFamily:"'Cinzel',serif",
-                fontSize:"clamp(20px,5vw,30px)", fontWeight:700,
-                color: theme.color,
-                textShadow:`0 0 30px ${theme.color}99`,
-                letterSpacing:6,
-              }}>
-                {initials}
-              </span>
-              {/* Horizontal ornament */}
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:4 }}>
-                <div style={{ width:24, height:1, background:`linear-gradient(90deg,transparent,${theme.color})` }}/>
-                <div style={{ width:5, height:5, borderRadius:"50%", background:theme.color }}/>
-                <div style={{ width:24, height:1, background:`linear-gradient(90deg,${theme.color},transparent)` }}/>
-              </div>
-            </div>
-          )}
-
-          {/* Top ornamental border */}
-          <div style={{
-            position:"absolute", top:0, left:0, right:0, height:3, zIndex:10,
-            background:`linear-gradient(90deg, transparent 0%, ${theme.color}cc 30%, ${theme.color} 50%, ${theme.color}cc 70%, transparent 100%)`,
-          }}/>
-
-          {/* Category tag — top right */}
-          <div style={{
-            position:"absolute", top:10, right:10, zIndex:10,
-            background:"rgba(0,0,0,0.7)", backdropFilter:"blur(4px)",
-            border:`1px solid ${theme.color}66`,
-            color:theme.color, fontSize:9, fontWeight:700,
-            padding:"3px 8px", letterSpacing:1.5,
-            fontFamily:"'Cinzel',serif", textTransform:"uppercase",
-          }}>
-            {artist.category || "Artist"}
-          </div>
-
-          {/* Price — top left */}
-          {artist.price && (
-            <div style={{
-              position:"absolute", top:10, left:10, zIndex:10,
-              background:"rgba(0,0,0,0.7)", backdropFilter:"blur(4px)",
-              border:`1px solid ${theme.color}44`,
-              color: theme.color, fontSize:9, fontWeight:700,
-              padding:"3px 8px", letterSpacing:1,
-              fontFamily:"'Cinzel',serif",
-            }}>
-              ₹{Number(artist.price).toLocaleString("en-IN")}
-            </div>
-          )}
-
-          {/* Bottom-of-portrait: name over the fade */}
-          <div style={{
-            position:"absolute", bottom:0, left:0, right:0, zIndex:10,
-            padding:"0 14px 14px",
-          }}>
-            {/* Rating */}
-            <div style={{ display:"flex", gap:2, marginBottom:5 }}>
-              {Array.from({ length:5 }).map((_,i) => (
-                <span key={i} style={{
-                  fontSize:10,
-                  color: i < Math.round(artist.rating||5) ? "#ffd600" : "rgba(255,255,255,0.15)",
-                }}>★</span>
-              ))}
-              <span style={{ fontSize:9, color:"rgba(255,255,255,0.35)", marginLeft:4, lineHeight:"12px" }}>
-                {(artist.rating||5).toFixed(1)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ── NAME + TAGLINE PANEL ── */}
-        <div style={{
-          padding:"12px 14px 16px",
-          background:`linear-gradient(180deg, #0c0603 0%, #060301 100%)`,
-          borderTop:`1px solid ${theme.color}33`,
-          position:"relative", overflow:"hidden",
-        }}>
-          {/* Subtle glow behind text */}
-          <div style={{
-            position:"absolute", bottom:-10, left:"50%", transform:"translateX(-50%)",
-            width:"80%", height:40, borderRadius:"50%",
-            background:`radial-gradient(ellipse, ${theme.color}18, transparent 70%)`,
-            pointerEvents:"none",
-          }}/>
-
-          {/* Artist name */}
-          <div style={{
-            fontFamily:"'Cinzel',serif",
-            fontSize:"clamp(12px,2.8vw,16px)",
-            fontWeight:700,
-            color:"#e8d5b0",
-            letterSpacing:1.5,
-            textAlign:"center",
-            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
-            marginBottom:4,
-            textShadow:`0 0 20px ${theme.color}66`,
-          }}>
-            {artist.name}
-          </div>
-
-          {/* Ornamental divider */}
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6, justifyContent:"center" }}>
-            <div style={{ flex:1, height:"0.5px", background:`linear-gradient(90deg,transparent,${theme.color}88)` }}/>
-            <span style={{ color:theme.color, fontSize:8 }}>✦</span>
-            <div style={{ flex:1, height:"0.5px", background:`linear-gradient(90deg,${theme.color}88,transparent)` }}/>
-          </div>
-
-          {/* City & tagline */}
-          <div style={{ textAlign:"center" }}>
-            {artist.city && (
-              <div style={{
-                fontSize:9, color:"rgba(200,170,120,0.6)",
-                fontFamily:"'Cinzel',serif", letterSpacing:2,
-                textTransform:"uppercase", marginBottom:3,
-              }}>
-                {artist.city}
+                <span style={{ fontSize:"clamp(28px,7vw,44px)" }}>{icon}</span>
+                <span style={{
+                  fontFamily:"'Rye',serif",
+                  fontSize:"clamp(16px,4vw,24px)",
+                  color:"#3d1f00", letterSpacing:3, fontWeight:700,
+                }}>
+                  {artist.name?.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2)}
+                </span>
               </div>
             )}
+
+            {/* Sepia vignette overlay */}
             <div style={{
-              fontSize:9, color:theme.color,
-              fontFamily:"'Cinzel',serif", letterSpacing:1.5,
-              fontStyle:"italic", opacity:0.8,
-            }}>
-              {theme.tagline}
-            </div>
+              position:"absolute", inset:0, pointerEvents:"none",
+              background:"radial-gradient(ellipse at center, transparent 50%, rgba(80,45,5,0.45) 100%)",
+            }}/>
           </div>
 
-          {/* Post count badge */}
-          {artist.postCount > 0 && (
+          {/* ── DEAD OR ALIVE ── */}
+          <div style={{
+            textAlign:"center",
+            fontFamily:"'Rye',serif",
+            fontSize:"clamp(6px,1.8vw,9px)",
+            color:"#3d1f00",
+            letterSpacing:2,
+            marginTop:5,
+            opacity:0.75,
+            borderTop:"1px solid #8b6914",
+            borderBottom:"1px solid #8b6914",
+            padding:"2px 0",
+          }}>
+            ✦ {BOUNTY_LABEL[artist.category] || "DEAD OR ALIVE"} ✦
+          </div>
+
+          {/* ── ARTIST NAME ── */}
+          <div style={{
+            textAlign:"center",
+            fontFamily:"'Rye',serif",
+            fontSize:"clamp(10px,2.6vw,14px)",
+            fontWeight:700,
+            color:"#1a0800",
+            letterSpacing:1.5,
+            marginTop:4,
+            lineHeight:1.2,
+            whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis",
+            padding:"0 4px",
+          }}>
+            {artist.name?.toUpperCase()}
+          </div>
+
+          {/* Category */}
+          <div style={{
+            textAlign:"center",
+            fontFamily:"'Rye',serif",
+            fontSize:"clamp(6px,1.5vw,8px)",
+            color:"#5a3a0a",
+            letterSpacing:2,
+            marginTop:2,
+            opacity:0.7,
+          }}>
+            — {(artist.category || "Artist").toUpperCase()} —
+          </div>
+
+          {/* City */}
+          {artist.city && (
             <div style={{
-              position:"absolute", bottom:10, right:12,
-              fontSize:8, color:"rgba(200,160,80,0.4)",
-              fontFamily:"'Cinzel',serif", letterSpacing:1,
+              textAlign:"center",
+              fontFamily:"'Rye',serif",
+              fontSize:"clamp(5px,1.3vw,7px)",
+              color:"#5a3a0a",
+              letterSpacing:1.5,
+              marginTop:1,
+              opacity:0.55,
             }}>
-              🎨 {artist.postCount}
+              📍 {artist.city.toUpperCase()}
             </div>
           )}
+
+          {/* ── BOUNTY AMOUNT ── */}
+          <div style={{
+            textAlign:"center",
+            fontFamily:"'Rye',serif",
+            fontSize:"clamp(9px,2.2vw,12px)",
+            fontWeight:700,
+            color:"#1a0800",
+            letterSpacing:1,
+            marginTop:5,
+            borderTop:"1.5px solid #8b6914",
+            paddingTop:4,
+            textShadow:"0.5px 0.5px 0 rgba(255,255,255,0.2)",
+          }}>
+            {bounty(artist)}
+          </div>
+
+          {/* MARINE stamp */}
+          <div style={{
+            textAlign:"center",
+            fontFamily:"'Rye',serif",
+            fontSize:"clamp(5px,1.2vw,7px)",
+            color:"#3d1f00",
+            letterSpacing:3,
+            marginTop:2,
+            opacity:0.5,
+          }}>
+            — ARTSPIRE —
+          </div>
         </div>
+
+        {/* Corner age spots */}
+        {[
+          { top:2,    left:2  },
+          { top:2,    right:2 },
+          { bottom:2, left:2  },
+          { bottom:2, right:2 },
+        ].map((pos,i) => (
+          <div key={i} style={{
+            position:"absolute", ...pos, zIndex:3,
+            width:8, height:8, borderRadius:"50%",
+            background:"rgba(80,40,0,0.35)",
+          }}/>
+        ))}
       </div>
     </Link>
   );
@@ -306,7 +298,9 @@ export default function Artists() {
             return {
               ...a, _id: id,
               postCount: postData.filter(p => p.artistId === id).length,
-              profileImage: a.profileImage || postData.find(p => p.artistId === id && p.type === "image")?.media || null,
+              profileImage: a.profileImage
+                || postData.find(p => p.artistId === id && p.type === "image")?.media
+                || null,
             };
           })
           .filter(a => a._id)
@@ -332,41 +326,42 @@ export default function Artists() {
   return (
     <div style={{
       minHeight:"100vh",
-      background:"#060301",
-      color:"#e8d5b0",
+      background:"#081120",
+      color:"#fff",
       fontFamily:"'Nunito',sans-serif",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+      <link href="https://fonts.googleapis.com/css2?family=Rye&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet"/>
       <style>{`
         * { box-sizing: border-box; }
-        @keyframes shimmer { 0%{opacity:.3} 50%{opacity:.7} 100%{opacity:.3} }
-        @keyframes fadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes flicker { 0%,100%{opacity:1} 50%{opacity:0.85} 92%{opacity:0.95} }
-        .search-input::placeholder { color: rgba(200,160,80,0.25); }
+        @keyframes shimmer { 0%{opacity:.4} 50%{opacity:.8} 100%{opacity:.4} }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        .search-input::placeholder { color:rgba(255,255,255,0.2); }
         .search-input:focus { outline:none; border-color:#c9a84c !important; box-shadow:0 0 0 3px rgba(200,160,80,0.1); }
-        .cat-pill { transition: all 0.2s ease; }
-        .cat-pill:hover { transform: translateY(-2px); }
-        .artist-grid {
-          display: grid;
-          grid-template-columns: repeat(2, 1fr);
-          gap: 2px;
+        .cat-pill { transition:all 0.18s ease; }
+        .cat-pill:hover { transform:translateY(-2px); }
+        .wanted-grid {
+          display:grid;
+          grid-template-columns: repeat(3,1fr);
+          gap:10px;
+          padding: 0 10px;
         }
-        @media(min-width:480px)  { .artist-grid { grid-template-columns: repeat(3,1fr) !important; } }
-        @media(min-width:720px)  { .artist-grid { grid-template-columns: repeat(4,1fr) !important; } }
-        @media(min-width:1024px) { .artist-grid { grid-template-columns: repeat(5,1fr) !important; } }
-        @media(min-width:1280px) { .artist-grid { grid-template-columns: repeat(6,1fr) !important; } }
+        @media(min-width:480px)  { .wanted-grid { grid-template-columns:repeat(3,1fr) !important; gap:12px !important; } }
+        @media(min-width:680px)  { .wanted-grid { grid-template-columns:repeat(4,1fr) !important; gap:14px !important; } }
+        @media(min-width:900px)  { .wanted-grid { grid-template-columns:repeat(5,1fr) !important; gap:14px !important; } }
+        @media(min-width:1100px) { .wanted-grid { grid-template-columns:repeat(6,1fr) !important; } }
+        @media(min-width:1400px) { .wanted-grid { grid-template-columns:repeat(7,1fr) !important; } }
         .cat-strip::-webkit-scrollbar { display:none; }
         ::-webkit-scrollbar { width:3px; }
-        ::-webkit-scrollbar-thumb { background:#2a1a08; border-radius:2px; }
+        ::-webkit-scrollbar-thumb { background:#1f2937; border-radius:2px; }
       `}</style>
 
       {/* VIDEO BG */}
       <div style={{ position:"fixed", inset:0, zIndex:0, pointerEvents:"none" }}>
         <video autoPlay loop muted playsInline
-          style={{ width:"100%", height:"100%", objectFit:"cover", opacity:0.08 }}>
+          style={{ width:"100%", height:"100%", objectFit:"cover", opacity:0.15 }}>
           <source src="/artbg.mp4" type="video/mp4"/>
         </video>
-        <div style={{ position:"absolute", inset:0, background:"rgba(4,2,1,0.88)" }}/>
+        <div style={{ position:"absolute", inset:0, background:"rgba(8,17,32,0.88)" }}/>
       </div>
 
       <div style={{ position:"relative", zIndex:100 }}><Navbar/></div>
@@ -374,100 +369,83 @@ export default function Artists() {
       <div style={{ position:"relative", zIndex:10, paddingBottom:110 }}>
 
         {/* ── HEADER ── */}
-        <div style={{ textAlign:"center", padding:"88px 20px 28px", animation:"fadeUp 0.5s ease" }}>
-          <button
-            onClick={() => navigate("/")}
-            style={{
-              background:"none", border:"none",
-              color:"rgba(200,160,80,0.3)", fontSize:10, fontWeight:700,
-              cursor:"pointer", fontFamily:"'Cinzel',serif",
-              marginBottom:18, letterSpacing:3,
-            }}
-          >
-            ← HOME
-          </button>
+        <div style={{ textAlign:"center", padding:"88px 20px 28px", animation:"fadeUp 0.4s ease" }}>
+          <button onClick={() => navigate("/")} style={{
+            background:"none", border:"none",
+            color:"rgba(200,160,80,0.35)", fontSize:10, fontWeight:700,
+            cursor:"pointer", fontFamily:"'Rye',serif",
+            marginBottom:16, letterSpacing:3,
+          }}>← HOME</button>
 
-          {/* Decorative top line */}
-          <div style={{ display:"flex", alignItems:"center", gap:12, justifyContent:"center", marginBottom:16 }}>
-            <div style={{ height:"0.5px", width:60, background:"linear-gradient(90deg,transparent,#c9a84c)" }}/>
-            <span style={{ color:"#c9a84c", fontSize:14 }}>✦</span>
-            <div style={{ height:"0.5px", width:60, background:"linear-gradient(90deg,#c9a84c,transparent)" }}/>
+          <div style={{ display:"flex", alignItems:"center", gap:12, justifyContent:"center", marginBottom:12 }}>
+            <div style={{ height:"0.5px", width:50, background:"linear-gradient(90deg,transparent,#c9a84c)" }}/>
+            <span style={{ color:"#c9a84c", fontSize:12 }}>✦</span>
+            <div style={{ height:"0.5px", width:50, background:"linear-gradient(90deg,#c9a84c,transparent)" }}/>
           </div>
 
           <h1 style={{
-            fontFamily:"'Cinzel',serif",
+            fontFamily:"'Rye',serif",
             fontWeight:900, fontSize:"clamp(28px,6vw,52px)",
-            margin:"0 0 10px", letterSpacing:4, color:"#e8d5b0",
-            textShadow:"0 0 40px rgba(200,160,80,0.4)",
-            animation:"flicker 4s ease infinite",
+            margin:"0 0 10px", letterSpacing:6, color:"#e8c870",
+            textShadow:"0 0 30px rgba(200,160,40,0.5), 2px 2px 0 rgba(0,0,0,0.5)",
           }}>
-            DISCOVER <span style={{ color:"#c9a84c" }}>ARTISTS</span>
+            MOST WANTED
           </h1>
-
           <p style={{
-            fontFamily:"'Cinzel',serif",
+            fontFamily:"'Rye',serif",
             color:"rgba(200,160,80,0.4)", fontSize:10,
-            fontWeight:400, margin:0, letterSpacing:4, textTransform:"uppercase",
+            letterSpacing:4, textTransform:"uppercase", margin:0,
           }}>
-            {loading ? "Summoning Creatives…"
-              : error   ? "The scroll could not be read."
-              : `${filtered.length} Creative Soul${filtered.length !== 1 ? "s" : ""} Found`}
+            {loading ? "Searching the realm…"
+              : error   ? "Scroll unreadable."
+              : `${filtered.length} Artist${filtered.length !== 1 ? "s" : ""} Found`}
           </p>
         </div>
 
         {/* ── SEARCH + FILTERS ── */}
-        <div style={{ maxWidth:720, margin:"0 auto", padding:"0 16px 32px", animation:"fadeUp 0.4s ease 0.1s both" }}>
-          <div style={{ position:"relative", marginBottom:14 }}>
-            <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:14, pointerEvents:"none", opacity:0.5 }}>🔍</span>
+        <div style={{ maxWidth:720, margin:"0 auto", padding:"0 16px 28px", animation:"fadeUp 0.4s ease 0.08s both" }}>
+          <div style={{ position:"relative", marginBottom:12 }}>
+            <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", fontSize:14, pointerEvents:"none", opacity:0.4 }}>🔍</span>
             <input
               className="search-input"
               placeholder="Search by name or city…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{
-                width:"100%", padding:"12px 42px 12px 44px",
-                border:"1px solid rgba(200,160,80,0.2)",
-                background:"rgba(10,6,2,0.8)", color:"#e8d5b0",
-                fontFamily:"'Cinzel',serif", fontSize:12, letterSpacing:1,
+                width:"100%", padding:"11px 40px 11px 42px",
+                borderRadius:6, border:"1px solid rgba(200,160,80,0.2)",
+                background:"rgba(10,6,2,0.7)", color:"#e8d5b0",
+                fontFamily:"'Rye',serif", fontSize:11, letterSpacing:1,
                 backdropFilter:"blur(8px)",
                 transition:"border-color 0.2s, box-shadow 0.2s",
-                borderRadius:0,
               }}
             />
             {search && (
-              <button onClick={() => setSearch("")}
-                style={{
-                  position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
-                  background:"rgba(200,160,80,0.1)", border:"1px solid rgba(200,160,80,0.2)",
-                  color:"rgba(200,160,80,0.5)", cursor:"pointer",
-                  fontSize:11, width:22, height:22, borderRadius:"50%",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                }}
-              >✕</button>
+              <button onClick={() => setSearch("")} style={{
+                position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
+                background:"rgba(200,160,80,0.1)", border:"1px solid rgba(200,160,80,0.2)",
+                color:"rgba(200,160,80,0.5)", cursor:"pointer",
+                fontSize:11, width:22, height:22, borderRadius:"50%",
+                display:"flex", alignItems:"center", justifyContent:"center",
+              }}>✕</button>
             )}
           </div>
 
-          {/* Category pills */}
           <div className="cat-strip" style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:4 }}>
             {CATEGORIES.map(cat => {
-              const t = CAT_THEME[cat] || CAT_THEME.default;
               const isActive = activeCategory === cat;
               return (
                 <button key={cat} className="cat-pill"
                   onClick={() => setActiveCategory(cat)}
                   style={{
-                    padding:"5px 14px", flexShrink:0,
-                    border: isActive
-                      ? `1px solid ${t.color}`
-                      : "1px solid rgba(200,160,80,0.15)",
-                    background: isActive
-                      ? `rgba(200,160,80,0.1)` : "rgba(4,2,0,0.6)",
-                    color: isActive ? t.color : "rgba(200,160,80,0.3)",
-                    fontFamily:"'Cinzel',serif", fontWeight:600, fontSize:10,
+                    padding:"5px 14px", flexShrink:0, borderRadius:4,
+                    border: isActive ? "1px solid #c9a84c" : "1px solid rgba(200,160,80,0.15)",
+                    background: isActive ? "rgba(200,160,80,0.12)" : "rgba(4,2,0,0.5)",
+                    color: isActive ? "#e8c870" : "rgba(200,160,80,0.3)",
+                    fontFamily:"'Rye',serif", fontSize:9,
                     cursor:"pointer", whiteSpace:"nowrap",
                     letterSpacing:1.5, textTransform:"uppercase",
-                    boxShadow: isActive ? `0 0 16px ${t.color}33` : "none",
-                    borderRadius:0,
+                    boxShadow: isActive ? "0 0 12px rgba(200,160,80,0.25)" : "none",
                   }}
                 >
                   {cat !== "All" ? `${ICONS[cat]||"✨"} ${cat}` : "✦ All"}
@@ -477,35 +455,33 @@ export default function Artists() {
           </div>
         </div>
 
-        {/* ── GRID ── */}
-        <div style={{ maxWidth:1440, margin:"0 auto", padding:"0 2px" }}>
+        {/* ── WANTED GRID ── */}
+        <div style={{ maxWidth:1440, margin:"0 auto" }}>
           {error ? (
             <div style={{ textAlign:"center", padding:"60px 20px" }}>
               <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
-              <div style={{ color:"rgba(200,160,80,0.3)", fontSize:12, fontFamily:"'Cinzel',serif", letterSpacing:2, marginBottom:20 }}>
-                THE SCROLL COULD NOT BE READ
+              <div style={{ color:"rgba(200,160,80,0.3)", fontSize:12, fontFamily:"'Rye',serif", letterSpacing:2, marginBottom:20 }}>
+                SCROLL UNREADABLE
               </div>
-              <button onClick={() => window.location.reload()}
-                style={{
-                  background:"transparent", border:"1px solid #c9a84c",
-                  color:"#c9a84c", padding:"10px 28px",
-                  fontFamily:"'Cinzel',serif", fontSize:11, fontWeight:700,
-                  letterSpacing:2, cursor:"pointer",
-                }}
-              >TRY AGAIN</button>
+              <button onClick={() => window.location.reload()} style={{
+                background:"transparent", border:"1px solid #c9a84c",
+                color:"#c9a84c", padding:"10px 28px", borderRadius:4,
+                fontFamily:"'Rye',serif", fontSize:10, fontWeight:700,
+                letterSpacing:2, cursor:"pointer",
+              }}>RETRY</button>
             </div>
           ) : filtered.length === 0 && !loading ? (
             <div style={{ textAlign:"center", padding:"60px 20px" }}>
               <div style={{ fontSize:36, marginBottom:12 }}>🎭</div>
-              <div style={{ color:"rgba(200,160,80,0.3)", fontSize:12, fontFamily:"'Cinzel',serif", letterSpacing:2 }}>
+              <div style={{ color:"rgba(200,160,80,0.3)", fontSize:12, fontFamily:"'Rye',serif", letterSpacing:2 }}>
                 NO SOULS FOUND{search ? ` FOR "${search.toUpperCase()}"` : ""}
               </div>
             </div>
           ) : (
-            <div className="artist-grid">
+            <div className="wanted-grid">
               {loading
-                ? Array.from({ length:12 }).map((_,i) => <SkeletonCard key={i}/>)
-                : filtered.map(artist => <ArtistCard key={artist._id} artist={artist}/>)
+                ? Array.from({ length:15 }).map((_,i) => <SkeletonCard key={i}/>)
+                : filtered.map(artist => <WantedCard key={artist._id} artist={artist}/>)
               }
             </div>
           )}
@@ -522,22 +498,21 @@ export default function Artists() {
           gap:"clamp(24px,6vw,80px)", padding:"10px 20px 14px",
         }}>
           {[
-            { label:"Souls",       value:artists.length },
-            { label:"Crafts",      value:[...new Set(artists.map(a=>a.category).filter(Boolean))].length },
-            { label:"Creations",   value:artists.reduce((s,a)=>s+(a.postCount||0),0) },
-            { label:"Realms",      value:[...new Set(artists.map(a=>a.city).filter(Boolean))].length },
+            { label:"Artists",  value:artists.length },
+            { label:"Crafts",   value:[...new Set(artists.map(a=>a.category).filter(Boolean))].length },
+            { label:"Works",    value:artists.reduce((s,a)=>s+(a.postCount||0),0) },
+            { label:"Cities",   value:[...new Set(artists.map(a=>a.city).filter(Boolean))].length },
           ].map(({ label, value }) => (
             <div key={label} style={{ textAlign:"center" }}>
               <div style={{
-                fontFamily:"'Cinzel',serif",
-                fontWeight:700, fontSize:"clamp(14px,3vw,22px)",
-                color:"#c9a84c",
-                textShadow:"0 0 16px rgba(200,160,80,0.5)",
+                fontFamily:"'Rye',serif", fontWeight:700,
+                fontSize:"clamp(14px,3vw,22px)", color:"#c9a84c",
+                textShadow:"0 0 12px rgba(200,160,40,0.5)",
               }}>{value}</div>
               <div style={{
                 fontSize:8, color:"rgba(200,160,80,0.3)", fontWeight:700,
                 letterSpacing:2, textTransform:"uppercase",
-                fontFamily:"'Cinzel',serif",
+                fontFamily:"'Rye',serif",
               }}>✦ {label}</div>
             </div>
           ))}
