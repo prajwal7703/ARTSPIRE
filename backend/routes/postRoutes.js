@@ -1,9 +1,9 @@
-const express = require("express");
-const router = express.Router();
-const Post = require("../models/Post");
+const express      = require("express");
+const router       = express.Router();
+const Post         = require("../models/Post");
 const Notification = require("../models/Notification");
 
-// CREATE POST — supports both POST / and POST /create
+// CREATE POST
 router.post("/", createPost);
 router.post("/create", createPost);
 
@@ -32,6 +32,18 @@ router.get("/", async (req, res) => {
   }
 });
 
+// DELETE A POST
+router.delete("/:id", async (req, res) => {
+  try {
+    const post = await Post.findByIdAndDelete(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: "Post not found" });
+    res.json({ success: true, message: "Post deleted" });
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false });
+  }
+});
+
 // LIKE A POST
 router.post("/:id/like", async (req, res) => {
   try {
@@ -41,8 +53,8 @@ router.post("/:id/like", async (req, res) => {
     await Notification.create({
       toArtist: post.artistId,
       fromName: req.body.likerName || "Someone",
-      type: "like",
-      message: "liked your post",
+      type:     "like",
+      message:  "liked your post",
     });
 
     res.json({ success: true });
