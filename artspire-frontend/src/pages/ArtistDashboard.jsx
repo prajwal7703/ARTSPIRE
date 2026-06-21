@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import socket from "../socket";
 import { getArtist } from "../utils/auth";
 
@@ -36,6 +37,7 @@ function useIsMobile() {
 /* ─── BOOKINGS TAB ────────────────────────────────────────────────────────── */
 function ArtistBookingDashboard({ artistId }) {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [bookings,    setBookings]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [selected,    setSelected]    = useState(null);
@@ -58,8 +60,10 @@ function ArtistBookingDashboard({ artistId }) {
     });
     socket.on("price_accepted", ({ bookingId, price }) =>
       setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, status: "price_agreed", agreedPrice: price } : b)));
-    socket.on("booking_confirmed", ({ bookingId }) =>
-      setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, status: "confirmed" } : b)));
+    socket.on("booking_confirmed", ({ bookingId, paidAmount }) => {
+      setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, status: "confirmed", paidAmount } : b));
+      setSelected(s => s?._id === bookingId ? { ...s, status: "confirmed", paidAmount } : s);
+    });
     return () => {
       socket.off("new_booking_request");
       socket.off("user_counter");
@@ -92,7 +96,6 @@ function ArtistBookingDashboard({ artistId }) {
     setSending(true); setError("");
     try {
       await axios.post(`${API}/api/bookings/${selected._id}/offer`, { price, message: offerMsg });
-      socket.emit("artist_offer", { bookingId: selected._id, price, message: offerMsg, artistId });
       const entry = { from: "artist", price, message: offerMsg, timestamp: new Date() };
       setSelected(s => ({ ...s, status: "negotiating", negotiation: [...(s.negotiation||[]), entry] }));
       setBookings(bs => bs.map(b => b._id === selected._id
@@ -105,10 +108,11 @@ function ArtistBookingDashboard({ artistId }) {
   const acceptUserCounter = async (price) => {
     setSending(true);
     try {
-      socket.emit("artist_accepts_counter", { bookingId: selected._id, price });
-      await new Promise(r => setTimeout(r, 300));
+      await axios.post(`${API}/api/bookings/${selected._id}/artist-accept`, { price });
       setSelected(s => ({ ...s, status: "price_agreed", agreedPrice: price }));
       setBookings(bs => bs.map(b => b._id === selected._id ? { ...b, status: "price_agreed", agreedPrice: price } : b));
+    } catch {
+      setError("Failed to accept price.");
     } finally { setSending(false); }
   };
 
@@ -140,6 +144,10 @@ function ArtistBookingDashboard({ artistId }) {
         </span>
       </div>
 
+      <button onClick={() => navigate(`/chat/${selected.userId}`)} style={bs.chatBtn}>
+        💬 Chat with {selected.userName}
+      </button>
+
       <div style={bs.infoCard}>
         {[
           ["Event",    selected.eventType],
@@ -149,6 +157,8 @@ function ArtistBookingDashboard({ artistId }) {
           ["Location", selected.location],
           ["Base",     `₹${selected.basePrice?.toLocaleString()}`],
           selected.agreedPrice && ["Agreed", `₹${selected.agreedPrice?.toLocaleString()}`],
+          selected.discountAmount > 0 && ["Coupon", `${selected.couponCode} (− ₹${selected.discountAmount?.toLocaleString()})`],
+          selected.paidAmount && ["Received", `₹${selected.paidAmount?.toLocaleString()}`],
         ].filter(Boolean).map(([k,v]) => (
           <div key={k} style={bs.infoRow}>
             <span style={{ color:"#64748b" }}>{k}</span>
@@ -212,6 +222,12 @@ function ArtistBookingDashboard({ artistId }) {
           <div style={{ fontSize:24, marginBottom:6 }}>🤝</div>
           <div style={{ fontWeight:800, color:"#15803d", fontFamily:"'Nunito',sans-serif", fontSize:14 }}>Price agreed at ₹{selected.agreedPrice?.toLocaleString()}</div>
           <div style={{ fontSize:12, color:"#16a34a", fontFamily:"'Nunito',sans-serif", marginTop:4 }}>Waiting for client to complete payment.</div>
+        </div>
+      )}
+      {selected.status === "payment_pending" && (
+        <div style={{ background:"#faf5ff", border:"1px solid #e9d5ff", borderRadius:12, padding:"14px", textAlign:"center" }}>
+          <div style={{ fontSize:24, marginBottom:6 }}>⏳</div>
+          <div style={{ fontWeight:800, color:"#7e22ce", fontFamily:"'Nunito',sans-serif", fontSize:14 }}>Client is completing payment…</div>
         </div>
       )}
       {selected.status === "confirmed" && (
@@ -452,7 +468,6 @@ function PostsTab({ artistId }) {
   const [deleting,   setDeleting]   = useState(null);
   const [msg,        setMsg]        = useState({ type:"", text:"" });
   const [title,      setTitle]      = useState("");
-  const [type,       setType]       = useState("image");
   const fileRef = useRef();
 
   const loadPosts = async () => {
@@ -882,6 +897,7 @@ const bs = {
   errorBox:    { background:"#fee2e2", color:"#7f1d1d", borderRadius:10, padding:"8px 12px", fontSize:12, fontWeight:600, marginBottom:8 },
   primaryBtn:  { background:"#1e3a8a", color:"#fff", border:"none", padding:"11px 18px", borderRadius:20, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:13, cursor:"pointer" },
   acceptBtn:   { background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:18, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12, cursor:"pointer" },
+  chatBtn:     { alignSelf:"flex-start", background:"#1e293b", color:"#fff", border:"none", padding:"9px 16px", borderRadius:20, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12, cursor:"pointer" },
   quickChip:   { background:"#eff6ff", color:"#1d4ed8", border:"none", padding:"5px 12px", borderRadius:16, fontSize:12, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" },
   emptyMsg:    { padding:"24px", color:"#94a3b8", fontSize:13, fontFamily:"'Nunito',sans-serif" },
 };
