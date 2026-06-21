@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import socket from "../socket"; // adjust path if needed
+import { getArtist } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
@@ -527,11 +528,18 @@ function EarningsTab({ artistId }) {
 
 // ─── Main Dashboard Page ─────────────────────────────────────────────────────
 export default function ArtistDashboard() {
-  const [activeTab, setActiveTab] = useState("bookings");
-  const [artist, setArtist]       = useState(null);
+  // FIX 3: Read initial tab from ?tab= query param (e.g. /artist-dashboard?tab=profile)
+  const [activeTab, setActiveTab] = useState(() => {
+    const param = new URLSearchParams(window.location.search).get("tab");
+    return TABS.some(t => t.id === param) ? param : "bookings";
+  });
 
-  const artistId   = localStorage.getItem("artistId");
-  const artistName = localStorage.getItem("artistName") || "Artist";
+  const [artist, setArtist] = useState(null);
+
+  // FIX 1 & 2: Read artist from the "artist" key saved by saveAuth(), not "artistId"
+  const loggedArtist = getArtist();
+  const artistId     = loggedArtist?._id;
+  const artistName   = loggedArtist?.name || "Artist";
 
   useEffect(() => {
     if (!artistId) return;

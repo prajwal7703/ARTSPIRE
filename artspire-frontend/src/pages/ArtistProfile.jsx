@@ -40,12 +40,12 @@ function ChatModal({ artist, currentUser, artistId, onClose }) {
 
   useEffect(() => {
     if (!myId) return;
-    fetch(); const iv = setInterval(fetch, 3000); return () => clearInterval(iv);
+    fetchMsgs(); const iv = setInterval(fetchMsgs, 3000); return () => clearInterval(iv);
   }, [myId]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [messages]);
 
-  const fetch = async () => {
+  const fetchMsgs = async () => {
     try {
       const res = await axios.get(`${API}/api/chat/${myId}/${artistId}`);
       setMessages(Array.isArray(res.data) ? res.data : []);
@@ -57,7 +57,7 @@ function ChatModal({ artist, currentUser, artistId, onClose }) {
     setSending(true);
     try {
       await axios.post(`${API}/api/chat/send`, { senderId:myId, receiverId:artistId, message:input.trim() });
-      setInput(""); fetch();
+      setInput(""); fetchMsgs();
     } catch {}
     setSending(false);
   };
@@ -72,7 +72,6 @@ function ChatModal({ artist, currentUser, artistId, onClose }) {
         width:"100%", maxWidth:440, borderRadius:20, overflow:"hidden",
         background:"#fff", boxShadow:"0 20px 60px rgba(0,0,0,0.3)",
         fontFamily:"'Nunito',sans-serif",
-        /* torn paper top */
         position:"relative",
       }}>
         {/* Header */}
@@ -225,7 +224,6 @@ function RatingSection({ artist, currentUser, artistId, onUpdate }) {
 
   return (
     <div style={{
-      /* Sticky note style */
       background:"#fffde7",
       borderRadius:4,
       padding:20,
@@ -313,7 +311,7 @@ function RatingSection({ artist, currentUser, artistId, onUpdate }) {
                 <span style={{ fontWeight:800, fontSize:12, color:"#333" }}>{r.userName||"User"}</span>
                 <span style={{ fontSize:11, color:"#f59e0b" }}>{"★".repeat(r.rating||0)}</span>
               </div>
-              {r.review && <div style={{ fontSize:12, color:"#666", fontFamily:"'Caveat',cursive",  }}>{r.review}</div>}
+              {r.review && <div style={{ fontSize:12, color:"#666", fontFamily:"'Caveat',cursive" }}>{r.review}</div>}
             </div>
           ))}
         </div>
@@ -379,7 +377,6 @@ export default function ArtistProfile() {
     <div style={{
       minHeight:"100vh",
       fontFamily:"'Nunito',sans-serif",
-      /* GRID PAPER BACKGROUND — exactly like reference */
       background:"#eef2f7",
       backgroundImage:`
         linear-gradient(rgba(180,200,230,0.35) 1px, transparent 1px),
@@ -388,7 +385,6 @@ export default function ArtistProfile() {
         linear-gradient(90deg, rgba(180,200,230,0.12) 1px, transparent 1px)
       `,
       backgroundSize:"40px 40px, 40px 40px, 8px 8px, 8px 8px",
-      /* Red margin line on left */
       borderLeft:"none",
       position:"relative",
     }}>
@@ -449,7 +445,8 @@ export default function ArtistProfile() {
           }}>📅 Book</button>
         )}
         {isOwner && (
-          <button onClick={()=>navigate("/artist-dashboard")} style={{
+          // FIX: navigate to profile tab directly
+          <button onClick={()=>navigate("/artist-dashboard?tab=profile")} style={{
             background:"#f0f2ff", border:"1px solid #e8eaf6", color:"#3d5afe",
             padding:"8px 14px", borderRadius:20,
             fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:11, cursor:"pointer",
@@ -460,12 +457,11 @@ export default function ArtistProfile() {
       {/* ── PAGE CONTENT ── */}
       <div style={{ maxWidth:800, margin:"0 auto", padding:"28px 20px 80px", position:"relative", zIndex:1 }}>
 
-        {/* ══ SECTION 1: HERO — HEY I AM + PHOTO ══ */}
+        {/* ══ SECTION 1: HERO ══ */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:20, marginBottom:28, animation:"fadeUp 0.4s ease" }}>
 
           {/* Left: name + bio */}
           <div>
-            {/* "HEY! I AM" */}
             <div style={{
               fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:"clamp(18px,4vw,26px)",
               color:"#1a1a2e", marginBottom:6, lineHeight:1.1,
@@ -473,7 +469,7 @@ export default function ArtistProfile() {
               HEY! I AM
             </div>
 
-            {/* Artist name — big colorful letters like reference */}
+            {/* Artist name — colorful letters */}
             <div style={{
               fontFamily:"'Caveat',cursive", fontWeight:700,
               fontSize:"clamp(28px,7vw,48px)",
@@ -497,7 +493,7 @@ export default function ArtistProfile() {
               <span style={{ color:accentColor, marginLeft:4 }}>·</span>
             </div>
 
-            {/* Category hello badge */}
+            {/* Category badge */}
             <div style={{
               display:"inline-flex", alignItems:"center", gap:8,
               background:"#fff", border:`2px solid ${accentColor}`,
@@ -513,16 +509,11 @@ export default function ArtistProfile() {
             </div>
 
             {/* Bio */}
-            {artist.bio && (
-              <p style={{
-                fontFamily:"'Caveat',cursive", fontSize:16, color:"#444",
-                lineHeight:1.6, margin:0,
-                maxWidth:380,
-              }}>
+            {artist.bio ? (
+              <p style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", lineHeight:1.6, margin:0, maxWidth:380 }}>
                 {artist.bio}
               </p>
-            )}
-            {!artist.bio && (
+            ) : (
               <p style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#aaa", lineHeight:1.6, margin:0 }}>
                 {artist.city ? `Based in ${artist.city}. ` : ""}
                 A passionate {artist.category?.toLowerCase() || "artist"} sharing creativity with the world.
@@ -539,8 +530,7 @@ export default function ArtistProfile() {
                 <div key={l} style={{
                   background:"#fff", borderRadius:12, padding:"10px 16px",
                   boxShadow:"3px 3px 0 rgba(0,0,0,0.08)",
-                  border:`1.5px solid rgba(0,0,0,0.06)`, textAlign:"center",
-                  minWidth:64,
+                  border:`1.5px solid rgba(0,0,0,0.06)`, textAlign:"center", minWidth:64,
                 }}>
                   <div style={{ fontSize:16, marginBottom:2 }}>{emoji}</div>
                   <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:20, color:accentColor }}>{v}</div>
@@ -578,14 +568,9 @@ export default function ArtistProfile() {
                   style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
                 />
               ) : (
-                <div style={{
-                  display:"flex", flexDirection:"column", alignItems:"center",
-                  justifyContent:"center", gap:8,
-                }}>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8 }}>
                   <span style={{ fontSize:42 }}>{icon}</span>
-                  <span style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:24, color:accentColor }}>
-                    {initials}
-                  </span>
+                  <span style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:24, color:accentColor }}>{initials}</span>
                 </div>
               )}
             </div>
@@ -594,14 +579,13 @@ export default function ArtistProfile() {
               {artist.name?.split(" ")[0] || "Artist"}
             </div>
 
-            {/* Sticker on photo */}
+            {/* City sticker */}
             <div style={{
               position:"absolute", bottom:36, right:-10,
               background:accentColor, color:"#fff",
               fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:10,
               padding:"4px 8px", borderRadius:4, transform:"rotate(-4deg)",
-              boxShadow:"2px 2px 4px rgba(0,0,0,0.2)",
-              whiteSpace:"nowrap",
+              boxShadow:"2px 2px 4px rgba(0,0,0,0.2)", whiteSpace:"nowrap",
             }}>
               {artist.city || "Artist"}
             </div>
@@ -610,29 +594,22 @@ export default function ArtistProfile() {
 
         {/* ══ SECTION 2: INTERESTS + CONTACT ══ */}
         <div style={{
-          display:"grid",
-          gridTemplateColumns:"1fr 1fr",
+          display:"grid", gridTemplateColumns:"1fr 1fr",
           gap:20, marginBottom:28,
           animation:"fadeUp 0.4s ease 0.1s both",
         }}>
 
-          {/* INTERESTS — torn notebook paper */}
+          {/* INTERESTS */}
           <div style={{
-            background:"#fff",
-            borderRadius:4,
-            padding:"18px 18px 22px",
-            boxShadow:"3px 3px 10px rgba(0,0,0,0.1)",
-            position:"relative",
-            /* torn bottom edge via clip-path */
+            background:"#fff", borderRadius:4, padding:"18px 18px 22px",
+            boxShadow:"3px 3px 10px rgba(0,0,0,0.1)", position:"relative",
             clipPath:"polygon(0 0,100% 0,100% 88%,97% 92%,93% 89%,89% 93%,85% 89%,81% 93%,77% 89%,73% 93%,69% 89%,65% 93%,61% 89%,57% 93%,53% 89%,49% 93%,45% 89%,41% 93%,37% 89%,33% 93%,29% 89%,25% 93%,21% 89%,17% 93%,13% 89%,9% 93%,5% 89%,1% 93%,0 89%)",
             paddingBottom:32,
           }}>
-            {/* Tape */}
             <div style={{
               position:"absolute", top:-10, left:"50%", transform:"translateX(-50%)",
               width:48, height:20, background:"rgba(249,202,36,0.65)", borderRadius:2,
             }}/>
-            {/* Red lines */}
             {[0,1,2].map(i=>(
               <div key={i} style={{
                 position:"absolute", left:0, right:0, top:`${38+i*22}px`,
@@ -643,32 +620,23 @@ export default function ArtistProfile() {
               🎯 INTERESTS
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {/* Category as primary interest */}
-              <div style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ color:accentColor }}>•</span> {artist.category || "Art"}
-              </div>
-              {artist.city && (
-                <div style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:accentColor }}>•</span> {artist.city}
+              {[
+                artist.category || "Art",
+                artist.city,
+                "Creativity",
+                "Performing",
+                "Collaboration",
+              ].filter(Boolean).map((item, i) => (
+                <div key={i} style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ color:accentColor }}>•</span> {item}
                 </div>
-              )}
-              <div style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ color:accentColor }}>•</span> Creativity
-              </div>
-              <div style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ color:accentColor }}>•</span> Performing
-              </div>
-              <div style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ color:accentColor }}>•</span> Collaboration
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* CONTACT — sticky note */}
+          {/* CONTACT */}
           <div style={{
-            background:"#e8f5e9",
-            borderRadius:4,
-            padding:"18px 18px 22px",
+            background:"#e8f5e9", borderRadius:4, padding:"18px 18px 22px",
             boxShadow:"4px 4px 12px rgba(0,0,0,0.12), -1px -1px 0 rgba(0,0,0,0.04)",
             position:"relative",
           }}>
@@ -680,27 +648,23 @@ export default function ArtistProfile() {
               📬 CONTACT
             </div>
 
-            {/* Price */}
             {artist.price && (
               <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
                 <span style={{ color:accentColor }}>💰</span> From ₹{Number(artist.price).toLocaleString("en-IN")}
               </div>
             )}
 
-            {/* Rating */}
             <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ color:"#f59e0b" }}>{"★".repeat(stars)}{"☆".repeat(5-stars)}</span>
               <span style={{ color:"#666" }}>{(artist.rating||5).toFixed(1)}/5</span>
             </div>
 
-            {/* City */}
             {artist.city && (
               <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
                 <span>📍</span> {artist.city}
               </div>
             )}
 
-            {/* CHAT BUTTON */}
             <button onClick={()=>setShowChat(true)} style={{
               width:"100%", padding:"11px 14px", borderRadius:10,
               border:"none", background:"linear-gradient(135deg,#3d5afe,#7c4dff)",
@@ -711,7 +675,6 @@ export default function ArtistProfile() {
               💬 Send Message
             </button>
 
-            {/* BOOK BUTTON */}
             {!isOwner && (
               <button onClick={()=>setShowBooking(true)} style={{
                 width:"100%", padding:"11px 14px", borderRadius:10,
@@ -731,7 +694,7 @@ export default function ArtistProfile() {
           </div>
         </div>
 
-        {/* ══ SECTION 3: RATINGS (where Education was) ══ */}
+        {/* ══ SECTION 3: RATINGS ══ */}
         <div style={{ marginBottom:28, animation:"fadeUp 0.4s ease 0.15s both" }}>
           <RatingSection
             artist={artist} currentUser={currentUser}
@@ -739,14 +702,12 @@ export default function ArtistProfile() {
           />
         </div>
 
-        {/* ══ SECTION 4: WORKS (where Table of Contents was) ══ */}
+        {/* ══ SECTION 4: WORKS ══ */}
         <div style={{ animation:"fadeUp 0.4s ease 0.2s both" }}>
-          {/* Header — notebook style */}
           <div style={{ textAlign:"center", marginBottom:20 }}>
             <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:"clamp(24px,6vw,36px)", color:"#1a1a2e", letterSpacing:1 }}>
               MY WORKS
             </div>
-            {/* Underline squiggle */}
             <svg viewBox="0 0 200 14" style={{ width:160, marginTop:-4 }}>
               <path d="M0 7 Q25 0 50 7 T100 7 T150 7 T200 7" stroke={accentColor} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
             </svg>
@@ -770,7 +731,6 @@ export default function ArtistProfile() {
               )}
             </div>
           ) : (
-            /* Grid like polaroids pinned on a board */
             <div style={{
               display:"grid",
               gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",
@@ -783,11 +743,9 @@ export default function ArtistProfile() {
                     className="work-thumb"
                     onClick={()=>setLightbox(post)}
                     style={{
-                      background:"#fff",
-                      padding:"8px 8px 28px",
+                      background:"#fff", padding:"8px 8px 28px",
                       boxShadow:"3px 3px 12px rgba(0,0,0,0.12)",
-                      cursor:"pointer",
-                      transform:`rotate(${rotate}deg)`,
+                      cursor:"pointer", transform:`rotate(${rotate}deg)`,
                       position:"relative",
                     }}
                   >
@@ -796,8 +754,7 @@ export default function ArtistProfile() {
                       position:"absolute", top:-8, left:"50%", transform:"translateX(-50%)",
                       width:14, height:14, borderRadius:"50%",
                       background: TAPES[i%TAPES.length],
-                      boxShadow:"0 2px 4px rgba(0,0,0,0.2)",
-                      zIndex:2,
+                      boxShadow:"0 2px 4px rgba(0,0,0,0.2)", zIndex:2,
                     }}/>
                     <div style={{ width:"100%", aspectRatio:"1/1", overflow:"hidden", background:accentBg }}>
                       {post.type==="video"
@@ -805,7 +762,6 @@ export default function ArtistProfile() {
                         : <img src={post.media} alt="" style={{ width:"100%",height:"100%",objectFit:"cover",display:"block" }}/>
                       }
                     </div>
-                    {/* Title below like polaroid */}
                     <div style={{
                       position:"absolute", bottom:4, left:0, right:0,
                       textAlign:"center", fontFamily:"'Caveat',cursive",
@@ -828,17 +784,13 @@ export default function ArtistProfile() {
           )}
         </div>
 
-        {/* "JUST BE CREATIVE" sticker at bottom */}
-        <div style={{
-          textAlign:"right", marginTop:28,
-          animation:"fadeUp 0.4s ease 0.25s both",
-        }}>
+        {/* Bottom sticker */}
+        <div style={{ textAlign:"right", marginTop:28, animation:"fadeUp 0.4s ease 0.25s both" }}>
           <div style={{
             display:"inline-block",
             background:accentColor, color:"#fff",
             fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:13,
-            padding:"8px 16px", borderRadius:8,
-            transform:"rotate(-2deg)",
+            padding:"8px 16px", borderRadius:8, transform:"rotate(-2deg)",
             boxShadow:"3px 3px 0 rgba(0,0,0,0.15)",
           }}>
             🎨 JUST BE CREATIVE
