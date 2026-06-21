@@ -23,7 +23,39 @@ const TABS = [
   { id: "earnings", label: "Earnings",  icon: "₹"  },
 ];
 
-/* ─── useIsMobile ─────────────────────────────────────────────────────────── */
+/* ─── BASE STYLES REPOSITORY ────────────────────────────────────────────────── */
+const bs = {
+  displayText: { fontSize: 18, fontWeight: 800, color: "#1e293b", fontFamily: "'Nunito',sans-serif" },
+  badge: { borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 700, fontFamily: "'Nunito',sans-serif", display: "inline-block" },
+  filterBtn: { border: "none", padding: "6px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, fontFamily: "'Nunito',sans-serif", cursor: "pointer" },
+  emptyMsg: { padding: 40, textAlign: "center", color: "#94a3b8", fontFamily: "'Nunito',sans-serif", fontSize: 14 },
+  chatBtn: { background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "10px 14px", borderRadius: 10, width: "100%", fontWeight: 700, fontFamily: "'Nunito',sans-serif", cursor: "pointer", textAlign: "center" },
+  infoCard: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8, fontFamily: "'Nunito',sans-serif", fontSize: 13 },
+  infoRow: { display: "flex", justifyContent: "space-between" },
+  sectionLabel: { fontSize: 12, fontWeight: 800, color: "#475569", uppercase: "true", letterSpacing: "0.05em", marginBottom: 8, fontFamily: "'Nunito',sans-serif" },
+  miniLabel: { display: "block", fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 4, fontFamily: "'Nunito',sans-serif" },
+  input: { width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "'Nunito',sans-serif", outline: "none", boxSizing: "border-box" },
+  quickChip: { background: "#fff", border: "1px solid #e2e8f0", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, fontFamily: "'Nunito',sans-serif", cursor: "pointer" },
+  errorBox: { background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 12, marginBottom: 10, fontFamily: "'Nunito',sans-serif" },
+  primaryBtn: { background: "#1e3a8a", color: "#fff", border: "none", padding: "10px 16px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "'Nunito',sans-serif" },
+  acceptBtn: { background: "#16a34a", color: "#fff", border: "none", padding: "6px 12px", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Nunito',sans-serif" }
+};
+
+const t = {
+  tabBody: { padding: "20px 0px", display: "flex", flexDirection: "column", gap: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: 800, color: "#0f172a", fontFamily: "'Nunito',sans-serif" },
+  card: { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, padding: 16 },
+  cardTitle: { fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 14, fontFamily: "'Nunito',sans-serif" },
+  grid2: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 },
+  miniLabel: bs.miniLabel,
+  input: bs.input,
+  primaryBtn: bs.primaryBtn,
+  secondaryBtn: { background: "#fff", border: "1px solid #cbd5e1", color: "#334155", padding: "8px 14px", borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "'Nunito',sans-serif" },
+  msgBox: { border: "1px solid", padding: 12, borderRadius: 8, fontSize: 13, fontFamily: "'Nunito',sans-serif" },
+  centreMsg: { textAlign: "center", padding: 40, color: "#64748b", fontFamily: "'Nunito',sans-serif" }
+};
+
+/* ─── useIsMobile CUSTOM HOOK ─────────────────────────────────────────────── */
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -34,19 +66,19 @@ function useIsMobile() {
   return mobile;
 }
 
-/* ─── BOOKINGS TAB ────────────────────────────────────────────────────────── */
+/* ─── BOOKINGS TAB (UPDATED FILTER ENGINE) ─────────────────────────────────── */
 function ArtistBookingDashboard({ artistId }) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const [bookings,    setBookings]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [selected,    setSelected]    = useState(null);
-  const [showDetail,  setShowDetail]  = useState(false); // mobile: show detail panel
+  const [showDetail,  setShowDetail]  = useState(false);
   const [offerPrice,  setOfferPrice]  = useState("");
   const [offerMsg,    setOfferMsg]    = useState("");
   const [sending,     setSending]     = useState(false);
   const [error,       setError]       = useState("");
-  const [filter,      setFilter]      = useState("active");
+  const [filter,      setFilter]      = useState("pending_approval"); // Defaults to New Requests
 
   useEffect(() => {
     socket.emit("join_artist_room", artistId);
@@ -116,12 +148,19 @@ function ArtistBookingDashboard({ artistId }) {
     } finally { setSending(false); }
   };
 
-  const activeBookings = bookings.filter(b => !["confirmed","cancelled"].includes(b.status));
-  const displayList    = filter === "active" ? activeBookings : bookings;
+  // Explicit structural categories filtering
+  const pendingRequests = bookings.filter(b => b.status === "pending_approval");
+  const ongoingBookings = bookings.filter(b => ["negotiating", "price_agreed", "payment_pending"].includes(b.status));
+  const pastBookings    = bookings.filter(b => ["confirmed", "cancelled"].includes(b.status));
+
+  const displayList = 
+    filter === "pending_approval" ? pendingRequests :
+    filter === "ongoing"          ? ongoingBookings :
+    filter === "past"             ? pastBookings    : bookings;
+
   const lastUserOffer  = selected ? [...(selected.negotiation||[])].reverse().find(m => m.from === "user")   : null;
   const lastArtistOffer= selected ? [...(selected.negotiation||[])].reverse().find(m => m.from === "artist") : null;
 
-  /* ── Detail panel content (shared between mobile/desktop) ── */
   const DetailPanel = () => !selected ? (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100%", color:"#94a3b8", fontFamily:"'Nunito',sans-serif", gap:8 }}>
       <div style={{ fontSize:40 }}>📋</div>
@@ -150,12 +189,12 @@ function ArtistBookingDashboard({ artistId }) {
 
       <div style={bs.infoCard}>
         {[
-          ["Event",    selected.eventType],
-          ["Date",     selected.eventDate],
-          ["Time",     selected.eventTime || "TBD"],
-          ["Duration", selected.duration],
-          ["Location", selected.location],
-          ["Base",     `₹${selected.basePrice?.toLocaleString()}`],
+          ["Event",     selected.eventType],
+          ["Date",      selected.eventDate],
+          ["Time",      selected.eventTime || "TBD"],
+          ["Duration",  selected.duration],
+          ["Location",  selected.location],
+          ["Base",      `₹${selected.basePrice?.toLocaleString()}`],
           selected.agreedPrice && ["Agreed", `₹${selected.agreedPrice?.toLocaleString()}`],
           selected.discountAmount > 0 && ["Coupon", `${selected.couponCode} (− ₹${selected.discountAmount?.toLocaleString()})`],
           selected.paidAmount && ["Received", `₹${selected.paidAmount?.toLocaleString()}`],
@@ -240,54 +279,38 @@ function ArtistBookingDashboard({ artistId }) {
     </div>
   );
 
-  /* ── Mobile: show list OR detail ── */
-  if (isMobile) {
-    return (
-      <div style={{ height:"100%", display:"flex", flexDirection:"column" }}>
-        {!showDetail ? (
-          <>
-            <div style={{ padding:"16px 16px 10px", borderBottom:"1px solid #f1f5f9" }}>
-              <div style={bs.displayText}>Bookings</div>
-              <div style={{ display:"flex", gap:6, marginTop:8 }}>
-                {["active","all"].map(f => (
-                  <button key={f} onClick={() => setFilter(f)} style={{ ...bs.filterBtn, background: filter===f ? "#1e3a8a" : "transparent", color: filter===f ? "#fff" : "#64748b" }}>
-                    {f==="active" ? `Active (${activeBookings.length})` : `All (${bookings.length})`}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div style={{ flex:1, overflowY:"auto" }}>
-              {loading ? <div style={bs.emptyMsg}>Loading…</div>
-               : displayList.length===0 ? <div style={bs.emptyMsg}>No bookings yet.</div>
-               : displayList.map(b => <BookingCard key={b._id} b={b} selected={selected} onClick={() => openBooking(b)} />)}
-            </div>
-          </>
-        ) : (
-          <div style={{ flex:1, overflowY:"auto" }}><DetailPanel /></div>
-        )}
-      </div>
-    );
-  }
-
-  /* ── Desktop: side-by-side ── */
   return (
     <div style={{ display:"flex", height:"100%", fontFamily:"'Nunito',sans-serif" }}>
-      <div style={{ width:320, borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column", background:"#fff", flexShrink:0, overflowY:"auto" }}>
-        <div style={{ padding:"22px 18px 14px", borderBottom:"1px solid #f1f5f9" }}>
-          <div style={bs.displayText}>Bookings</div>
-          <div style={{ display:"flex", gap:6, marginTop:8 }}>
-            {["active","all"].map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{ ...bs.filterBtn, background: filter===f ? "#1e3a8a" : "transparent", color: filter===f ? "#fff" : "#64748b" }}>
-                {f==="active" ? `Active (${activeBookings.length})` : `All (${bookings.length})`}
-              </button>
-            ))}
+      {!isMobile || !showDetail ? (
+        <div style={{ width: isMobile ? "100%" : 320, borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column", background:"#fff", flexShrink:0, overflowY:"auto" }}>
+          <div style={{ padding:"22px 18px 14px", borderBottom:"1px solid #f1f5f9" }}>
+            <div style={bs.displayText}>Bookings</div>
+            <div style={{ display:"flex", gap:6, marginTop:8, overflowX:"auto", paddingBottom:4 }}>
+              {[
+                { id: "pending_approval", label: `Request (${pendingRequests.length})` },
+                { id: "ongoing",          label: `Approval (${ongoingBookings.length})` },
+                { id: "past",             label: `Last Booking (${pastBookings.length})` },
+                { id: "all",              label: `All (${bookings.length})` }
+              ].map(tabItem => (
+                <button 
+                  key={tabItem.id} 
+                  onClick={() => setFilter(tabItem.id)} 
+                  style={{ ...bs.filterBtn, background: filter === tabItem.id ? "#1e3a8a" : "transparent", color: filter === tabItem.id ? "#fff" : "#64748b", whiteSpace: "nowrap" }}
+                >
+                  {tabItem.label}
+                </button>
+              ))}
+            </div>
           </div>
+          {loading ? <div style={bs.emptyMsg}>Loading…</div>
+           : displayList.length === 0 ? <div style={bs.emptyMsg}>No bookings found in this category.</div>
+           : displayList.map(b => <BookingCard key={b._id} b={b} selected={selected} onClick={() => openBooking(b)} />)}
         </div>
-        {loading ? <div style={bs.emptyMsg}>Loading…</div>
-         : displayList.length===0 ? <div style={bs.emptyMsg}>No bookings yet.</div>
-         : displayList.map(b => <BookingCard key={b._id} b={b} selected={selected} onClick={() => openBooking(b)} />)}
-      </div>
-      <div style={{ flex:1, background:"#f8fafc", overflowY:"auto" }}><DetailPanel /></div>
+      ) : null}
+      
+      {(!isMobile || showDetail) && (
+        <div style={{ flex:1, background:"#f8fafc", overflowY:"auto" }}><DetailPanel /></div>
+      )}
     </div>
   );
 }
@@ -317,11 +340,11 @@ function BookingCard({ b, selected, onClick }) {
 
 /* ─── EDIT PROFILE TAB ────────────────────────────────────────────────────── */
 function EditProfileTab({ artistId }) {
-  const [form,        setForm]        = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [saving,      setSaving]      = useState(false);
-  const [uploading,   setUploading]   = useState(false);
-  const [msg,         setMsg]         = useState({ type:"", text:"" });
+  const [form,         setForm]        = useState(null);
+  const [loading,      setLoading]     = useState(true);
+  const [saving,       setSaving]      = useState(false);
+  const [uploading,    setUploading]   = useState(false);
+  const [msg,          setMsg]         = useState({ type:"", text:"" });
   const fileRef = useRef();
 
   useEffect(() => {
@@ -351,7 +374,6 @@ function EditProfileTab({ artistId }) {
   const save = async () => {
     setSaving(true); setMsg({ type:"", text:"" });
     try {
-      // Try PATCH first (your backend), fallback to PUT
       let res;
       try {
         res = await axios.patch(`${API}/api/artists/${artistId}`, form);
@@ -374,7 +396,6 @@ function EditProfileTab({ artistId }) {
     <div style={t.tabBody}>
       <div style={t.sectionTitle}>Edit Profile</div>
 
-      {/* Profile Photo */}
       <div style={t.card}>
         <div style={t.cardTitle}>Profile Photo</div>
         <div style={{ display:"flex", alignItems:"center", gap:20, flexWrap:"wrap" }}>
@@ -395,7 +416,6 @@ function EditProfileTab({ artistId }) {
         </div>
       </div>
 
-      {/* Basic Info */}
       <div style={t.card}>
         <div style={t.cardTitle}>Basic Info</div>
         <div style={t.grid2}>
@@ -407,7 +427,6 @@ function EditProfileTab({ artistId }) {
         <Field label="Bio" value={form.bio||""} onChange={v => set("bio",v)} multiline placeholder="Describe yourself, your style and experience…" />
       </div>
 
-      {/* Pricing */}
       <div style={t.card}>
         <div style={t.cardTitle}>Pricing</div>
         <div style={t.grid2}>
@@ -416,7 +435,6 @@ function EditProfileTab({ artistId }) {
         </div>
       </div>
 
-      {/* Social */}
       <div style={t.card}>
         <div style={t.cardTitle}>Social & Portfolio</div>
         <div style={t.grid2}>
@@ -425,7 +443,6 @@ function EditProfileTab({ artistId }) {
         </div>
       </div>
 
-      {/* Tags */}
       <div style={t.card}>
         <div style={t.cardTitle}>Skills / Tags</div>
         <Field
@@ -518,7 +535,6 @@ function PostsTab({ artistId }) {
     <div style={t.tabBody}>
       <div style={t.sectionTitle}>My Works</div>
 
-      {/* Upload card */}
       <div style={t.card}>
         <div style={t.cardTitle}>Upload New Work</div>
         <div style={{ display:"flex", gap:12, marginBottom:12, flexWrap:"wrap" }}>
@@ -538,7 +554,6 @@ function PostsTab({ artistId }) {
         )}
       </div>
 
-      {/* Works grid */}
       {loading ? (
         <div style={t.centreMsg}>Loading…</div>
       ) : posts.length === 0 ? (
@@ -599,319 +614,111 @@ function ReviewsTab({ artistId }) {
       <div style={t.sectionTitle}>Reviews</div>
       {error && <div style={{ ...t.msgBox, background:"#fee2e2", color:"#7f1d1d", borderColor:"#fca5a5" }}>{error}</div>}
 
-      {reviews.length > 0 && (
-        <div style={{ ...t.card, display:"flex", gap:24, alignItems:"center", flexWrap:"wrap", padding:"18px 22px" }}>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:48, color:"#1e3a8a", lineHeight:1 }}>{avg}</div>
-            <div style={t.miniLabel}>Overall</div>
-          </div>
-          <div style={{ flex:1, minWidth:160 }}>
-            {[5,4,3,2,1].map(star => {
-              const count = reviews.filter(r => Math.round(r.rating)===star).length;
-              const pct   = Math.round((count/reviews.length)*100);
-              return (
-                <div key={star} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                  <span style={{ fontSize:11, color:"#64748b", fontFamily:"'Nunito',sans-serif", width:14 }}>{star}</span>
-                  <div style={{ flex:1, height:6, borderRadius:4, background:"#e2e8f0", overflow:"hidden" }}>
-                    <div style={{ width:`${pct}%`, height:"100%", background:"#1e3a8a", borderRadius:4 }} />
+      {reviews.length > 0 ? (
+        <>
+          <div style={{ ...t.card, display:"flex", gap:24, alignItems:"center", flexWrap:"wrap", padding:"18px 22px" }}>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:48, color:"#1e3a8a", lineHeight:1 }}>{avg}</div>
+              <div style={t.miniLabel}>Overall</div>
+            </div>
+            <div style={{ flex:1, minWidth:160 }}>
+              {[5,4,3,2,1].map(star => {
+                const count = reviews.filter(r => Math.round(r.rating)===star).length;
+                const pct   = Math.round((count/reviews.length)*100);
+                return (
+                  <div key={star} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <span style={{ fontSize:11, color:"#64748b", fontFamily:"'Nunito',sans-serif", width:14 }}>{star}</span>
+                    <div style={{ flex:1, height:6, borderRadius:4, background:"#e2e8f0", overflow:"hidden" }}>
+                      <div style={{ width:`${pct}%`, height:"100%", background:"#1e3a8a", borderRadius:4 }} />
+                    </div>
+                    <span style={{ fontSize:11, color:"#94a3b8", fontFamily:"'Nunito',sans-serif", width:24 }}>{count}</span>
                   </div>
-                  <span style={{ fontSize:11, color:"#94a3b8", fontFamily:"'Nunito',sans-serif", width:24 }}>{count}</span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:36, color:"#1e3a8a", lineHeight:1 }}>{reviews.length}</div>
-            <div style={t.miniLabel}>Total</div>
-          </div>
-        </div>
-      )}
 
-      {reviews.length === 0 ? (
-        <div style={{ ...t.card, textAlign:"center", padding:"40px 20px", color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
-          <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
-          <div style={{ fontWeight:700 }}>No reviews yet</div>
-        </div>
-      ) : reviews.map((r,i) => (
-        <div key={r._id||i} style={t.card}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8, flexWrap:"wrap", gap:6 }}>
-            <div>
-              <div style={{ fontWeight:800, fontSize:14, color:"#1e293b", fontFamily:"'Nunito',sans-serif" }}>{r.userName||"Anonymous"}</div>
-              <div style={{ fontSize:11, color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
-                {r.eventType} {r.eventDate ? `· ${new Date(r.eventDate).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"})}` : ""}
+          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+            {reviews.map(rev => (
+              <div key={rev._id} style={t.card}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+                  <span style={{ fontWeight:800, fontSize:13, fontFamily:"'Nunito',sans-serif", color:"#1e293b" }}>{rev.userName || "Anonymous"}</span>
+                  <span style={{ color:"#eab308", fontWeight:700, fontSize:13 }}>{"★".repeat(rev.rating)}</span>
+                </div>
+                <p style={{ margin:0, fontSize:13, color:"#475569", fontFamily:"'Nunito',sans-serif", lineHeight:1.5 }}>{rev.comment}</p>
               </div>
-            </div>
-            <div style={{ display:"flex", gap:2 }}>
-              {[1,2,3,4,5].map(s => <span key={s} style={{ fontSize:14, color: s<=Math.round(r.rating) ? "#f59e0b" : "#e2e8f0" }}>★</span>)}
-            </div>
+            ))}
           </div>
-          {r.review && <div style={{ fontSize:13, color:"#475569", fontFamily:"'Nunito',sans-serif", lineHeight:1.6 }}>{r.review}</div>}
-          {r.comment && <div style={{ fontSize:13, color:"#475569", fontFamily:"'Nunito',sans-serif", lineHeight:1.6 }}>{r.comment}</div>}
-        </div>
-      ))}
+        </>
+      ) : (
+        <div style={t.centreMsg}>No ratings or reviews recorded yet.</div>
+      )}
     </div>
   );
 }
 
 /* ─── EARNINGS TAB ────────────────────────────────────────────────────────── */
 function EarningsTab({ artistId }) {
-  const [data,    setData]    = useState(null);
+  const [data, setData] = useState({ gross: 0, platformFees: 0, net: 0, history: [] });
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState("");
 
   useEffect(() => {
-    // Try earnings endpoint, fallback to withdrawals summary
-    axios.get(`${API}/api/artists/${artistId}/earnings`)
-      .then(r => setData(r.data))
-      .catch(() =>
-        axios.get(`${API}/api/withdrawals/summary/${artistId}`)
-          .then(r => setData(r.data))
-          .catch(() => setError("Could not load earnings."))
-      )
+    axios.get(`${API}/api/bookings/artist/${artistId}`)
+      .then(res => {
+        const books = Array.isArray(res.data) ? res.data : [];
+        const confirmed = books.filter(b => b.status === "confirmed");
+        
+        const gross = confirmed.reduce((acc, current) => acc + (current.paidAmount || 0), 0);
+        const platformFees = Math.round(gross * 0.10);
+        const net = gross - platformFees;
+
+        setData({ gross, platformFees, net, history: confirmed });
+      })
+      .catch(err => console.error(err))
       .finally(() => setLoading(false));
   }, [artistId]);
 
-  if (loading) return <div style={t.centreMsg}>Loading earnings…</div>;
-  if (error)   return <div style={t.tabBody}><div style={{ ...t.msgBox, background:"#fee2e2", color:"#7f1d1d", borderColor:"#fca5a5" }}>{error}</div></div>;
-
-  const bookings      = Array.isArray(data) ? data : (data?.bookings||[]);
-  const totalEarned   = data?.totalEarned   ?? bookings.reduce((s,b) => s+(b.paidAmount||0), 0);
-  const totalBookings = data?.totalBookings  ?? bookings.length;
-  const pendingPayout = data?.pendingPayout  ?? data?.available ?? 0;
-  const thisMonth     = data?.thisMonth      ?? bookings
-    .filter(b => new Date(b.updatedAt).getMonth()===new Date().getMonth())
-    .reduce((s,b) => s+(b.paidAmount||0), 0);
-
-  const stats = [
-    { label:"Total Earned",   value:`₹${totalEarned.toLocaleString()}`,  color:"#1e3a8a" },
-    { label:"This Month",     value:`₹${thisMonth.toLocaleString()}`,     color:"#15803d" },
-    { label:"Available",      value:`₹${pendingPayout.toLocaleString()}`, color:"#7e22ce" },
-    { label:"Completed Gigs", value:totalBookings,                         color:"#0e7490" },
-  ];
+  if (loading) return <div style={t.centreMsg}>Loading payouts metrics…</div>;
 
   return (
     <div style={t.tabBody}>
-      <div style={t.sectionTitle}>Earnings</div>
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:4 }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ ...t.card, padding:"18px 16px", textAlign:"center" }}>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:s.color, letterSpacing:1 }}>{s.value}</div>
-            <div style={t.miniLabel}>{s.label}</div>
-          </div>
-        ))}
+      <div style={t.sectionTitle}>Financial Summary</div>
+      
+      <div style={t.grid2}>
+        <div style={{ ...t.card, background:"#f8fafc" }}>
+          <div style={t.miniLabel}>Gross Volumetric Inflow</div>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, color:"#475569" }}>₹{data.gross.toLocaleString()}</div>
+        </div>
+        <div style={{ ...t.card, background:"#fdf2f8" }}>
+          <div style={t.miniLabel}>Platform Comm. Split (10%)</div>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, color:"#db2777" }}>− ₹{data.platformFees.toLocaleString()}</div>
+        </div>
+        <div style={{ ...t.card, background:"#f0fdf4", gridColumn: "1 / -1" }}>
+          <div style={t.miniLabel}>Net Distributable Earnings</div>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:40, color:"#16a34a" }}>₹{data.net.toLocaleString()}</div>
+        </div>
       </div>
 
-      {bookings.length > 0 && (
-        <div style={t.card}>
-          <div style={t.cardTitle}>Completed Bookings</div>
-          <div style={{ overflowX:"auto" }}>
-            <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"'Nunito',sans-serif", fontSize:13 }}>
-              <thead>
-                <tr style={{ borderBottom:"2px solid #e2e8f0" }}>
-                  {["Client","Event","Date","Amount","Status"].map(h => (
-                    <th key={h} style={{ textAlign:"left", padding:"8px 10px", fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.map((b,i) => (
-                  <tr key={b._id||i} style={{ borderBottom:"1px solid #f1f5f9" }}>
-                    <td style={{ padding:"10px", fontWeight:700, color:"#1e293b" }}>{b.userName}</td>
-                    <td style={{ padding:"10px", color:"#475569" }}>{b.eventType}</td>
-                    <td style={{ padding:"10px", color:"#475569" }}>{b.eventDate}</td>
-                    <td style={{ padding:"10px", fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:"#1e3a8a" }}>₹{(b.paidAmount||b.agreedPrice||0).toLocaleString()}</td>
-                    <td style={{ padding:"10px" }}>
-                      <span style={{ background:"#dcfce7", color:"#15803d", padding:"2px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>Confirmed</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {bookings.length === 0 && (
-        <div style={{ ...t.card, textAlign:"center", padding:"40px 20px", color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
-          <div style={{ fontSize:36, marginBottom:10 }}>₹</div>
-          <div style={{ fontWeight:700 }}>No completed bookings yet</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─── MAIN DASHBOARD ──────────────────────────────────────────────────────── */
-export default function ArtistDashboard() {
-  const isMobile = useIsMobile();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  const [activeTab, setActiveTab] = useState(() => {
-    const param = new URLSearchParams(window.location.search).get("tab");
-    return TABS.some(t => t.id === param) ? param : "bookings";
-  });
-
-  const [artist, setArtist] = useState(null);
-  const loggedArtist = getArtist();
-  const artistId     = loggedArtist?._id;
-  const artistName   = loggedArtist?.name || "Artist";
-
-  useEffect(() => {
-    if (!artistId) return;
-    axios.get(`${API}/api/artists/${artistId}`)
-      .then(r => setArtist(r.data))
-      .catch(() => {});
-  }, [artistId]);
-
-  const switchTab = (id) => {
-    setActiveTab(id);
-    setSidebarOpen(false);
-  };
-
-  const avatarLetter = (artist?.name || artistName)[0]?.toUpperCase() || "A";
-
-  return (
-    <div style={{ display:"flex", height:"100vh", fontFamily:"'Nunito',sans-serif", background:"#f8fafc", overflow:"hidden", position:"relative" }}>
-      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
-
-      {/* ── Mobile overlay ── */}
-      {isMobile && sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", zIndex:40 }} />
-      )}
-
-      {/* ── Sidebar ── */}
-      <aside style={{
-        width:220, background:"#1e3a8a", display:"flex", flexDirection:"column",
-        padding:"24px 14px 16px", flexShrink:0,
-        // Mobile: slide in/out
-        ...(isMobile ? {
-          position:"fixed", top:0, left:0, bottom:0, zIndex:50,
-          transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
-          transition:"transform 0.25s ease",
-          boxShadow: sidebarOpen ? "4px 0 20px rgba(0,0,0,0.3)" : "none",
-        } : {}),
-      }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28, paddingBottom:20, borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ width:42, height:42, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:22, flexShrink:0 }}>
-            {avatarLetter}
-          </div>
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:"#fff", letterSpacing:0.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-              {artist?.name || artistName}
-            </div>
-            <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", fontFamily:"'Nunito',sans-serif", marginTop:1 }}>
-              {artist?.category || "Artist"}
-            </div>
-          </div>
-        </div>
-
-        <nav style={{ display:"flex", flexDirection:"column", gap:4, flex:1 }}>
-          {TABS.map(tab => (
-            <button key={tab.id} onClick={() => switchTab(tab.id)} style={{
-              display:"flex", alignItems:"center", gap:10, padding:"10px 12px",
-              borderRadius:10, border:"none", cursor:"pointer",
-              fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13, textAlign:"left",
-              background: activeTab===tab.id ? "rgba(255,255,255,0.12)" : "transparent",
-              color:      activeTab===tab.id ? "#fff" : "rgba(255,255,255,0.6)",
-              borderLeft: activeTab===tab.id ? "3px solid #93c5fd" : "3px solid transparent",
-            }}>
-              <span style={{ fontSize:16 }}>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        <div style={{ paddingTop:20, textAlign:"center" }}>
-          <div style={{ fontSize:10, color:"rgba(255,255,255,0.35)", fontFamily:"'Nunito',sans-serif", letterSpacing:0.5 }}>ARTSPIRE</div>
-        </div>
-      </aside>
-
-      {/* ── Main ── */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-
-        {/* Mobile top bar */}
-        {isMobile && (
-          <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 16px", background:"#1e3a8a", flexShrink:0 }}>
-            <button onClick={() => setSidebarOpen(true)} style={{ background:"rgba(255,255,255,0.15)", border:"none", color:"#fff", width:36, height:36, borderRadius:8, fontSize:18, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
-              ☰
-            </button>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:"#fff", letterSpacing:1 }}>
-              {TABS.find(t => t.id===activeTab)?.icon} {TABS.find(t => t.id===activeTab)?.label}
-            </div>
-            <div style={{ marginLeft:"auto", width:32, height:32, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:16 }}>
-              {avatarLetter}
-            </div>
-          </div>
-        )}
-
-        {/* Desktop mobile-tab-bar (bottom quick nav on mobile) */}
-        {isMobile && (
-          <div style={{ display:"flex", borderTop:"1px solid #e2e8f0", background:"#fff", order:1, flexShrink:0 }}>
-            {TABS.map(tab => (
-              <button key={tab.id} onClick={() => switchTab(tab.id)} style={{
-                flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:2,
-                padding:"8px 2px", border:"none", background:"transparent", cursor:"pointer",
-                fontFamily:"'Nunito',sans-serif", whiteSpace:"nowrap",
-                borderTop: activeTab===tab.id ? "2px solid #1e3a8a" : "2px solid transparent",
-                color:     activeTab===tab.id ? "#1e3a8a" : "#94a3b8",
-                fontWeight:activeTab===tab.id ? 800 : 600,
-              }}>
-                <span style={{ fontSize:16 }}>{tab.icon}</span>
-                <span style={{ fontSize:9 }}>{tab.label}</span>
-              </button>
+      <div style={t.card}>
+        <div style={t.cardTitle}>Invoicing Ledger & Disbursements</div>
+        {data.history.length > 0 ? (
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {data.history.map(item => (
+              <div key={item._id} style={{ ...bs.infoRow, borderBottom:"1px solid #f1f5f9", paddingBottom:8, fontSize:13, fontFamily:"'Nunito',sans-serif" }}>
+                <div>
+                  <span style={{ fontWeight:700, color:"#1e293b" }}>{item.userName}</span>
+                  <div style={{ fontSize:11, color:"#94a3b8" }}>{item.eventType} · {item.eventDate}</div>
+                </div>
+                <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:18, color:"#16a34a" }}>+₹{item.paidAmount?.toLocaleString()}</span>
+              </div>
             ))}
           </div>
+        ) : (
+          <div style={{ textStyle:"italic", color:"#94a3b8", fontSize:12, fontFamily:"'Nunito',sans-serif" }}>No cleared transactional data available.</div>
         )}
-
-        <main style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
-          {!artistId ? (
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontFamily:"'Nunito',sans-serif", fontSize:14, flexDirection:"column", gap:12 }}>
-              <div style={{ fontSize:40 }}>🔒</div>
-              <div>Artist not found. Please log in again.</div>
-            </div>
-          ) : (
-            <>
-              {activeTab==="bookings" && <ArtistBookingDashboard artistId={artistId} />}
-              {activeTab==="profile"  && <EditProfileTab         artistId={artistId} />}
-              {activeTab==="posts"    && <PostsTab               artistId={artistId} />}
-              {activeTab==="reviews"  && <ReviewsTab             artistId={artistId} />}
-              {activeTab==="earnings" && <EarningsTab            artistId={artistId} />}
-            </>
-          )}
-        </main>
       </div>
     </div>
   );
 }
 
-/* ─── Shared style tokens ─────────────────────────────────────────────────── */
-const bs = {
-  displayText: { fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#1e3a8a", letterSpacing:1 },
-  filterBtn:   { padding:"5px 12px", borderRadius:16, border:"1.5px solid #e2e8f0", fontSize:12, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" },
-  badge:       { padding:"3px 9px", borderRadius:20, fontSize:11, fontWeight:700, fontFamily:"'Nunito',sans-serif" },
-  sectionLabel:{ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:8, fontFamily:"'Nunito',sans-serif" },
-  miniLabel:   { fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8, display:"block", marginBottom:4, fontFamily:"'Nunito',sans-serif" },
-  input:       { padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#fff", color:"#1e293b", fontSize:13, fontWeight:600, fontFamily:"'Nunito',sans-serif", outline:"none", width:"100%", boxSizing:"border-box" },
-  infoCard:    { background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"14px 16px" },
-  infoRow:     { display:"flex", justifyContent:"space-between", fontSize:13, color:"#1e293b", marginBottom:7, fontFamily:"'Nunito',sans-serif" },
-  errorBox:    { background:"#fee2e2", color:"#7f1d1d", borderRadius:10, padding:"8px 12px", fontSize:12, fontWeight:600, marginBottom:8 },
-  primaryBtn:  { background:"#1e3a8a", color:"#fff", border:"none", padding:"11px 18px", borderRadius:20, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:13, cursor:"pointer" },
-  acceptBtn:   { background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:18, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12, cursor:"pointer" },
-  chatBtn:     { alignSelf:"flex-start", background:"#1e293b", color:"#fff", border:"none", padding:"9px 16px", borderRadius:20, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:12, cursor:"pointer" },
-  quickChip:   { background:"#eff6ff", color:"#1d4ed8", border:"none", padding:"5px 12px", borderRadius:16, fontSize:12, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" },
-  emptyMsg:    { padding:"24px", color:"#94a3b8", fontSize:13, fontFamily:"'Nunito',sans-serif" },
-};
-
-const t = {
-  centreMsg:    { display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontFamily:"'Nunito',sans-serif", fontSize:14 },
-  tabBody:      { padding:"20px 20px 60px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 },
-  sectionTitle: { fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1, marginBottom:4 },
-  card:         { background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" },
-  cardTitle:    { fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14, fontFamily:"'Nunito',sans-serif" },
-  grid2:        { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:"0 16px" },
-  miniLabel:    { fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8, display:"block", marginBottom:4, fontFamily:"'Nunito',sans-serif" },
-  input:        { padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, fontFamily:"'Nunito',sans-serif", outline:"none", width:"100%", boxSizing:"border-box" },
-  msgBox:       { border:"1px solid", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif" },
-  primaryBtn:   { background:"#1e3a8a", color:"#fff", border:"none", padding:"11px 20px", borderRadius:20, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:13, cursor:"pointer", alignSelf:"flex-start" },
-  secondaryBtn: { background:"#eff6ff", color:"#1d4ed8", border:"1.5px solid #bfdbfe", padding:"9px 18px", borderRadius:20, fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:13, cursor:"pointer" },
-};
+export { ArtistBookingDashboard, EditProfileTab, PostsTab, ReviewsTab, EarningsTab };
