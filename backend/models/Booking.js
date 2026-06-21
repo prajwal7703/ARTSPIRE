@@ -1,4 +1,6 @@
 // backend/models/Booking.js
+// Same as your existing model, with coupon fields added (couponCode,
+// discountAmount, finalAmount). Drop-in replacement.
 
 const mongoose = require("mongoose");
 
@@ -25,23 +27,29 @@ const BookingSchema = new mongoose.Schema({
   duration:  { type: String, default: "2 hours" },
 
   // Pricing
-  basePrice:   { type: Number, default: 0 },   // from artist profile
-  agreedPrice: { type: Number, default: null }, // final negotiated price
-  paidAmount:  { type: Number, default: null }, // how much paid now
+  basePrice:   { type: Number, default: 0 },    // from artist profile
+  agreedPrice: { type: Number, default: null },  // final negotiated price (before coupon)
+  paidAmount:  { type: Number, default: null },  // how much was actually paid
   payMode:     { type: String, enum: ["advance", "full", null], default: null },
+
+  // Coupon (set when the user applies a coupon at checkout)
+  couponCode:     { type: String, default: null },
+  discountAmount: { type: Number, default: 0 },
+  finalAmount:    { type: Number, default: null }, // agreedPrice - discountAmount, what Razorpay actually charges
 
   // Full negotiation thread
   negotiation: { type: [NegotiationEntrySchema], default: [] },
 
   // Status flow:
-  // pending_approval → negotiating → price_agreed → confirmed
-  // or: pending_approval → cancelled
+  // pending_approval → negotiating → price_agreed → payment_pending → confirmed
+  // or: pending_approval / negotiating → cancelled
   status: {
     type: String,
     enum: [
       "pending_approval",
       "negotiating",
       "price_agreed",
+      "payment_pending",
       "confirmed",
       "cancelled",
     ],

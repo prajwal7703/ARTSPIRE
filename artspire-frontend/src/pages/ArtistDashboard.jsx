@@ -66,7 +66,7 @@ function useIsMobile() {
   return mobile;
 }
 
-/* ─── BOOKINGS TAB (UPDATED FILTER ENGINE) ─────────────────────────────────── */
+/* ─── BOOKINGS TAB (REAL STATUS FILTER ENGINE) ─────────────────────────────── */
 function ArtistBookingDashboard({ artistId }) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -77,12 +77,15 @@ function ArtistBookingDashboard({ artistId }) {
   const [offerPrice,  setOfferPrice]  = useState("");
   const [offerMsg,    setOfferMsg]    = useState("");
   const [sending,     setSending]     = useState(false);
+  const [confirming,  setConfirming]  = useState(false);
   const [error,       setError]       = useState("");
   const [filter,      setFilter]      = useState("pending_approval"); // Defaults to New Requests
 
   useEffect(() => {
     socket.emit("join_artist_room", artistId);
+
     socket.on("new_booking_request", fetchBookings);
+
     socket.on("user_counter", ({ bookingId, price, message }) => {
       const entry = { from: "user", price, message, timestamp: new Date() };
       setBookings(bs => bs.map(b => b._id === bookingId
@@ -90,16 +93,29 @@ function ArtistBookingDashboard({ artistId }) {
       setSelected(s => s?._id === bookingId
         ? { ...s, status: "negotiating", negotiation: [...(s.negotiation||[]), entry] } : s);
     });
+
     socket.on("price_accepted", ({ bookingId, price }) =>
       setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, status: "price_agreed", agreedPrice: price } : b)));
-    socket.on("booking_confirmed", ({ bookingId, paidAmount }) => {
-      setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, status: "confirmed", paidAmount } : b));
-      setSelected(s => s?._id === bookingId ? { ...s, status: "confirmed", paidAmount } : s);
+
+    // Fired by the CLIENT's payment page (UserPaymentPage) the moment they hit "I've Paid".
+    // This is what makes "Awaiting Pay" feel real-time instead of the artist having to refresh.
+    socket.on("payment_submitted", ({ bookingId, amount, couponCode, discountAmount }) => {
+      const patch = { status: "payment_pending", paymentSubmitted: true, claimedAmount: amount, couponCode, discountAmount };
+      setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, ...patch } : b));
+      setSelected(s => s?._id === bookingId ? { ...s, ...patch } : s);
     });
+
+    socket.on("booking_confirmed", ({ bookingId, paidAmount }) => {
+      const patch = { status: "confirmed", paidAmount, paymentSubmitted: false };
+      setBookings(bs => bs.map(b => b._id === bookingId ? { ...b, ...patch } : b));
+      setSelected(s => s?._id === bookingId ? { ...s, ...patch } : s);
+    });
+
     return () => {
       socket.off("new_booking_request");
       socket.off("user_counter");
       socket.off("price_accepted");
+      socket.off("payment_submitted");
       socket.off("booking_confirmed");
     };
   }, [artistId]);
@@ -148,15 +164,31 @@ function ArtistBookingDashboard({ artistId }) {
     } finally { setSending(false); }
   };
 
-  // Explicit structural categories filtering
-  const pendingRequests = bookings.filter(b => b.status === "pending_approval");
-  const ongoingBookings = bookings.filter(b => ["negotiating", "price_agreed", "payment_pending"].includes(b.status));
-  const pastBookings    = bookings.filter(b => ["confirmed", "cancelled"].includes(b.status));
+  // Manual confirmation — the artist is the source of truth that money actually landed.
+  // Backend should also emit "booking_confirmed" to the user's room so their payment
+  // page flips to success in real time.
+  const confirmPaymentReceived = async () => {
+    setConfirming(true); setError("");
+    try {
+      const amount = selected.claimedAmount || selected.agreedPrice;
+      const res = await axios.post(`${API}/api/bookings/${selected._id}/confirm-payment`, { paidAmount: amount });
+      const patch = { status: "confirmed", paidAmount: res.data?.paidAmount || amount, paymentSubmitted: false };
+      setSelected(s => ({ ...s, ...patch }));
+      setBookings(bs => bs.map(b => b._id === selected._id ? { ...b, ...patch } : b));
+    } catch {
+      setError("Could not confirm payment. Please try again.");
+    } finally { setConfirming(false); }
+  };
 
-  const displayList = 
-    filter === "pending_approval" ? pendingRequests :
-    filter === "ongoing"          ? ongoingBookings :
-    filter === "past"             ? pastBookings    : bookings;
+  // Real per-status counts, built directly off STATUS_LABELS — every tab matches a real status.
+  const statusCounts = Object.keys(STATUS_LABELS).reduce((acc, key) => {
+    acc[key] = bookings.filter(b => b.status === key).length;
+    return acc;
+  }, {});
+
+  const displayList = filter === "all"
+    ? bookings
+    : bookings.filter(b => b.status === filter);
 
   const lastUserOffer  = selected ? [...(selected.negotiation||[])].reverse().find(m => m.from === "user")   : null;
   const lastArtistOffer= selected ? [...(selected.negotiation||[])].reverse().find(m => m.from === "artist") : null;
@@ -196,7 +228,8 @@ function ArtistBookingDashboard({ artistId }) {
           ["Location",  selected.location],
           ["Base",      `₹${selected.basePrice?.toLocaleString()}`],
           selected.agreedPrice && ["Agreed", `₹${selected.agreedPrice?.toLocaleString()}`],
-          selected.discountAmount > 0 && ["Coupon", `${selected.couponCode} (− ₹${selected.discountAmount?.toLocaleString()})`],
+          selected.couponCode && ["Coupon", `${selected.couponCode}${selected.discountAmount ? ` (− ₹${selected.discountAmount?.toLocaleString()})` : ""}`],
+          selected.claimedAmount && selected.status === "payment_pending" && ["Client Paid", `₹${selected.claimedAmount?.toLocaleString()} (unconfirmed)`],
           selected.paidAmount && ["Received", `₹${selected.paidAmount?.toLocaleString()}`],
         ].filter(Boolean).map(([k,v]) => (
           <div key={k} style={bs.infoRow}>
@@ -260,15 +293,37 @@ function ArtistBookingDashboard({ artistId }) {
         <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:12, padding:"14px", textAlign:"center" }}>
           <div style={{ fontSize:24, marginBottom:6 }}>🤝</div>
           <div style={{ fontWeight:800, color:"#15803d", fontFamily:"'Nunito',sans-serif", fontSize:14 }}>Price agreed at ₹{selected.agreedPrice?.toLocaleString()}</div>
-          <div style={{ fontSize:12, color:"#16a34a", fontFamily:"'Nunito',sans-serif", marginTop:4 }}>Waiting for client to complete payment.</div>
+          <div style={{ fontSize:12, color:"#16a34a", fontFamily:"'Nunito',sans-serif", marginTop:4 }}>The client will receive a payment link with a UPI QR code.</div>
         </div>
       )}
+
       {selected.status === "payment_pending" && (
-        <div style={{ background:"#faf5ff", border:"1px solid #e9d5ff", borderRadius:12, padding:"14px", textAlign:"center" }}>
-          <div style={{ fontSize:24, marginBottom:6 }}>⏳</div>
-          <div style={{ fontWeight:800, color:"#7e22ce", fontFamily:"'Nunito',sans-serif", fontSize:14 }}>Client is completing payment…</div>
+        <div style={{ background:"#faf5ff", border:"1px solid #e9d5ff", borderRadius:12, padding:"14px", display:"flex", flexDirection:"column", gap:10, textAlign:"center" }}>
+          <div>
+            <div style={{ fontSize:24, marginBottom:6 }}>⏳</div>
+            {selected.paymentSubmitted ? (
+              <>
+                <div style={{ fontWeight:800, color:"#7e22ce", fontFamily:"'Nunito',sans-serif", fontSize:14 }}>
+                  {selected.userName} marked ₹{selected.claimedAmount?.toLocaleString()} as paid
+                </div>
+                <div style={{ fontSize:12, color:"#9333ea", fontFamily:"'Nunito',sans-serif", marginTop:4 }}>
+                  Check your UPI app, then confirm below to close the booking.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontWeight:800, color:"#7e22ce", fontFamily:"'Nunito',sans-serif", fontSize:14 }}>Client is completing payment…</div>
+                <div style={{ fontSize:12, color:"#9333ea", fontFamily:"'Nunito',sans-serif", marginTop:4 }}>This updates live the moment they scan the QR and confirm.</div>
+              </>
+            )}
+          </div>
+          {error && <div style={bs.errorBox}>{error}</div>}
+          <button onClick={confirmPaymentReceived} disabled={confirming} style={{ ...bs.acceptBtn, padding:"10px 16px", fontSize:13, opacity: confirming ? 0.7 : 1 }}>
+            {confirming ? "Confirming…" : "✅ Confirm Payment Received"}
+          </button>
         </div>
       )}
+
       {selected.status === "confirmed" && (
         <div style={{ background:"#dcfce7", border:"1px solid #86efac", borderRadius:12, padding:"14px", textAlign:"center" }}>
           <div style={{ fontSize:24, marginBottom:6 }}>🎉</div>
@@ -287,14 +342,15 @@ function ArtistBookingDashboard({ artistId }) {
             <div style={bs.displayText}>Bookings</div>
             <div style={{ display:"flex", gap:6, marginTop:8, overflowX:"auto", paddingBottom:4 }}>
               {[
-                { id: "pending_approval", label: `Request (${pendingRequests.length})` },
-                { id: "ongoing",          label: `Approval (${ongoingBookings.length})` },
-                { id: "past",             label: `Last Booking (${pastBookings.length})` },
-                { id: "all",              label: `All (${bookings.length})` }
+                { id: "all", label: `All (${bookings.length})` },
+                ...Object.entries(STATUS_LABELS).map(([id, meta]) => ({
+                  id,
+                  label: `${meta.label} (${statusCounts[id]})`
+                }))
               ].map(tabItem => (
-                <button 
-                  key={tabItem.id} 
-                  onClick={() => setFilter(tabItem.id)} 
+                <button
+                  key={tabItem.id}
+                  onClick={() => setFilter(tabItem.id)}
                   style={{ ...bs.filterBtn, background: filter === tabItem.id ? "#1e3a8a" : "transparent", color: filter === tabItem.id ? "#fff" : "#64748b", whiteSpace: "nowrap" }}
                 >
                   {tabItem.label}
@@ -307,7 +363,7 @@ function ArtistBookingDashboard({ artistId }) {
            : displayList.map(b => <BookingCard key={b._id} b={b} selected={selected} onClick={() => openBooking(b)} />)}
         </div>
       ) : null}
-      
+
       {(!isMobile || showDetail) && (
         <div style={{ flex:1, background:"#f8fafc", overflowY:"auto" }}><DetailPanel /></div>
       )}
@@ -317,7 +373,9 @@ function ArtistBookingDashboard({ artistId }) {
 
 function BookingCard({ b, selected, onClick }) {
   const st = STATUS_LABELS[b.status] || {};
-  const hasNew = b.status==="pending_approval" || (b.status==="negotiating" && [...(b.negotiation||[])].reverse()[0]?.from==="user");
+  const hasNew = b.status==="pending_approval"
+    || (b.status==="negotiating" && [...(b.negotiation||[])].reverse()[0]?.from==="user")
+    || (b.status==="payment_pending" && b.paymentSubmitted);
   return (
     <div onClick={onClick} style={{ padding:"14px 18px", borderBottom:"1px solid #f1f5f9", cursor:"pointer", background: selected?._id===b._id ? "#eff6ff" : "#fff", borderLeft: selected?._id===b._id ? "3px solid #1e3a8a" : "3px solid transparent" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
@@ -432,6 +490,17 @@ function EditProfileTab({ artistId }) {
         <div style={t.grid2}>
           <Field label="Base Price (₹)" type="number" value={form.price||form.basePrice||""} onChange={v => { set("price",v); set("basePrice",v); }} />
           <Field label="Price Note" value={form.priceNote||""} onChange={v => set("priceNote",v)} placeholder="e.g. per hour, per event" />
+        </div>
+      </div>
+
+      <div style={t.card}>
+        <div style={t.cardTitle}>Payments (UPI)</div>
+        <div style={t.grid2}>
+          <Field label="UPI ID" value={form.upiId||""} onChange={v => set("upiId",v)} placeholder="yourname@upi" />
+          <Field label="Payee Name (shown to client)" value={form.upiPayeeName||form.name||""} onChange={v => set("upiPayeeName",v)} />
+        </div>
+        <div style={{ fontSize:12, color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
+          This UPI ID is used to generate the real QR code clients scan to pay you once a price is agreed.
         </div>
       </div>
 
@@ -667,7 +736,7 @@ function EarningsTab({ artistId }) {
       .then(res => {
         const books = Array.isArray(res.data) ? res.data : [];
         const confirmed = books.filter(b => b.status === "confirmed");
-        
+
         const gross = confirmed.reduce((acc, current) => acc + (current.paidAmount || 0), 0);
         const platformFees = Math.round(gross * 0.10);
         const net = gross - platformFees;
@@ -683,7 +752,7 @@ function EarningsTab({ artistId }) {
   return (
     <div style={t.tabBody}>
       <div style={t.sectionTitle}>Financial Summary</div>
-      
+
       <div style={t.grid2}>
         <div style={{ ...t.card, background:"#f8fafc" }}>
           <div style={t.miniLabel}>Gross Volumetric Inflow</div>

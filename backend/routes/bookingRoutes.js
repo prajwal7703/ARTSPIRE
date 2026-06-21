@@ -1,9 +1,25 @@
 // backend/routes/bookingRoutes.js
-// Drop-in replacement — covers all negotiation + payment routes
+// Drop-in replacement for your existing file.
+//
+// What changed from your version:
+//   1. /create-order now takes { bookingId, couponCode } instead of a raw
+//      `amount` from the client. The amount is computed server-side from
+//      booking.agreedPrice and a server-validated coupon. Previously a user
+//      could send any amount they wanted and pay ₹1 for any booking.
+//   2. /:id/confirm-payment now verifies the Razorpay signature (HMAC with
+//      your key secret) before marking a booking confirmed. Previously it
+//      trusted the client's word that payment succeeded — anyone could call
+//      that route directly and mark their booking "confirmed" for free.
+//   3. booking_confirmed and booking_offer events are now also emitted to
+//      `user_${userId}` (not just `artist_${artistId}`), so the user's own
+//      booking page updates in real time too.
 
-const express = require("express");
-const router  = express.Router();
-const Booking = require("../models/Booking");
+const express  = require("express");
+const router   = express.Router();
+const crypto   = require("crypto");
+const Booking  = require("../models/Booking");
+const Coupon   = require("../models/Coupon");
+const { evaluateCoupon } = require("../utils/couponUtils");
 
 // ── helper: get io from app ───────────────────────────────────────────────────
 function getIO(req) { return req.app.get("io"); }
@@ -177,29 +193,109 @@ router.post("/:id/artist-accept", async (req, res) => {
   }
 });
 
+// ── POST /api/bookings/:id/cancel ─────────────────────────────────────────────
+// Either side can cancel before payment is confirmed.
+router.post("/:id/cancel", async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+    if (booking.status === "confirmed") {
+      return res.status(400).json({ error: "Cannot cancel a confirmed booking." });
+    }
+
+    booking.status = "cancelled";
+    await booking.save();
+
+    getIO(req).to(`artist_${booking.artistId}`).emit("booking_cancelled", { bookingId: booking._id });
+    getIO(req).to(`user_${booking.userId}`).emit("booking_cancelled", { bookingId: booking._id });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("bookings/cancel error:", err);
+    res.status(500).json({ error: "Failed to cancel booking." });
+  }
+});
+
 // ── POST /api/bookings/create-order ──────────────────────────────────────────
-// Creates Razorpay order (or demo order if keys not set).
+// Creates a Razorpay order for a booking (or a demo order if keys not set).
+// The amount is ALWAYS computed server-side from booking.agreedPrice and a
+// server-validated coupon — never trust a client-sent amount for money.
+//
+// body: { bookingId, couponCode? }
 router.post("/create-order", async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { bookingId, couponCode } = req.body;
+    if (!bookingId) return res.status(400).json({ error: "bookingId is required." });
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ error: "Booking not found." });
+
+    if (!["price_agreed", "payment_pending"].includes(booking.status)) {
+      return res.status(400).json({ error: "Price has not been agreed on yet." });
+    }
+
+    const baseAmount = booking.agreedPrice ?? booking.basePrice ?? 0;
+    if (baseAmount <= 0) {
+      return res.status(400).json({ error: "Invalid booking amount." });
+    }
+
+    let discountAmount = 0;
+    let appliedCode    = null;
+
+    if (couponCode) {
+      const coupon = await Coupon.findOne({ code: String(couponCode).trim().toUpperCase() });
+      const result  = evaluateCoupon(coupon, baseAmount);
+      if (!result.valid) {
+        return res.status(400).json({ error: result.message });
+      }
+      discountAmount = result.discountAmount;
+      appliedCode    = coupon.code;
+    }
+
+    const finalAmount = Math.max(1, Math.round(baseAmount - discountAmount));
+
+    booking.couponCode     = appliedCode;
+    booking.discountAmount = discountAmount;
+    booking.finalAmount    = finalAmount;
+    booking.status         = "payment_pending";
 
     const keyId     = process.env.RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
     if (!keyId || !keySecret) {
-      // Demo mode — skip real payment
-      return res.json({ orderId: `demo_${Date.now()}`, amount, demo: true });
+      // Demo mode — no real Razorpay account configured.
+      const demoOrderId = `demo_${Date.now()}`;
+      booking.orderId = demoOrderId;
+      await booking.save();
+      return res.json({
+        orderId: demoOrderId,
+        amount: finalAmount * 100,
+        keyId: null,
+        discountAmount,
+        finalAmount,
+        demo: true,
+      });
     }
 
     const Razorpay = require("razorpay");
     const rzp = new Razorpay({ key_id: keyId, key_secret: keySecret });
     const order = await rzp.orders.create({
-      amount:   amount * 100,
+      amount:   finalAmount * 100, // paise
       currency: "INR",
-      receipt:  `receipt_${Date.now()}`,
+      receipt:  `booking_${booking._id}`,
     });
 
-    res.json({ orderId: order.id, amount: order.amount, demo: false });
+    booking.orderId = order.id;
+    await booking.save();
+
+    res.json({
+      orderId: order.id,
+      amount: order.amount,
+      keyId, // public key id — safe to send to the frontend, never the secret
+      discountAmount,
+      finalAmount,
+      demo: false,
+    });
   } catch (err) {
     console.error("create-order error:", err);
     res.status(500).json({ error: "Failed to create payment order." });
@@ -207,34 +303,72 @@ router.post("/create-order", async (req, res) => {
 });
 
 // ── POST /api/bookings/:id/confirm-payment ────────────────────────────────────
-// Called after Razorpay payment succeeds. Status → confirmed.
+// Called after Razorpay checkout succeeds on the frontend. Verifies the
+// payment signature before trusting it, then sets status → confirmed.
+//
+// body: { paymentId, orderId, signature }
 router.post("/:id/confirm-payment", async (req, res) => {
   try {
-    const { paymentId, orderId, amount, payMode, agreedPrice } = req.body;
+    const { paymentId, orderId, signature } = req.body;
     const booking = await Booking.findById(req.params.id);
     if (!booking) return res.status(404).json({ error: "Booking not found." });
 
-    booking.agreedPrice = agreedPrice;
-    booking.paidAmount  = amount;
-    booking.payMode     = payMode;
-    booking.paymentId   = paymentId || null;
-    booking.orderId     = orderId   || null;
+    if (!booking.orderId || booking.orderId !== orderId) {
+      return res.status(400).json({ error: "Order does not match this booking." });
+    }
+    if (booking.status === "confirmed") {
+      return res.json({ ok: true, booking }); // already confirmed, idempotent
+    }
+
+    const isDemo = orderId.startsWith("demo_");
+
+    if (!isDemo) {
+      const keySecret = process.env.RAZORPAY_KEY_SECRET;
+      if (!keySecret) return res.status(500).json({ error: "Payment is not configured on the server." });
+      if (!paymentId || !signature) {
+        return res.status(400).json({ error: "Missing payment verification details." });
+      }
+
+      const expectedSignature = crypto
+        .createHmac("sha256", keySecret)
+        .update(`${orderId}|${paymentId}`)
+        .digest("hex");
+
+      if (expectedSignature !== signature) {
+        return res.status(400).json({ error: "Payment verification failed." });
+      }
+    }
+
+    booking.paidAmount  = booking.finalAmount ?? booking.agreedPrice;
+    booking.payMode     = "full";
+    booking.paymentId   = paymentId || `demo_pay_${Date.now()}`;
     booking.status      = "confirmed";
     booking.confirmedAt = new Date();
     await booking.save();
 
-    // Notify artist
-    getIO(req)
-      .to(`artist_${booking.artistId}`)
-      .emit("booking_confirmed", {
-        bookingId:  booking._id,
-        userName:   booking.userName,
-        eventType:  booking.eventType,
-        eventDate:  booking.eventDate,
-        paidAmount: amount,
-      });
+    // Mark the coupon as used (only once payment is actually confirmed)
+    if (booking.couponCode) {
+      try {
+        await Coupon.findOneAndUpdate({ code: booking.couponCode }, { $inc: { usedCount: 1 } });
+      } catch (e) {
+        console.error("coupon usedCount increment failed:", e);
+      }
+    }
 
-    res.json({ ok: true });
+    const io = getIO(req);
+    io.to(`artist_${booking.artistId}`).emit("booking_confirmed", {
+      bookingId:  booking._id,
+      userName:   booking.userName,
+      eventType:  booking.eventType,
+      eventDate:  booking.eventDate,
+      paidAmount: booking.paidAmount,
+    });
+    io.to(`user_${booking.userId}`).emit("booking_confirmed", {
+      bookingId:  booking._id,
+      paidAmount: booking.paidAmount,
+    });
+
+    res.json({ ok: true, booking });
   } catch (err) {
     console.error("confirm-payment error:", err);
     res.status(500).json({ error: "Failed to confirm booking." });
