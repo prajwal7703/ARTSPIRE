@@ -528,11 +528,19 @@ function EditProfileTab({ artistId }) {
   const [msg,        setMsg]        = useState({ type:"", text:"" });
   const [imageFile,  setImageFile]  = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+
+  // ── NEW: state for portfolio / work-sample uploads ──────────────────────
+  const [uploadingWorks, setUploadingWorks] = useState(false);
+
   const fileRef = useRef(null);
 
   useEffect(()=>{
     axios.get(`${API}/api/artists/${artistId}`)
-      .then(r=>{ setForm(r.data); setImagePreview(r.data.image||r.data.profileImage||null); })
+      .then(r=>{
+        // Ensure `works` is always an array even if backend hasn't set it yet
+        setForm({ works: [], ...r.data });
+        setImagePreview(r.data.image||r.data.profileImage||null);
+      })
       .catch(()=>setMsg({ type:"error", text:"Failed to load profile." }))
       .finally(()=>setLoading(false));
   },[artistId]);
@@ -546,6 +554,59 @@ function EditProfileTab({ artistId }) {
     setImagePreview(URL.createObjectURL(file));
   };
 
+  // ── NEW: upload one or more work-sample images immediately ──────────────
+  // Each file is uploaded right away via the existing /api/artists/upload
+  // endpoint, and the returned URL is pushed into form.works in real time.
+  const onWorkFilesChange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setUploadingWorks(true);
+    setMsg({ type:"", text:"" });
+    try {
+      const uploadedUrls = [];
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("image", file);
+        const r = await axios.post(`${API}/api/artists/upload`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (r.data?.url) uploadedUrls.push(r.data.url);
+      }
+      if (uploadedUrls.length) {
+        // Update local form state immediately (real-time preview)
+        setForm(f => ({ ...f, works: [...(f.works || []), ...uploadedUrls] }));
+        // Persist immediately so a page refresh doesn't lose the new works,
+        // even if the artist forgets to click "Save Changes" afterward.
+        try {
+          await axios.put(`${API}/api/artists/${artistId}`, {
+            works: [...(form?.works || []), ...uploadedUrls],
+          });
+        } catch (persistErr) {
+          console.error("Auto-save of works failed:", persistErr);
+          setMsg({ type:"error", text:"Uploaded, but failed to auto-save — click Save Changes to confirm." });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      setMsg({ type:"error", text:"Failed to upload one or more files." });
+    } finally {
+      setUploadingWorks(false);
+      e.target.value = ""; // reset input so the same file can be re-selected later
+    }
+  };
+
+  // ── NEW: remove a work sample (also persists immediately) ───────────────
+  const removeWork = async (urlToRemove) => {
+    const updatedWorks = (form.works || []).filter(u => u !== urlToRemove);
+    setForm(f => ({ ...f, works: updatedWorks }));
+    try {
+      await axios.put(`${API}/api/artists/${artistId}`, { works: updatedWorks });
+    } catch (err) {
+      console.error("Failed to persist work removal:", err);
+      setMsg({ type:"error", text:"Removed locally, but failed to save — click Save Changes to confirm." });
+    }
+  };
+
   const save = async () => {
     setSaving(true); setMsg({ type:"", text:"" });
     try {
@@ -553,7 +614,14 @@ function EditProfileTab({ artistId }) {
       if (imageFile) {
         const fd = new FormData();
         Object.entries(form).forEach(([k,v]) => {
-          if (v !== null && v !== undefined) fd.append(k, v);
+          if (v === null || v === undefined) return;
+          // NEW: arrays (like `works`) must be stringified for FormData,
+          // otherwise axios/FormData will mangle them into "[object Object]".
+          if (Array.isArray(v)) {
+            fd.append(k, JSON.stringify(v));
+          } else {
+            fd.append(k, v);
+          }
         });
         fd.append("image", imageFile);
         await axios.put(`${API}/api/artists/${artistId}`, fd, {
@@ -637,6 +705,41 @@ function EditProfileTab({ artistId }) {
           </div>
         </div>
       ))}
+
+      {/* ── NEW: Portfolio / Work Samples Upload ───────────────────────── */}
+      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+        <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Portfolio / Work Samples</div>
+
+        {(form.works || []).length > 0 && (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))", gap:10, marginBottom:14 }}>
+            {(form.works || []).map((url, i) => (
+              <div key={url + i} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
+                <img src={url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                <button
+                  onClick={() => removeWork(url)}
+                  title="Remove"
+                  style={st({ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", cursor:"pointer", fontSize:12, lineHeight:1 })}
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <label style={st({ display:"inline-block", background: uploadingWorks ? "#f1f5f9" : "#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"8px 16px", borderRadius:10, fontWeight:700, fontSize:13, cursor: uploadingWorks ? "not-allowed" : "pointer" })}>
+          {uploadingWorks ? "Uploading…" : "+ Add Work Samples"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={onWorkFilesChange}
+            disabled={uploadingWorks}
+            style={{ display:"none" }}
+          />
+        </label>
+        <div style={st({ fontSize:11, color:"#94a3b8", marginTop:6 })}>
+          Upload images of your past work. JPG, PNG or WebP. Uploads save automatically.
+        </div>
+      </div>
 
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Bio</div>
