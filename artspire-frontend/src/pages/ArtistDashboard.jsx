@@ -344,19 +344,24 @@ function BookingsTab({ artistId }) {
     </div>
   );
 }
+
 // ─── GROUPS PANEL ─────────────────────────────────────────────────────────────
 function GroupsPanel({ artistId }) {
-  const [groups, setGroups] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
+  // ── state ──────────────────────────────────────────────────────────────────
+  const [groups,         setGroups]         = useState([]);
+  const [selected,       setSelected]       = useState(null);
+  const [messages,       setMessages]       = useState([]);
+  const [text,           setText]           = useState("");
+  const [loading,        setLoading]        = useState(true);
+  const [showCreate,     setShowCreate]     = useState(false);
+  const [newName,        setNewName]        = useState("");
+  const [showAddMember,  setShowAddMember]  = useState(false); // ✅ ADD MEMBER state
+  const [addMemberId,    setAddMemberId]    = useState("");    // ✅ ADD MEMBER state
   const isMobile = useIsMobile();
   const [showChat, setShowChat] = useState(false);
   const bottomRef = useRef(null);
 
+  // ── data fetching ──────────────────────────────────────────────────────────
   const fetchGroups = async () => {
     try {
       const r = await axios.get(`${API}/api/groups/${artistId}`);
@@ -377,6 +382,7 @@ function GroupsPanel({ artistId }) {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  // ── actions ────────────────────────────────────────────────────────────────
   const createGroup = async () => {
     if (!newName.trim()) return;
     try {
@@ -388,6 +394,8 @@ function GroupsPanel({ artistId }) {
 
   const openGroup = async (g) => {
     setSelected(g);
+    setShowAddMember(false); // reset add-member panel when switching groups
+    setAddMemberId("");
     if (isMobile) setShowChat(true);
     socket.emit("join_group", g._id);
     try {
@@ -405,6 +413,19 @@ function GroupsPanel({ artistId }) {
     } catch (e) { console.error(e); setText(msgText); }
   };
 
+  // ✅ ADD MEMBER action
+  const addMember = async () => {
+    if (!addMemberId.trim() || !selected) return;
+    try {
+      const r = await axios.post(`${API}/api/groups/${selected._id}/members`, { userId: addMemberId.trim() });
+      setSelected(r.data);
+      setGroups(prev => prev.map(g => g._id === r.data._id ? r.data : g));
+      setAddMemberId("");
+      setShowAddMember(false);
+    } catch (e) { console.error(e); }
+  };
+
+  // ── sub-components ─────────────────────────────────────────────────────────
   const GroupList = () => (
     <div style={{ width: isMobile ? "100%" : 300, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", background: "#fff", flexShrink: 0 }}>
       <div style={{ padding: "18px 16px 12px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -442,8 +463,12 @@ function GroupsPanel({ artistId }) {
     </div>
   ) : (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f8fafc" }}>
+
+      {/* ── Group header ── */}
       <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", background: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
-        {isMobile && <button onClick={() => setShowChat(false)} style={st({ background: "none", border: "none", cursor: "pointer", color: "#1e3a8a", fontWeight: 800, fontSize: 13 })}>← Back</button>}
+        {isMobile && (
+          <button onClick={() => setShowChat(false)} style={st({ background: "none", border: "none", cursor: "pointer", color: "#1e3a8a", fontWeight: 800, fontSize: 13 })}>← Back</button>
+        )}
         <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#1e3a8a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue',sans-serif", fontSize: 18 }}>
           {selected.name?.[0]?.toUpperCase()}
         </div>
@@ -451,7 +476,36 @@ function GroupsPanel({ artistId }) {
           <div style={st({ fontWeight: 800, fontSize: 14, color: "#1e293b" })}>{selected.name}</div>
           <div style={st({ fontSize: 11, color: "#94a3b8" })}>{selected.members?.length || 0} members</div>
         </div>
+
+        {/* ✅ ADD MEMBER — toggle button, pushed to the right */}
+        <button
+          onClick={() => setShowAddMember(s => !s)}
+          style={st({ marginLeft: "auto", background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer" })}
+        >
+          + Add
+        </button>
       </div>
+
+      {/* ✅ ADD MEMBER — expandable input row, sits just below the header */}
+      {showAddMember && (
+        <div style={{ display: "flex", gap: 6, padding: "8px 16px", borderBottom: "1px solid #f1f5f9", background: "#fff" }}>
+          <input
+            value={addMemberId}
+            onChange={e => setAddMemberId(e.target.value)}
+            placeholder="Paste user ID"
+            onKeyDown={e => { if (e.key === "Enter") addMember(); }}
+            style={st({ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "6px 10px", fontSize: 12, outline: "none" })}
+          />
+          <button
+            onClick={addMember}
+            style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer" })}
+          >
+            Add
+          </button>
+        </div>
+      )}
+
+      {/* ── Messages list ── */}
       <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {messages.length === 0
           ? <div style={st({ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 40 })}>No messages yet. Say hello!</div>
@@ -469,42 +523,35 @@ function GroupsPanel({ artistId }) {
         }
         <div ref={bottomRef} />
       </div>
+
+      {/* ── Message input bar ── */}
       <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8 }}>
-        <input value={text} onChange={e => setText(e.target.value)}
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendGroupMessage(); } }}
           placeholder="Type a message…"
-          style={st({ flex: 1, border: "1px solid #e2e8f0", borderRadius: 24, padding: "9px 16px", fontSize: 13, outline: "none", background: "#f8fafc" })} />
-        <button onClick={sendGroupMessage} disabled={!text.trim()} style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 24, padding: "9px 18px", fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: !text.trim() ? 0.5 : 1 })}>Send</button>
+          style={st({ flex: 1, border: "1px solid #e2e8f0", borderRadius: 24, padding: "9px 16px", fontSize: 13, outline: "none", background: "#f8fafc" })}
+        />
+        <button
+          onClick={sendGroupMessage}
+          disabled={!text.trim()}
+          style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 24, padding: "9px 18px", fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: !text.trim() ? 0.5 : 1 })}
+        >
+          Send
+        </button>
       </div>
     </div>
   );
-const [showAddMember, setShowAddMember] = useState(false);
-const [addMemberId, setAddMemberId] = useState("");
 
-const addMember = async () => {
-  if (!addMemberId.trim() || !selected) return;
-  try {
-    const r = await axios.post(`${API}/api/groups/${selected._id}/members`, { userId: addMemberId.trim() });
-    setSelected(r.data);
-    setGroups(prev => prev.map(g => g._id === r.data._id ? r.data : g));
-    setAddMemberId(""); setShowAddMember(false);
-  } catch (e) { console.error(e); }
-};
   return (
     <div style={{ display: "flex", height: "100%" }}>
       {(!isMobile || !showChat) && <GroupList />}
-      {(!isMobile || showChat) && <GroupChatWindow />}
+      {(!isMobile || showChat)  && <GroupChatWindow />}
     </div>
   );
 }
-<button onClick={() => setShowAddMember(s => !s)} style={st({ marginLeft:"auto", background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"4px 10px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer" })}>+ Add</button>
-{showAddMember && (
-  <div style={{ display:"flex", gap:6, padding:"8px 16px", borderBottom:"1px solid #f1f5f9" }}>
-    <input value={addMemberId} onChange={e=>setAddMemberId(e.target.value)} placeholder="Paste user ID"
-      style={st({ flex:1, border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 10px", fontSize:12, outline:"none" })} />
-    <button onClick={addMember} style={st({ background:"#1e3a8a", color:"#fff", border:"none", borderRadius:8, padding:"6px 14px", fontWeight:700, fontSize:12, cursor:"pointer" })}>Add</button>
-  </div>
-)}
+
 // ─── CHAT TAB ─────────────────────────────────────────────────────────────────
 function ChatTab({ artistId }) {
   const [conversations, setConversations] = useState([]);
@@ -515,8 +562,9 @@ function ChatTab({ artistId }) {
   const [sending,       setSending]       = useState(false);
   const isMobile = useIsMobile();
   const [showChat, setShowChat] = useState(false);
+  const [view,     setView]     = useState("direct"); // "direct" | "groups"
   const bottomRef = useRef(null);
-const [view, setView] = useState("direct"); // "direct" | "groups"
+
   const fetchConversations = async () => {
     try {
       const r = await axios.get(`${API}/api/chat/conversations/${artistId}`);
@@ -560,7 +608,7 @@ const [view, setView] = useState("direct"); // "direct" | "groups"
     const msgText = text.trim();
     setSending(true);
     setText("");
-   const optimistic = { _tempId: Date.now(), senderId: artistId, receiverId: selected.userId, message: msgText, createdAt: new Date(), senderRole: "artist" };
+    const optimistic = { _tempId: Date.now(), senderId: artistId, receiverId: selected.userId, message: msgText, createdAt: new Date(), senderRole: "artist" };
     setMessages(prev => [...prev, optimistic]);
     try {
       await axios.post(`${API}/api/chat/send`, {
@@ -714,7 +762,6 @@ function EditProfileTab({ artistId }) {
     setImagePreview(URL.createObjectURL(file));
   };
 
-  // ✅ FIXED: compute updatedWorks before setForm to avoid stale closure
   const onWorkFilesChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -731,7 +778,6 @@ function EditProfileTab({ artistId }) {
         if (r.data?.url) uploadedUrls.push(r.data.url);
       }
       if (uploadedUrls.length) {
-        // ✅ Compute the new list ONCE so both setForm and axios.put use the same array
         const updatedWorks = [...(form.works || []), ...uploadedUrls];
         setForm(f => ({ ...f, works: updatedWorks }));
         try {
@@ -859,7 +905,6 @@ function EditProfileTab({ artistId }) {
       {/* Portfolio / Work Samples */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Portfolio / Work Samples</div>
-
         {(form.works || []).length > 0 && (
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))", gap:10, marginBottom:14 }}>
             {(form.works || []).map((url, i) => (
@@ -874,7 +919,6 @@ function EditProfileTab({ artistId }) {
             ))}
           </div>
         )}
-
         <label style={st({ display:"inline-block", background: uploadingWorks ? "#f1f5f9" : "#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"8px 16px", borderRadius:10, fontWeight:700, fontSize:13, cursor: uploadingWorks ? "not-allowed" : "pointer" })}>
           {uploadingWorks ? "Uploading…" : "+ Add Work Samples"}
           <input
