@@ -99,29 +99,27 @@ export default function UserChat() {
             ? <div style={{ ...f, padding: 40, textAlign: "center", color: "#94a3b8" }}>Loading…</div>
             : conversations.length === 0
               ? <div style={{ ...f, padding: 40, textAlign: "center", color: "#94a3b8" }}>No conversations yet.</div>
-             conversations.map(conv => (
-  <div key={conv.artistId} onClick={() => openConv(conv)}
-    style={{ padding: "13px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", display:"flex", alignItems:"center", gap:12,
-      background: selected?.artistId === conv.artistId ? "#eff6ff" : "#fff",
-      borderLeft: `3px solid ${selected?.artistId === conv.artistId ? "#1e3a8a" : "transparent"}` }}>
-    <div style={{ width:42, height:42, borderRadius:"50%", flexShrink:0, background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:800, fontSize:18, overflow:"hidden" }}>
-      {conv.artistImage ? <img src={conv.artistImage} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} /> : (conv.artistName?.[0]?.toUpperCase() || "?")}
-    </div>
-    <div style={{ flex:1, minWidth:0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ ...f, fontWeight: 800, fontSize: 14, color: "#1e293b" }}>{conv.artistName || "Unknown"}</div>
-        {conv.unread > 0 && (
-          <span style={{ ...f, background: "#1e3a8a", color: "#fff", fontSize: 10, fontWeight: 800, borderRadius: 20, padding: "2px 7px" }}>
-            {conv.unread}
-          </span>
-        )}
+              : conversations.map(conv => (
+                <div key={conv.artistId} onClick={() => openConv(conv)}
+                  style={{ padding: "13px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+                    background: selected?.artistId === conv.artistId ? "#eff6ff" : "#fff",
+                    borderLeft: `3px solid ${selected?.artistId === conv.artistId ? "#1e3a8a" : "transparent"}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ ...f, fontWeight: 800, fontSize: 14, color: "#1e293b" }}>{conv.artistName}</div>
+                    {conv.unread > 0 && (
+                      <span style={{ ...f, background: "#1e3a8a", color: "#fff", fontSize: 10, fontWeight: 800, borderRadius: 20, padding: "2px 7px" }}>
+                        {conv.unread}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ ...f, fontSize: 12, color: "#94a3b8", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {conv.lastMessage || "Start chatting"}
+                  </div>
+                </div>
+              ))
+          }
+        </div>
       </div>
-      <div style={{ ...f, fontSize: 12, color: "#94a3b8", marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {conv.lastMessage || "Start chatting"}
-      </div>
-    </div>
-  </div>
-
 
       {/* Chat window */}
       {!selected ? (
