@@ -6,6 +6,13 @@ import { getArtist } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
+const TABS = [
+  { id: "bookings", label: "Bookings",     icon: "📋" },
+  { id: "profile",  label: "Edit Profile", icon: "✏️" },
+  { id: "reviews",  label: "Reviews",      icon: "⭐" },
+  { id: "earnings", label: "Earnings",     icon: "₹"  },
+];
+
 const STATUS_META = {
   pending_approval: { label: "New Request",  bg: "#fef9c3", color: "#854d0e", dot: "#ca8a04" },
   negotiating:      { label: "Negotiating",  bg: "#eff6ff", color: "#1d4ed8", dot: "#3b82f6" },
@@ -26,117 +33,70 @@ function useIsMobile() {
 }
 
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
-const s = (obj) => ({ fontFamily: "'Nunito',sans-serif", ...obj });
+const st  = (obj) => ({ fontFamily: "'Nunito',sans-serif", ...obj });
 
+// ─── STATUS BADGE ────────────────────────────────────────────────────────────
 function StatusBadge({ status, size = "sm" }) {
   const m = STATUS_META[status] || { label: status, bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" };
   return (
-    <span style={s({
-      display: "inline-flex", alignItems: "center", gap: 5,
-      background: m.bg, color: m.color,
-      padding: size === "lg" ? "5px 14px" : "3px 10px",
-      borderRadius: 20, fontSize: size === "lg" ? 13 : 11, fontWeight: 700,
-    })}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: m.dot, flexShrink: 0 }} />
+    <span style={st({ display:"inline-flex", alignItems:"center", gap:5, background:m.bg, color:m.color, padding: size==="lg"?"5px 14px":"3px 10px", borderRadius:20, fontSize:size==="lg"?13:11, fontWeight:700 })}>
+      <span style={{ width:6, height:6, borderRadius:"50%", background:m.dot, flexShrink:0 }} />
       {m.label}
     </span>
   );
 }
 
+// ─── AMOUNT DISPLAY ──────────────────────────────────────────────────────────
 function AmountDisplay({ booking }) {
-  if (booking.paidAmount) {
-    return (
-      <div style={s({ textAlign: "right" })}>
-        <div style={s({ fontSize: 9, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: 1 })}>Received</div>
-        <div style={s({ fontSize: 18, fontWeight: 800, color: "#15803d", fontFamily: "'Bebas Neue',sans-serif" })}>₹{fmt(booking.paidAmount)}</div>
-      </div>
-    );
-  }
-  if (booking.agreedPrice) {
-    return (
-      <div style={s({ textAlign: "right" })}>
-        <div style={s({ fontSize: 9, fontWeight: 700, color: "#1d4ed8", textTransform: "uppercase", letterSpacing: 1 })}>Agreed</div>
-        <div style={s({ fontSize: 18, fontWeight: 800, color: "#1e3a8a", fontFamily: "'Bebas Neue',sans-serif" })}>₹{fmt(booking.agreedPrice)}</div>
-      </div>
-    );
-  }
+  const val   = booking.paidAmount || booking.agreedPrice || booking.basePrice;
+  const label = booking.paidAmount ? "Received" : booking.agreedPrice ? "Agreed" : "Base";
+  const color = booking.paidAmount ? "#15803d"  : booking.agreedPrice ? "#1e3a8a" : "#64748b";
   return (
-    <div style={s({ textAlign: "right" })}>
-      <div style={s({ fontSize: 9, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 })}>Base</div>
-      <div style={s({ fontSize: 18, fontWeight: 800, color: "#64748b", fontFamily: "'Bebas Neue',sans-serif" })}>₹{fmt(booking.basePrice)}</div>
+    <div style={st({ textAlign:"right" })}>
+      <div style={st({ fontSize:9, fontWeight:700, color, textTransform:"uppercase", letterSpacing:1 })}>{label}</div>
+      <div style={st({ fontSize:18, fontWeight:800, color, fontFamily:"'Bebas Neue',sans-serif" })}>₹{fmt(val)}</div>
     </div>
   );
 }
 
+// ─── BOOKING CARD ────────────────────────────────────────────────────────────
 function BookingCard({ b, isSelected, onClick }) {
-  const hasNew =
-    b.status === "pending_approval" ||
-    (b.status === "negotiating" && [...(b.negotiation || [])].reverse()[0]?.from === "user");
-
+  const hasNew = b.status==="pending_approval" || (b.status==="negotiating" && [...(b.negotiation||[])].reverse()[0]?.from==="user");
   return (
-    <div onClick={onClick} style={{
-      padding: "14px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
-      background: isSelected ? "#eff6ff" : "#fff",
-      borderLeft: `3px solid ${isSelected ? "#1e3a8a" : "transparent"}`,
-      transition: "background 0.12s",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={s({ fontWeight: 800, fontSize: 14, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
-            {b.userName}
-          </div>
-          <div style={s({ fontSize: 12, color: "#64748b", marginTop: 1 })}>{b.eventType} · {b.eventDate}</div>
+    <div onClick={onClick} style={{ padding:"14px 16px", borderBottom:"1px solid #f1f5f9", cursor:"pointer", background:isSelected?"#eff6ff":"#fff", borderLeft:`3px solid ${isSelected?"#1e3a8a":"transparent"}`, transition:"background 0.12s" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" })}>{b.userName}</div>
+          <div style={st({ fontSize:12, color:"#64748b", marginTop:1 })}>{b.eventType} · {b.eventDate}</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, marginLeft: 8 }}>
+        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:3, marginLeft:8 }}>
           <StatusBadge status={b.status} />
-          {hasNew && (
-            <span style={s({ fontSize: 10, fontWeight: 800, background: "#fee2e2", color: "#991b1b", padding: "2px 8px", borderRadius: 20 })}>
-              ● New
-            </span>
-          )}
+          {hasNew && <span style={st({ fontSize:10, fontWeight:800, background:"#fee2e2", color:"#991b1b", padding:"2px 8px", borderRadius:20 })}>● New</span>}
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={s({ fontSize: 11, color: "#94a3b8" })}>📍 {b.location}</span>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <span style={st({ fontSize:11, color:"#94a3b8" })}>📍 {b.location}</span>
         <AmountDisplay booking={b} />
       </div>
     </div>
   );
 }
 
+// ─── NEG THREAD ──────────────────────────────────────────────────────────────
 function NegThread({ negotiation, userName }) {
   if (!negotiation?.length) return null;
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={s({ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 })}>
-        Price Discussion
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", padding: "2px 0" }}>
-        {negotiation.map((msg, i) => {
-          const isArtist = msg.from === "artist";
+    <div style={{ marginBottom:14 }}>
+      <div style={st({ fontSize:11, fontWeight:800, color:"#475569", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 })}>Price Discussion</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:200, overflowY:"auto" }}>
+        {negotiation.map((msg,i) => {
+          const isA = msg.from==="artist";
           return (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: isArtist ? "flex-end" : "flex-start", gap: 2 }}>
-              <span style={s({ fontSize: 10, color: "#94a3b8" })}>{isArtist ? "You" : userName}</span>
-              <div style={{
-                maxWidth: "80%", padding: "9px 13px",
-                borderRadius: isArtist ? "16px 3px 16px 16px" : "3px 16px 16px 16px",
-                background: isArtist ? "#1e3a8a" : "#f8fafc",
-                border: isArtist ? "none" : "1px solid #e2e8f0",
-                color: isArtist ? "#fff" : "#1e293b",
-                fontSize: 13, fontFamily: "'Nunito',sans-serif", lineHeight: 1.55,
-              }}>
-                {msg.message && <div style={{ marginBottom: msg.price ? 5 : 0 }}>{msg.message}</div>}
-                {msg.price && (
-                  <span style={{
-                    display: "inline-block",
-                    background: isArtist ? "rgba(255,255,255,0.18)" : "#f0fdf4",
-                    color: isArtist ? "#fff" : "#15803d",
-                    padding: "2px 10px", borderRadius: 20,
-                    fontSize: 13, fontWeight: 800, fontFamily: "'Bebas Neue',sans-serif",
-                  }}>
-                    ₹{fmt(msg.price)}
-                  </span>
-                )}
+            <div key={i} style={{ display:"flex", flexDirection:"column", alignItems:isA?"flex-end":"flex-start", gap:2 }}>
+              <span style={st({ fontSize:10, color:"#94a3b8" })}>{isA?"You":userName}</span>
+              <div style={{ maxWidth:"80%", padding:"9px 13px", borderRadius:isA?"16px 3px 16px 16px":"3px 16px 16px 16px", background:isA?"#1e3a8a":"#f8fafc", border:isA?"none":"1px solid #e2e8f0", color:isA?"#fff":"#1e293b", fontSize:13, fontFamily:"'Nunito',sans-serif", lineHeight:1.55 }}>
+                {msg.message && <div style={{ marginBottom:msg.price?5:0 }}>{msg.message}</div>}
+                {msg.price && <span style={{ display:"inline-block", background:isA?"rgba(255,255,255,0.18)":"#f0fdf4", color:isA?"#fff":"#15803d", padding:"2px 10px", borderRadius:20, fontSize:13, fontWeight:800, fontFamily:"'Bebas Neue',sans-serif" }}>₹{fmt(msg.price)}</span>}
               </div>
             </div>
           );
@@ -146,112 +106,84 @@ function NegThread({ negotiation, userName }) {
   );
 }
 
+// ─── LIVE STATUS PANEL ───────────────────────────────────────────────────────
 function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMsg, setOfferMsg, onSendOffer, sending, error }) {
   const { status, agreedPrice, paidAmount, basePrice, userName, negotiation } = booking;
-  const lastUserOffer   = [...(negotiation || [])].reverse().find((m) => m.from === "user");
-  const lastArtistOffer = [...(negotiation || [])].reverse().find((m) => m.from === "artist");
-  const canAcceptUser   = ["pending_approval", "negotiating"].includes(status) && lastUserOffer && lastUserOffer !== lastArtistOffer;
+  const lastUserOffer   = [...(negotiation||[])].reverse().find(m=>m.from==="user");
+  const lastArtistOffer = [...(negotiation||[])].reverse().find(m=>m.from==="artist");
+  const canAccept = ["pending_approval","negotiating"].includes(status) && lastUserOffer && lastUserOffer!==lastArtistOffer;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: "14px 16px" }}>
-        <div style={s({ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 })}>
-          Booking Progress
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          {[
-            { key: "pending_approval", label: "Request received",    icon: "📥" },
-            { key: "negotiating",      label: "Negotiating price",   icon: "💬" },
-            { key: "price_agreed",     label: "Price agreed",        icon: "🤝" },
-            { key: "payment_pending",  label: "Payment in progress", icon: "💳" },
-            { key: "confirmed",        label: "Booking confirmed",   icon: "✅" },
-          ].map((step, idx, arr) => {
-            const statuses   = ["pending_approval","negotiating","price_agreed","payment_pending","confirmed"];
-            const currentIdx = statuses.indexOf(status);
-            const stepIdx    = statuses.indexOf(step.key);
-            const done       = stepIdx < currentIdx || (status !== "cancelled" && step.key === status);
-            const active     = step.key === status && status !== "cancelled";
-            const cancelled  = status === "cancelled";
-            return (
-              <div key={step.key} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
-                    background: cancelled ? "#fee2e2" : done ? (active ? "#1e3a8a" : "#dcfce7") : "#f1f5f9",
-                    border: active ? "2px solid #1e3a8a" : "2px solid transparent",
-                  }}>
-                    {cancelled ? "✕" : done ? (active ? step.icon : "✓") : "○"}
-                  </div>
-                  {idx < arr.length - 1 && (
-                    <div style={{ width: 2, height: 18, background: stepIdx < currentIdx && !cancelled ? "#16a34a" : "#e2e8f0", margin: "2px 0" }} />
-                  )}
+    <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:14, padding:"14px 16px" }}>
+        <div style={st({ fontSize:11, fontWeight:800, color:"#475569", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 })}>Booking Progress</div>
+        {[
+          { key:"pending_approval", label:"Request received",    icon:"📥" },
+          { key:"negotiating",      label:"Negotiating price",   icon:"💬" },
+          { key:"price_agreed",     label:"Price agreed",        icon:"🤝" },
+          { key:"payment_pending",  label:"Payment in progress", icon:"💳" },
+          { key:"confirmed",        label:"Booking confirmed",   icon:"✅" },
+        ].map((step,idx,arr) => {
+          const order = ["pending_approval","negotiating","price_agreed","payment_pending","confirmed"];
+          const ci = order.indexOf(status), si = order.indexOf(step.key);
+          const done = si<ci || (status!=="cancelled" && step.key===status);
+          const active = step.key===status && status!=="cancelled";
+          const cancelled = status==="cancelled";
+          return (
+            <div key={step.key} style={{ display:"flex", alignItems:"flex-start", gap:10 }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
+                <div style={{ width:28, height:28, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, background:cancelled?"#fee2e2":done?(active?"#1e3a8a":"#dcfce7"):"#f1f5f9", border:active?"2px solid #1e3a8a":"2px solid transparent" }}>
+                  {cancelled?"✕":done?(active?step.icon:"✓"):"○"}
                 </div>
-                <div style={{ paddingTop: 4 }}>
-                  <div style={s({
-                    fontSize: 12, fontWeight: active ? 800 : 600, lineHeight: 1.6,
-                    color: active ? "#1e293b" : done && !cancelled ? "#16a34a" : "#94a3b8",
-                  })}>
-                    {step.label}
-                    {active && agreedPrice && step.key === "price_agreed" && (
-                      <span style={s({ marginLeft: 6, fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, color: "#15803d" })}>₹{fmt(agreedPrice)}</span>
-                    )}
-                    {active && paidAmount && step.key === "confirmed" && (
-                      <span style={s({ marginLeft: 6, fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, color: "#15803d" })}>₹{fmt(paidAmount)} received</span>
-                    )}
-                  </div>
+                {idx<arr.length-1 && <div style={{ width:2, height:18, background:si<ci&&!cancelled?"#16a34a":"#e2e8f0", margin:"2px 0" }} />}
+              </div>
+              <div style={{ paddingTop:4 }}>
+                <div style={st({ fontSize:12, fontWeight:active?800:600, lineHeight:1.6, color:active?"#1e293b":done&&!cancelled?"#16a34a":"#94a3b8" })}>
+                  {step.label}
+                  {active&&agreedPrice&&step.key==="price_agreed" && <span style={st({ marginLeft:6, fontFamily:"'Bebas Neue',sans-serif", fontSize:14, color:"#15803d" })}>₹{fmt(agreedPrice)}</span>}
+                  {active&&paidAmount&&step.key==="confirmed"     && <span style={st({ marginLeft:6, fontFamily:"'Bebas Neue',sans-serif", fontSize:14, color:"#15803d" })}>₹{fmt(paidAmount)} received</span>}
                 </div>
               </div>
-            );
-          })}
-          {status === "cancelled" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>✕</div>
-              <div style={s({ fontSize: 12, fontWeight: 800, color: "#7f1d1d" })}>Booking cancelled</div>
             </div>
-          )}
-        </div>
+          );
+        })}
+        {status==="cancelled" && (
+          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", background:"#fee2e2", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>✕</div>
+            <div style={st({ fontSize:12, fontWeight:800, color:"#7f1d1d" })}>Booking cancelled</div>
+          </div>
+        )}
       </div>
 
-      {canAcceptUser && (
-        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+      {canAccept && (
+        <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:12, padding:"12px 14px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:8 }}>
           <div>
-            <div style={s({ fontSize: 13, fontWeight: 800, color: "#15803d" })}>{userName} offered ₹{fmt(lastUserOffer.price)}</div>
-            <div style={s({ fontSize: 11, color: "#16a34a", marginTop: 2 })}>Accept to lock this price</div>
+            <div style={st({ fontSize:13, fontWeight:800, color:"#15803d" })}>{userName} offered ₹{fmt(lastUserOffer.price)}</div>
+            <div style={st({ fontSize:11, color:"#16a34a", marginTop:2 })}>Accept to lock this price</div>
           </div>
-          <button onClick={() => onAccept(lastUserOffer.price)} disabled={sending}
-            style={s({ background: "#16a34a", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: sending ? 0.7 : 1 })}>
+          <button onClick={()=>onAccept(lastUserOffer.price)} disabled={sending} style={st({ background:"#16a34a", color:"#fff", border:"none", padding:"8px 16px", borderRadius:8, fontWeight:800, fontSize:13, cursor:"pointer", opacity:sending?0.7:1 })}>
             Accept ₹{fmt(lastUserOffer.price)}
           </button>
         </div>
       )}
 
-      {["pending_approval", "negotiating"].includes(status) && (
-        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: "14px 16px" }}>
-          <div style={s({ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 })}>
-            Send Your Price
-          </div>
-          <label style={s({ fontSize: 11, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 })}>Your price (₹)</label>
-          <input type="number" value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} placeholder="Enter price"
-            style={s({ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 10 })} />
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {[basePrice, Math.round(basePrice * 1.2), Math.round(basePrice * 1.5)].map((p) => (
-              <button key={p} onClick={() => setOfferPrice(p)}
-                style={s({ background: "#fff", border: "1px solid #e2e8f0", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer" })}>
-                ₹{fmt(p)}
-              </button>
+      {["pending_approval","negotiating"].includes(status) && (
+        <div style={{ background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:14, padding:"14px 16px" }}>
+          <div style={st({ fontSize:11, fontWeight:800, color:"#475569", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 })}>Send Your Price</div>
+          <label style={st({ fontSize:11, fontWeight:700, color:"#64748b", display:"block", marginBottom:4 })}>Your price (₹)</label>
+          <input type="number" value={offerPrice} onChange={e=>setOfferPrice(e.target.value)} placeholder="Enter price"
+            style={st({ width:"100%", border:"1px solid #cbd5e1", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", boxSizing:"border-box", marginBottom:10 })} />
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+            {[basePrice, Math.round(basePrice*1.2), Math.round(basePrice*1.5)].map(p=>(
+              <button key={p} onClick={()=>setOfferPrice(p)} style={st({ background:"#fff", border:"1px solid #e2e8f0", padding:"4px 10px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer" })}>₹{fmt(p)}</button>
             ))}
           </div>
-          <label style={s({ fontSize: 11, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 })}>Message to client</label>
-          <textarea value={offerMsg} onChange={(e) => setOfferMsg(e.target.value)} placeholder="Explain your offer…" rows={3}
-            style={s({ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 10 })} />
-          {error && (
-            <div style={s({ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 12, marginBottom: 10 })}>
-              {error}
-            </div>
-          )}
-          <button onClick={onSendOffer} disabled={sending}
-            style={s({ background: "#1e3a8a", color: "#fff", border: "none", padding: "10px 16px", borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: "pointer", width: "100%", opacity: sending ? 0.7 : 1 })}>
-            {sending ? "Sending…" : "Send Price Offer →"}
+          <label style={st({ fontSize:11, fontWeight:700, color:"#64748b", display:"block", marginBottom:4 })}>Message to client</label>
+          <textarea value={offerMsg} onChange={e=>setOfferMsg(e.target.value)} placeholder="Explain your offer…" rows={3}
+            style={st({ width:"100%", border:"1px solid #cbd5e1", borderRadius:8, padding:"8px 12px", fontSize:13, outline:"none", resize:"none", boxSizing:"border-box", marginBottom:10 })} />
+          {error && <div style={st({ background:"#fee2e2", border:"1px solid #fca5a5", color:"#991b1b", padding:10, borderRadius:8, fontSize:12, marginBottom:10 })}>{error}</div>}
+          <button onClick={onSendOffer} disabled={sending} style={st({ background:"#1e3a8a", color:"#fff", border:"none", padding:"10px 16px", borderRadius:8, fontWeight:800, fontSize:13, cursor:"pointer", width:"100%", opacity:sending?0.7:1 })}>
+            {sending?"Sending…":"Send Price Offer →"}
           </button>
         </div>
       )}
@@ -259,21 +191,10 @@ function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMs
   );
 }
 
-export default function ArtistDashboard() {
+// ─── BOOKINGS TAB ────────────────────────────────────────────────────────────
+function BookingsTab({ artistId }) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const tab = searchParams.get("tab") || "bookings";
-
-  const artist   = getArtist();
-  const artistId = artist?._id;
-
-  useEffect(() => {
-    if (tab === "profile" && artistId) {
-      navigate(`/artist-profile/${artistId}`, { replace: true });
-    }
-  }, [tab, artistId, navigate]);
-
   const [bookings,   setBookings]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [selected,   setSelected]   = useState(null);
@@ -289,190 +210,400 @@ export default function ArtistDashboard() {
     socket.emit("join_artist_room", artistId);
     socket.on("new_booking_request", fetchBookings);
     socket.on("user_counter", ({ bookingId, price, message }) => {
-      const entry = { from: "user", price, message, timestamp: new Date() };
-      updateBooking(bookingId, (b) => ({ ...b, status: "negotiating", negotiation: [...(b.negotiation || []), entry] }));
+      const entry = { from:"user", price, message, timestamp:new Date() };
+      upd(bookingId, b=>({ ...b, status:"negotiating", negotiation:[...(b.negotiation||[]),entry] }));
     });
-    socket.on("price_accepted", ({ bookingId, price }) =>
-      updateBooking(bookingId, (b) => ({ ...b, status: "price_agreed", agreedPrice: price }))
-    );
-    socket.on("booking_confirmed", ({ bookingId, paidAmount }) =>
-      updateBooking(bookingId, (b) => ({ ...b, status: "confirmed", paidAmount }))
-    );
-    return () => {
-      socket.off("new_booking_request");
-      socket.off("user_counter");
-      socket.off("price_accepted");
-      socket.off("booking_confirmed");
-    };
+    socket.on("price_accepted",    ({ bookingId, price })       => upd(bookingId, b=>({ ...b, status:"price_agreed", agreedPrice:price })));
+    socket.on("booking_confirmed", ({ bookingId, paidAmount })  => upd(bookingId, b=>({ ...b, status:"confirmed",    paidAmount })));
+    return () => { socket.off("new_booking_request"); socket.off("user_counter"); socket.off("price_accepted"); socket.off("booking_confirmed"); };
   }, [artistId]);
 
-  const updateBooking = (id, fn) => {
-    setBookings((bs) => bs.map((b) => (b._id === id ? fn(b) : b)));
-    setSelected((sel) => (sel?._id === id ? fn(sel) : sel));
-  };
+  const upd = (id,fn) => { setBookings(bs=>bs.map(b=>b._id===id?fn(b):b)); setSelected(s=>s?._id===id?fn(s):s); };
 
   const fetchBookings = async () => {
     if (!artistId) { setLoading(false); return; }
-    try {
-      const res = await axios.get(`${API}/api/bookings/artist/${artistId}`);
-      setBookings(Array.isArray(res.data) ? res.data : []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+    try { const r = await axios.get(`${API}/api/bookings/artist/${artistId}`); setBookings(Array.isArray(r.data)?r.data:[]); }
+    catch(e) { console.error(e); } finally { setLoading(false); }
   };
-  useEffect(() => { fetchBookings(); }, [artistId]);
+  useEffect(()=>{ fetchBookings(); },[artistId]);
 
-  const openBooking = (b) => {
+  const open = (b) => {
     setSelected(b);
-    const lastArtist = [...(b.negotiation || [])].reverse().find((m) => m.from === "artist");
-    setOfferPrice(lastArtist ? lastArtist.price : b.basePrice);
-    setOfferMsg("");
-    setError("");
+    const la = [...(b.negotiation||[])].reverse().find(m=>m.from==="artist");
+    setOfferPrice(la?la.price:b.basePrice);
+    setOfferMsg(""); setError("");
     if (isMobile) setShowDetail(true);
   };
 
   const sendOffer = async () => {
     const price = parseInt(offerPrice);
-    if (!price || price <= 0) { setError("Enter a valid price."); return; }
-    if (!offerMsg.trim())     { setError("Add a message."); return; }
+    if (!price||price<=0) { setError("Enter a valid price."); return; }
+    if (!offerMsg.trim())  { setError("Add a message."); return; }
     setSending(true); setError("");
     try {
-      await axios.post(`${API}/api/bookings/${selected._id}/offer`, { price, message: offerMsg });
-      const entry = { from: "artist", price, message: offerMsg, timestamp: new Date() };
-      updateBooking(selected._id, (b) => ({ ...b, status: "negotiating", negotiation: [...(b.negotiation || []), entry] }));
+      await axios.post(`${API}/api/bookings/${selected._id}/offer`, { price, message:offerMsg });
+      const entry = { from:"artist", price, message:offerMsg, timestamp:new Date() };
+      upd(selected._id, b=>({ ...b, status:"negotiating", negotiation:[...(b.negotiation||[]),entry] }));
       setOfferMsg("");
-    } catch {
-      setError("Failed to send offer. Please try again.");
-    } finally {
-      setSending(false);
-    }
+    } catch { setError("Failed to send offer."); } finally { setSending(false); }
   };
 
-  const acceptUserCounter = async (price) => {
+  const acceptCounter = async (price) => {
     setSending(true);
     try {
       await axios.post(`${API}/api/bookings/${selected._id}/artist-accept`, { price });
-      updateBooking(selected._id, (b) => ({ ...b, status: "price_agreed", agreedPrice: price }));
-    } catch {
-      setError("Failed to accept price.");
-    } finally {
-      setSending(false);
-    }
+      upd(selected._id, b=>({ ...b, status:"price_agreed", agreedPrice:price }));
+    } catch { setError("Failed to accept price."); } finally { setSending(false); }
   };
 
-  const pendingList = bookings.filter((b) => b.status === "pending_approval");
-  const ongoingList = bookings.filter((b) => ["negotiating", "price_agreed", "payment_pending"].includes(b.status));
-  const pastList    = bookings.filter((b) => ["confirmed", "cancelled"].includes(b.status));
-  const displayList =
-    filter === "pending_approval" ? pendingList :
-    filter === "ongoing"          ? ongoingList :
-    filter === "past"             ? pastList    : bookings;
+  const pending = bookings.filter(b=>b.status==="pending_approval");
+  const ongoing = bookings.filter(b=>["negotiating","price_agreed","payment_pending"].includes(b.status));
+  const past    = bookings.filter(b=>["confirmed","cancelled"].includes(b.status));
+  const list    = filter==="pending_approval"?pending:filter==="ongoing"?ongoing:filter==="past"?past:bookings;
 
-  const filterTabs = [
-    { id: "pending_approval", label: `Requests (${pendingList.length})` },
-    { id: "ongoing",          label: `Ongoing (${ongoingList.length})` },
-    { id: "past",             label: `Past (${pastList.length})` },
-    { id: "all",              label: `All (${bookings.length})` },
+  const filters = [
+    { id:"pending_approval", label:`Requests (${pending.length})` },
+    { id:"ongoing",          label:`Ongoing (${ongoing.length})` },
+    { id:"past",             label:`Past (${past.length})` },
+    { id:"all",              label:`All (${bookings.length})` },
   ];
 
-  const DetailPanel = () => {
-    if (!selected) {
-      return (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8", gap: 10, padding: 40 }}>
-          <div style={{ fontSize: 40 }}>📋</div>
-          <div style={s({ fontSize: 14 })}>Select a booking to review</div>
+  const Detail = () => !selected ? (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100%", color:"#94a3b8", gap:10, padding:40 }}>
+      <div style={{ fontSize:40 }}>📋</div>
+      <div style={st({ fontSize:14 })}>Select a booking to review</div>
+    </div>
+  ) : (
+    <div style={{ padding:20, display:"flex", flexDirection:"column", gap:14, overflowY:"auto", height:"100%" }}>
+      {isMobile && <button onClick={()=>setShowDetail(false)} style={st({ alignSelf:"flex-start", background:"#eff6ff", border:"none", color:"#1e3a8a", padding:"6px 14px", borderRadius:20, fontWeight:800, fontSize:12, cursor:"pointer" })}>← Back</button>}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8 }}>
+        <div>
+          <div style={st({ fontSize:20, fontWeight:800, color:"#1e293b" })}>{selected.userName}</div>
+          <div style={st({ fontSize:12, color:"#94a3b8", marginTop:2 })}>{selected.userEmail}</div>
         </div>
-      );
-    }
-    return (
-      <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", height: "100%" }}>
-        {isMobile && (
-          <button onClick={() => setShowDetail(false)}
-            style={s({ alignSelf: "flex-start", background: "#eff6ff", border: "none", color: "#1e3a8a", padding: "6px 14px", borderRadius: 20, fontWeight: 800, fontSize: 12, cursor: "pointer" })}>
-            ← Back
-          </button>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
-          <div>
-            <div style={s({ fontSize: 20, fontWeight: 800, color: "#1e293b" })}>{selected.userName}</div>
-            <div style={s({ fontSize: 12, color: "#94a3b8", marginTop: 2 })}>{selected.userEmail}</div>
-          </div>
-          <StatusBadge status={selected.status} size="lg" />
-        </div>
-        <button onClick={() => navigate(`/chat/${selected.userId}`)}
-          style={s({ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "10px 14px", borderRadius: 10, width: "100%", fontWeight: 700, cursor: "pointer", fontSize: 13, textAlign: "center" })}>
-          💬 Chat with {selected.userName}
-        </button>
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 14 }}>
-          {[
-            ["Event",          selected.eventType],
-            ["Date",           selected.eventDate],
-            ["Time",           selected.eventTime || "TBD"],
-            ["Duration",       selected.duration],
-            ["Location",       selected.location],
-            ["Base price",     `₹${fmt(selected.basePrice)}`],
-            selected.agreedPrice && ["Agreed price",    `₹${fmt(selected.agreedPrice)}`],
-            selected.discountAmount > 0 && ["Coupon",   `${selected.couponCode} (− ₹${fmt(selected.discountAmount)})`],
-            selected.paidAmount && ["Amount received",  `₹${fmt(selected.paidAmount)}`],
-          ].filter(Boolean).map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f8fafc", fontSize: 13, fontFamily: "'Nunito',sans-serif" }}>
-              <span style={{ color: "#64748b" }}>{k}</span>
-              <span style={{ fontWeight: 700, color: "#1e293b" }}>{v}</span>
-            </div>
-          ))}
-        </div>
-        <NegThread negotiation={selected.negotiation} userName={selected.userName} />
-        <LiveStatusPanel
-          booking={selected}
-          onAccept={acceptUserCounter}
-          offerPrice={offerPrice} setOfferPrice={setOfferPrice}
-          offerMsg={offerMsg}    setOfferMsg={setOfferMsg}
-          onSendOffer={sendOffer}
-          sending={sending} error={error}
-        />
+        <StatusBadge status={selected.status} size="lg" />
       </div>
-    );
-  };
+      <button onClick={()=>navigate(`/chat/${selected.userId}`)} style={st({ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"10px 14px", borderRadius:10, width:"100%", fontWeight:700, cursor:"pointer", fontSize:13, textAlign:"center" })}>
+        💬 Chat with {selected.userName}
+      </button>
+      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:12, padding:14 }}>
+        {[
+          ["Event",         selected.eventType],
+          ["Date",          selected.eventDate],
+          ["Time",          selected.eventTime||"TBD"],
+          ["Duration",      selected.duration],
+          ["Location",      selected.location],
+          ["Base price",   `₹${fmt(selected.basePrice)}`],
+          selected.agreedPrice && ["Agreed price", `₹${fmt(selected.agreedPrice)}`],
+          selected.paidAmount  && ["Amount received", `₹${fmt(selected.paidAmount)}`],
+        ].filter(Boolean).map(([k,v])=>(
+          <div key={k} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 0", borderBottom:"1px solid #f8fafc", fontSize:13, fontFamily:"'Nunito',sans-serif" }}>
+            <span style={{ color:"#64748b" }}>{k}</span>
+            <span style={{ fontWeight:700, color:"#1e293b" }}>{v}</span>
+          </div>
+        ))}
+      </div>
+      <NegThread negotiation={selected.negotiation} userName={selected.userName} />
+      <LiveStatusPanel booking={selected} onAccept={acceptCounter} offerPrice={offerPrice} setOfferPrice={setOfferPrice} offerMsg={offerMsg} setOfferMsg={setOfferMsg} onSendOffer={sendOffer} sending={sending} error={error} />
+    </div>
+  );
 
   return (
-    <div style={{ display: "flex", height: "100%", fontFamily: "'Nunito',sans-serif" }}>
-      {(!isMobile || !showDetail) && (
-        <div style={{ width: isMobile ? "100%" : 320, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", background: "#fff", flexShrink: 0, overflowY: "auto" }}>
-          <div style={{ padding: "18px 16px 12px", borderBottom: "1px solid #f1f5f9", position: "sticky", top: 0, background: "#fff", zIndex: 5 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={s({ fontSize: 18, fontWeight: 800, color: "#1e293b" })}>Bookings</div>
-              <button onClick={() => navigate(`/artist-profile/${artistId}`)}
-                style={s({ background: "#f1f5f9", border: "none", color: "#1e293b", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer" })}>
-                👤 Profile
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-              {filterTabs.map((t) => (
-                <button key={t.id} onClick={() => setFilter(t.id)}
-                  style={s({ border: "none", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", background: filter === t.id ? "#1e3a8a" : "transparent", color: filter === t.id ? "#fff" : "#64748b" })}>
-                  {t.label}
-                </button>
+    <div style={{ display:"flex", height:"100%" }}>
+      {(!isMobile||!showDetail) && (
+        <div style={{ width:isMobile?"100%":320, borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column", background:"#fff", flexShrink:0, overflowY:"auto" }}>
+          <div style={{ padding:"18px 16px 12px", borderBottom:"1px solid #f1f5f9", position:"sticky", top:0, background:"#fff", zIndex:5 }}>
+            <div style={st({ fontSize:18, fontWeight:800, color:"#1e293b", marginBottom:10 })}>Bookings</div>
+            <div style={{ display:"flex", gap:6, overflowX:"auto", paddingBottom:2 }}>
+              {filters.map(f=>(
+                <button key={f.id} onClick={()=>setFilter(f.id)} style={st({ border:"none", padding:"5px 12px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap", background:filter===f.id?"#1e3a8a":"transparent", color:filter===f.id?"#fff":"#64748b" })}>{f.label}</button>
               ))}
             </div>
           </div>
-          {loading ? (
-            <div style={s({ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 14 })}>Loading…</div>
-          ) : displayList.length === 0 ? (
-            <div style={s({ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 14 })}>No bookings in this category.</div>
-          ) : (
-            displayList.map((b) => (
-              <BookingCard key={b._id} b={b} isSelected={selected?._id === b._id} onClick={() => openBooking(b)} />
-            ))
-          )}
+          {loading ? <div style={st({ padding:40, textAlign:"center", color:"#94a3b8", fontSize:14 })}>Loading…</div>
+          : list.length===0 ? <div style={st({ padding:40, textAlign:"center", color:"#94a3b8", fontSize:14 })}>No bookings here.</div>
+          : list.map(b=><BookingCard key={b._id} b={b} isSelected={selected?._id===b._id} onClick={()=>open(b)} />)}
         </div>
       )}
-      {(!isMobile || showDetail) && (
-        <div style={{ flex: 1, background: "#f8fafc", overflowY: "auto" }}>
-          <DetailPanel />
+      {(!isMobile||showDetail) && (
+        <div style={{ flex:1, background:"#f8fafc", overflowY:"auto" }}><Detail /></div>
+      )}
+    </div>
+  );
+}
+
+// ─── EDIT PROFILE TAB ────────────────────────────────────────────────────────
+function EditProfileTab({ artistId }) {
+  const [form,    setForm]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [msg,     setMsg]     = useState({ type:"", text:"" });
+
+  useEffect(()=>{
+    axios.get(`${API}/api/artists/${artistId}`)
+      .then(r=>setForm(r.data))
+      .catch(()=>setMsg({ type:"error", text:"Failed to load profile." }))
+      .finally(()=>setLoading(false));
+  },[artistId]);
+
+  const set = (k,v) => setForm(f=>({ ...f, [k]:v }));
+
+  const save = async () => {
+    setSaving(true); setMsg({ type:"", text:"" });
+    try { await axios.put(`${API}/api/artists/${artistId}`, form); setMsg({ type:"ok", text:"Profile saved!" }); }
+    catch { setMsg({ type:"error", text:"Failed to save." }); } finally { setSaving(false); }
+  };
+
+  if (loading) return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Loading…</div>;
+  if (!form)   return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Could not load profile.</div>;
+
+  const Field = ({ label, k, type="text", multiline=false, placeholder="" }) => (
+    <div style={{ marginBottom:14 }}>
+      <label style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8, display:"block", marginBottom:4 })}>{label}</label>
+      {multiline
+        ? <textarea value={form[k]||""} onChange={e=>set(k,e.target.value)} placeholder={placeholder} rows={4} style={st({ padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, outline:"none", width:"100%", boxSizing:"border-box", resize:"vertical" })} />
+        : <input type={type} value={form[k]||""} onChange={e=>set(k,e.target.value)} placeholder={placeholder} style={st({ padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, outline:"none", width:"100%", boxSizing:"border-box" })} />
+      }
+    </div>
+  );
+
+  return (
+    <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Edit Profile</div>
+      {[
+        { title:"Basic Info", fields:[
+          { label:"Artist Name", k:"name" }, { label:"Category", k:"category", placeholder:"e.g. Musician" },
+          { label:"Location",    k:"location" }, { label:"Phone", k:"phone" },
+        ]},
+        { title:"Pricing", fields:[
+          { label:"Base Price (₹)", k:"basePrice", type:"number" }, { label:"Price Note", k:"priceNote", placeholder:"e.g. per event" },
+        ]},
+        { title:"Social & Portfolio", fields:[
+          { label:"Instagram", k:"instagram", placeholder:"@handle" }, { label:"Portfolio URL", k:"portfolioUrl", placeholder:"https://…" },
+        ]},
+      ].map(section=>(
+        <div key={section.title} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+          <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>{section.title}</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }}>
+            {section.fields.map(f=><Field key={f.k} {...f} />)}
+          </div>
+        </div>
+      ))}
+      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+        <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Bio</div>
+        <Field label="Bio" k="bio" multiline placeholder="Describe yourself…" />
+      </div>
+      {msg.text && <div style={{ border:"1px solid", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif", background:msg.type==="ok"?"#f0fdf4":"#fee2e2", color:msg.type==="ok"?"#15803d":"#7f1d1d", borderColor:msg.type==="ok"?"#86efac":"#fca5a5" }}>{msg.text}</div>}
+      <button onClick={save} disabled={saving} style={st({ background:"#1e3a8a", color:"#fff", border:"none", padding:"13px 24px", borderRadius:20, fontWeight:800, fontSize:14, cursor:"pointer", alignSelf:"flex-start", opacity:saving?0.7:1 })}>
+        {saving?"Saving…":"Save Changes →"}
+      </button>
+    </div>
+  );
+}
+
+// ─── REVIEWS TAB ─────────────────────────────────────────────────────────────
+function ReviewsTab({ artistId }) {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    axios.get(`${API}/api/artists/${artistId}/reviews`)
+      .then(r=>setReviews(Array.isArray(r.data)?r.data:[]))
+      .catch(()=>{})
+      .finally(()=>setLoading(false));
+  },[artistId]);
+
+  const avg = reviews.length ? (reviews.reduce((s,r)=>s+(r.rating||0),0)/reviews.length).toFixed(1) : null;
+
+  if (loading) return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Loading…</div>;
+
+  return (
+    <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Reviews</div>
+      {reviews.length>0 && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"18px 22px", display:"flex", gap:32, alignItems:"center" }}>
+          <div style={{ textAlign:"center" }}>
+            <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:48, color:"#1e3a8a", lineHeight:1 })}>{avg}</div>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8 })}>Overall</div>
+          </div>
+          <div style={{ flex:1 }}>
+            {[5,4,3,2,1].map(star=>{
+              const count = reviews.filter(r=>Math.round(r.rating)===star).length;
+              const pct   = Math.round((count/reviews.length)*100);
+              return (
+                <div key={star} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                  <span style={st({ fontSize:11, color:"#64748b", width:14 })}>{star}</span>
+                  <div style={{ flex:1, height:6, borderRadius:4, background:"#e2e8f0", overflow:"hidden" }}>
+                    <div style={{ width:`${pct}%`, height:"100%", background:"#1e3a8a", borderRadius:4 }} />
+                  </div>
+                  <span style={st({ fontSize:11, color:"#94a3b8", width:28 })}>{count}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ textAlign:"center" }}>
+            <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:36, color:"#1e3a8a", lineHeight:1 })}>{reviews.length}</div>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8 })}>Reviews</div>
+          </div>
         </div>
       )}
+      {reviews.length===0 ? (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"40px 20px", textAlign:"center", color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
+          <div style={{ fontWeight:700 }}>No reviews yet</div>
+        </div>
+      ) : reviews.map((r,i)=>(
+        <div key={r._id||i} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+            <div>
+              <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{r.userName||"Anonymous"}</div>
+              <div style={st({ fontSize:11, color:"#94a3b8" })}>{r.eventType}</div>
+            </div>
+            <div style={{ display:"flex", gap:2 }}>
+              {[1,2,3,4,5].map(s=><span key={s} style={{ fontSize:14, color:s<=Math.round(r.rating)?"#f59e0b":"#e2e8f0" }}>★</span>)}
+            </div>
+          </div>
+          {r.comment && <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.comment}</div>}
+          {r.review  && <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.review}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── EARNINGS TAB ────────────────────────────────────────────────────────────
+function EarningsTab({ artistId }) {
+  const [data,    setData]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState("");
+
+  useEffect(()=>{
+    axios.get(`${API}/api/artists/${artistId}/earnings`)
+      .then(r=>setData(r.data))
+      .catch(()=>setError("Could not load earnings."))
+      .finally(()=>setLoading(false));
+  },[artistId]);
+
+  if (loading) return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Loading…</div>;
+
+  const bookings     = Array.isArray(data)?data:(data?.bookings||[]);
+  const totalEarned  = data?.totalEarned  ?? bookings.reduce((s,b)=>s+(b.paidAmount||0),0);
+  const totalGigs    = data?.totalBookings ?? bookings.length;
+  const pending      = data?.pendingPayout ?? 0;
+  const thisMonth    = data?.thisMonth     ?? bookings.filter(b=>new Date(b.updatedAt).getMonth()===new Date().getMonth()).reduce((s,b)=>s+(b.paidAmount||0),0);
+
+  return (
+    <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
+      <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Earnings</div>
+      {error && <div style={{ background:"#fee2e2", border:"1px solid #fca5a5", color:"#7f1d1d", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif" }}>{error}</div>}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
+        {[
+          { label:"Total Earned",   val:`₹${fmt(totalEarned)}`,  color:"#1e3a8a" },
+          { label:"This Month",     val:`₹${fmt(thisMonth)}`,    color:"#15803d" },
+          { label:"Pending Payout", val:`₹${fmt(pending)}`,      color:"#7e22ce" },
+          { label:"Completed Gigs", val:totalGigs,               color:"#0e7490" },
+        ].map(s=>(
+          <div key={s.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"18px 16px", textAlign:"center" }}>
+            <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, color:s.color, letterSpacing:1 })}>{s.val}</div>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8, marginTop:4 })}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {bookings.length>0 && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+          <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Completed Bookings</div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"'Nunito',sans-serif", fontSize:13 }}>
+              <thead>
+                <tr style={{ borderBottom:"2px solid #e2e8f0" }}>
+                  {["Client","Event","Date","Amount"].map(h=>(
+                    <th key={h} style={{ textAlign:"left", padding:"8px 10px", fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {bookings.map((b,i)=>(
+                  <tr key={b._id||i} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                    <td style={{ padding:"10px", fontWeight:700, color:"#1e293b" }}>{b.userName}</td>
+                    <td style={{ padding:"10px", color:"#475569" }}>{b.eventType}</td>
+                    <td style={{ padding:"10px", color:"#475569" }}>{b.eventDate}</td>
+                    <td style={{ padding:"10px", fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:"#1e3a8a" }}>₹{fmt(b.paidAmount||b.agreedPrice||0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── MAIN DASHBOARD ──────────────────────────────────────────────────────────
+export default function ArtistDashboard() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "bookings");
+  const [artistData, setArtistData] = useState(null);
+
+  const artist   = getArtist();
+  const artistId = artist?._id;
+
+  useEffect(()=>{
+    if (!artistId) return;
+    axios.get(`${API}/api/artists/${artistId}`)
+      .then(r=>setArtistData(r.data))
+      .catch(()=>{});
+  },[artistId]);
+
+  const displayName = artistData?.name || artist?.name || "Artist";
+
+  return (
+    <div style={{ display:"flex", height:"100vh", fontFamily:"'Nunito',sans-serif", background:"#f8fafc", overflow:"hidden" }}>
+      <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+
+      {/* Sidebar */}
+      <aside style={{ width:220, background:"#1e3a8a", display:"flex", flexDirection:"column", padding:"24px 14px 16px", flexShrink:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28, paddingBottom:20, borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ width:42, height:42, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:22, flexShrink:0 }}>
+            {displayName[0]?.toUpperCase()}
+          </div>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:"#fff", letterSpacing:0.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{displayName}</div>
+            <div style={st({ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:1 })}>{artistData?.category||"Artist"}</div>
+          </div>
+        </div>
+        <nav style={{ display:"flex", flexDirection:"column", gap:4 }}>
+          {TABS.map(tab=>(
+            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"none", cursor:"pointer", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13, textAlign:"left", background:activeTab===tab.id?"rgba(255,255,255,0.12)":"transparent", color:activeTab===tab.id?"#fff":"rgba(255,255,255,0.6)", borderLeft:activeTab===tab.id?"3px solid #93c5fd":"3px solid transparent", transition:"all 0.15s" }}>
+              <span style={{ fontSize:16 }}>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div style={{ marginTop:"auto", paddingTop:20, textAlign:"center" }}>
+          <button onClick={()=>navigate(`/artist-profile/${artistId}`)} style={st({ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"rgba(255,255,255,0.7)", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", width:"100%" })}>
+            👤 View Profile
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile tab bar */}
+      <div style={{ display:"none" }} className="mobile-tabs" />
+
+      {/* Main */}
+      <main style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
+        {!artistId ? (
+          <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"100%", color:"#94a3b8", fontSize:14 })}>Artist not found. Please log in again.</div>
+        ) : (
+          <>
+            {activeTab==="bookings" && <BookingsTab    artistId={artistId} />}
+            {activeTab==="profile"  && <EditProfileTab artistId={artistId} />}
+            {activeTab==="reviews"  && <ReviewsTab     artistId={artistId} />}
+            {activeTab==="earnings" && <EarningsTab    artistId={artistId} />}
+          </>
+        )}
+      </main>
     </div>
   );
 }
