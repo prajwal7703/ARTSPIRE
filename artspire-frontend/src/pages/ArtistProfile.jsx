@@ -399,7 +399,13 @@ export default function ArtistProfile() {
 
   // BUG 1 FIX: check both image fields — artist.image (backend field) and artist.profileImage (legacy field)
   const profileImageSrc = artist.image || artist.profileImage || null;
+const profileImageSrc = artist.image || artist.profileImage || null;
 
+  // Merge dashboard-uploaded work samples (artist.works) with posts collection
+  const works = [
+    ...(artist.works || []).map((url, i) => ({ _id: `work-${i}`, media: url, type: "image", title: "Untitled" })),
+    ...posts,
+  ];
   return (
     <div style={{
       minHeight:"100vh",
@@ -550,8 +556,7 @@ export default function ArtistProfile() {
               {[
                 // BUG 2 FIX: use live avgRating here too
                 { v: avgRating || (artist.rating||5).toFixed(1), l:"Rating", emoji:"⭐" },
-                { v:posts.length,                                  l:"Works",  emoji:"🎨" },
-                { v:artist.profileViews||0,                        l:"Views",  emoji:"👁" },
+{ v:works.length,                                  l:"Works",  emoji:"🎨" },                { v:artist.profileViews||0,                        l:"Views",  emoji:"👁" },
               ].map(({v,l,emoji})=>(
                 <div key={l} style={{
                   background:"#fff", borderRadius:12, padding:"10px 16px",
@@ -746,7 +751,7 @@ export default function ArtistProfile() {
             </svg>
           </div>
 
-          {posts.length === 0 ? (
+        {works.length === 0 ? (
             <div style={{
               textAlign:"center", padding:"40px 20px",
               background:"#fff", borderRadius:12,
@@ -769,7 +774,7 @@ export default function ArtistProfile() {
               gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",
               gap:12,
             }}>
-              {posts.map((post, i) => {
+              {works.map((post, i) => {
                 const rotate = (i%5===0?-2:i%5===1?1:i%5===2?-1:i%5===3?2:0);
                 return (
                   <div key={post._id||i}
