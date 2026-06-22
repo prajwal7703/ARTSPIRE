@@ -1,14 +1,8 @@
 // backend/routes/bookingRoutes.js
-// Replace your existing bookingRoutes.js with this file.
-// server.js already does:  app.use("/api/bookings", bookingRoutes);
-// This file exports a plain router (not a factory) so it works with your current server.js.
-// It reads `io` from app.get("io") which server.js already sets up.
-
 const express = require("express");
 const router  = express.Router();
 const Booking = require("../models/Booking");
 
-// Helper to get io from the express app
 const getIO = (req) => req.app.get("io");
 
 /* ── CREATE booking request (user → artist) ─────────────────────────────── */
@@ -22,26 +16,37 @@ router.post("/", async (req, res) => {
       duration,  location,  basePrice, notes,
     } = req.body;
 
-    if (!artistId || !userId || !eventType || !eventDate || !location || !basePrice) {
-      return res.status(400).json({ error: "Missing required fields" });
+    const missing = [];
+    if (!artistId)  missing.push("artistId");
+    if (!eventType) missing.push("eventType");
+    if (!eventDate) missing.push("eventDate");
+    if (!location)  missing.push("location");
+    if (basePrice === undefined || basePrice === null || basePrice === "") {
+      missing.push("basePrice");
+    }
+    // userId intentionally NOT required — guests can book without an account
+
+    if (missing.length) {
+      return res.status(400).json({ error: `Missing required fields: ${missing.join(", ")}` });
     }
 
     const booking = await Booking.create({
       artistId, artistName: artistName || "",
-      userId,   userName,   userEmail: userEmail || "",
+      userId: userId || null,
+      userName: userName || "Guest",
+      userEmail: userEmail || "",
       eventType, eventDate, eventTime: eventTime || "",
       duration:  duration || "2 hours",
       location,
-      basePrice: Number(basePrice),
+      basePrice: Number(basePrice) || 0,
       notes:     notes || "",
       status:    "pending_approval",
       negotiation: [],
     });
 
-    // Notify artist's socket room
     io.to(`artist_${artistId}`).emit("new_booking_request", {
       bookingId: booking._id,
-      userName,
+      userName: userName || "Guest",
       eventType,
       eventDate,
     });
@@ -56,8 +61,7 @@ router.post("/", async (req, res) => {
 /* ── GET all bookings for an artist ─────────────────────────────────────── */
 router.get("/artist/:artistId", async (req, res) => {
   try {
-    const bookings = await Booking.find({ artistId: req.params.artistId })
-      .sort({ createdAt: -1 });
+    const bookings = await Booking.find({ artistId: req.params.artistId }).sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch artist bookings" });
@@ -67,8 +71,7 @@ router.get("/artist/:artistId", async (req, res) => {
 /* ── GET all bookings for a user ─────────────────────────────────────────── */
 router.get("/user/:userId", async (req, res) => {
   try {
-    const bookings = await Booking.find({ userId: req.params.userId })
-      .sort({ createdAt: -1 });
+    const bookings = await Booking.find({ userId: req.params.userId }).sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch user bookings" });
@@ -87,7 +90,6 @@ router.get("/:id", async (req, res) => {
 });
 
 /* ── ARTIST: send a price offer ──────────────────────────────────────────── */
-// POST /api/bookings/:id/offer   body: { price, message }
 router.post("/:id/offer", async (req, res) => {
   try {
     const io = getIO(req);
@@ -100,19 +102,12 @@ router.post("/:id/offer", async (req, res) => {
       return res.status(400).json({ error: "Cannot modify this booking" });
     }
 
-    booking.negotiation.push({
-      from: "artist", price: Number(price),
-      message: message || "", timestamp: new Date(),
-    });
+    booking.negotiation.push({ from: "artist", price: Number(price), message: message || "", timestamp: new Date() });
     booking.status = "negotiating";
     await booking.save();
 
-    // Push to user's socket room
     io.to(`user_${booking.userId}`).emit("booking_offer", {
-      bookingId: booking._id,
-      price:     Number(price),
-      message:   message || "",
-      status:    "negotiating",
+      bookingId: booking._id, price: Number(price), message: message || "", status: "negotiating",
     });
 
     res.json(booking);
@@ -123,7 +118,6 @@ router.post("/:id/offer", async (req, res) => {
 });
 
 /* ── USER: send counter offer ────────────────────────────────────────────── */
-// POST /api/bookings/:id/counter   body: { price, message }
 router.post("/:id/counter", async (req, res) => {
   try {
     const io = getIO(req);
@@ -133,19 +127,12 @@ router.post("/:id/counter", async (req, res) => {
     const booking = await Booking.findById(req.params.id);
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
-    booking.negotiation.push({
-      from: "user", price: Number(price),
-      message: message || "", timestamp: new Date(),
-    });
+    booking.negotiation.push({ from: "user", price: Number(price), message: message || "", timestamp: new Date() });
     booking.status = "negotiating";
     await booking.save();
 
-    // Push to artist's socket room
     io.to(`artist_${booking.artistId}`).emit("user_counter", {
-      bookingId: booking._id,
-      price:     Number(price),
-      message:   message || "",
-      userName:  booking.userName,
+      bookingId: booking._id, price: Number(price), message: message || "", userName: booking.userName,
     });
 
     res.json(booking);
@@ -156,16 +143,13 @@ router.post("/:id/counter", async (req, res) => {
 });
 
 /* ── USER: accept artist's offer → price_agreed ──────────────────────────── */
-// POST /api/bookings/:id/user-accept   body: { price }
 router.post("/:id/user-accept", async (req, res) => {
   try {
     const io = getIO(req);
     const { price } = req.body;
 
     const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: "price_agreed", agreedPrice: Number(price) },
-      { new: true }
+      req.params.id, { status: "price_agreed", agreedPrice: Number(price) }, { new: true }
     );
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
@@ -181,16 +165,13 @@ router.post("/:id/user-accept", async (req, res) => {
 });
 
 /* ── ARTIST: accept user's counter offer → price_agreed ─────────────────── */
-// POST /api/bookings/:id/artist-accept   body: { price }
 router.post("/:id/artist-accept", async (req, res) => {
   try {
     const io = getIO(req);
     const { price } = req.body;
 
     const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { status: "price_agreed", agreedPrice: Number(price) },
-      { new: true }
+      req.params.id, { status: "price_agreed", agreedPrice: Number(price) }, { new: true }
     );
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
@@ -206,7 +187,6 @@ router.post("/:id/artist-accept", async (req, res) => {
 });
 
 /* ── CREATE Razorpay order → payment_pending ─────────────────────────────── */
-// POST /api/bookings/create-order   body: { bookingId }
 router.post("/create-order", async (req, res) => {
   try {
     const { bookingId } = req.body;
@@ -218,46 +198,20 @@ router.post("/create-order", async (req, res) => {
 
     const amountPaise = Math.round(booking.agreedPrice * 100);
 
-    // If Razorpay keys are not set, return a demo order
     if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
       const demoOrderId = `demo_order_${Date.now()}`;
-      await Booking.findByIdAndUpdate(bookingId, {
-        status:  "payment_pending",
-        orderId: demoOrderId,
-      });
-      return res.json({
-        orderId:     demoOrderId,
-        amount:      amountPaise,
-        finalAmount: booking.agreedPrice,
-        keyId:       null,
-        demo:        true,
-      });
+      await Booking.findByIdAndUpdate(bookingId, { status: "payment_pending", orderId: demoOrderId });
+      return res.json({ orderId: demoOrderId, amount: amountPaise, finalAmount: booking.agreedPrice, keyId: null, demo: true });
     }
 
     const Razorpay = require("razorpay");
-    const rzp = new Razorpay({
-      key_id:     process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
+    const rzp = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID, key_secret: process.env.RAZORPAY_KEY_SECRET });
 
-    const order = await rzp.orders.create({
-      amount:   amountPaise,
-      currency: "INR",
-      receipt:  `bk_${bookingId}`,
-    });
+    const order = await rzp.orders.create({ amount: amountPaise, currency: "INR", receipt: `bk_${bookingId}` });
 
-    await Booking.findByIdAndUpdate(bookingId, {
-      status:  "payment_pending",
-      orderId: order.id,
-    });
+    await Booking.findByIdAndUpdate(bookingId, { status: "payment_pending", orderId: order.id });
 
-    res.json({
-      orderId:     order.id,
-      amount:      amountPaise,
-      finalAmount: booking.agreedPrice,
-      keyId:       process.env.RAZORPAY_KEY_ID,
-      demo:        false,
-    });
+    res.json({ orderId: order.id, amount: amountPaise, finalAmount: booking.agreedPrice, keyId: process.env.RAZORPAY_KEY_ID, demo: false });
   } catch (err) {
     console.error("POST /create-order:", err);
     res.status(500).json({ error: "Failed to create payment order" });
@@ -265,19 +219,15 @@ router.post("/create-order", async (req, res) => {
 });
 
 /* ── CONFIRM payment → confirmed ─────────────────────────────────────────── */
-// POST /api/bookings/:id/confirm-payment   body: { paymentId, orderId, signature }
 router.post("/:id/confirm-payment", async (req, res) => {
   try {
     const io = getIO(req);
     const { paymentId, orderId, signature } = req.body;
 
-    // Verify Razorpay signature if real keys exist
     if (process.env.RAZORPAY_KEY_SECRET && signature) {
       const crypto = require("crypto");
-      const body   = `${orderId}|${paymentId}`;
-      const expected = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-        .update(body).digest("hex");
+      const body = `${orderId}|${paymentId}`;
+      const expected = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET).update(body).digest("hex");
       if (expected !== signature) {
         return res.status(400).json({ error: "Payment signature mismatch" });
       }
@@ -285,17 +235,11 @@ router.post("/:id/confirm-payment", async (req, res) => {
 
     const booking = await Booking.findByIdAndUpdate(
       req.params.id,
-      {
-        status:      "confirmed",
-        paymentId:   paymentId || "",
-        paidAmount:  0, // will be updated below
-        confirmedAt: new Date(),
-      },
+      { status: "confirmed", paymentId: paymentId || "", paidAmount: 0, confirmedAt: new Date() },
       { new: true }
     );
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
-    // Set paidAmount = agreedPrice
     booking.paidAmount = booking.agreedPrice;
     await booking.save();
 
@@ -311,7 +255,6 @@ router.post("/:id/confirm-payment", async (req, res) => {
 });
 
 /* ── CANCEL booking ──────────────────────────────────────────────────────── */
-// POST /api/bookings/:id/cancel   body: { reason, cancelledBy }
 router.post("/:id/cancel", async (req, res) => {
   try {
     const io = getIO(req);
@@ -319,18 +262,14 @@ router.post("/:id/cancel", async (req, res) => {
 
     const booking = await Booking.findByIdAndUpdate(
       req.params.id,
-      {
-        status:      "cancelled",
-        cancelReason: reason || "",
-        cancelledBy:  cancelledBy || "user",
-      },
+      { status: "cancelled", cancelReason: reason || "", cancelledBy: cancelledBy || "user" },
       { new: true }
     );
     if (!booking) return res.status(404).json({ error: "Booking not found" });
 
     const payload = { bookingId: booking._id, cancelledBy };
     io.to(`artist_${booking.artistId}`).emit("booking_cancelled", payload);
-    io.to(`user_${booking.userId}`).emit("booking_cancelled",    payload);
+    io.to(`user_${booking.userId}`).emit("booking_cancelled", payload);
 
     res.json(booking);
   } catch (err) {

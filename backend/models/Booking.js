@@ -1,7 +1,4 @@
 // backend/models/Booking.js
-// Same as your existing model, with coupon fields added (couponCode,
-// discountAmount, finalAmount). Drop-in replacement.
-
 const mongoose = require("mongoose");
 
 const NegotiationEntrySchema = new mongoose.Schema({
@@ -15,7 +12,7 @@ const BookingSchema = new mongoose.Schema({
   // Parties
   artistId:   { type: String, required: true, index: true },
   artistName: { type: String, required: true },
-  userId:     { type: String, required: true, index: true },
+  userId:     { type: String, default: null, index: true }, // ✅ no longer required (guest bookings)
   userName:   { type: String, required: true },
   userEmail:  { type: String, default: "" },
 
@@ -27,22 +24,18 @@ const BookingSchema = new mongoose.Schema({
   duration:  { type: String, default: "2 hours" },
 
   // Pricing
-  basePrice:   { type: Number, default: 0 },    // from artist profile
-  agreedPrice: { type: Number, default: null },  // final negotiated price (before coupon)
-  paidAmount:  { type: Number, default: null },  // how much was actually paid
+  basePrice:   { type: Number, default: 0 },
+  agreedPrice: { type: Number, default: null },
+  paidAmount:  { type: Number, default: null },
   payMode:     { type: String, enum: ["advance", "full", null], default: null },
 
-  // Coupon (set when the user applies a coupon at checkout)
+  // Coupon
   couponCode:     { type: String, default: null },
   discountAmount: { type: Number, default: 0 },
-  finalAmount:    { type: Number, default: null }, // agreedPrice - discountAmount, what Razorpay actually charges
+  finalAmount:    { type: Number, default: null },
 
-  // Full negotiation thread
   negotiation: { type: [NegotiationEntrySchema], default: [] },
 
-  // Status flow:
-  // pending_approval → negotiating → price_agreed → payment_pending → confirmed
-  // or: pending_approval / negotiating → cancelled
   status: {
     type: String,
     enum: [
@@ -57,7 +50,6 @@ const BookingSchema = new mongoose.Schema({
     index: true,
   },
 
-  // Payment
   paymentId:   { type: String, default: null },
   orderId:     { type: String, default: null },
   confirmedAt: { type: Date,   default: null },
