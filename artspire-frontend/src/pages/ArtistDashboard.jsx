@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
 import socket from "../socket";
+import { getArtist } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-/* ─── STATUS CONFIG ─────────────────────────────────────────────────────────── */
 const STATUS_META = {
   pending_approval: { label: "New Request",  bg: "#fef9c3", color: "#854d0e", dot: "#ca8a04" },
   negotiating:      { label: "Negotiating",  bg: "#eff6ff", color: "#1d4ed8", dot: "#3b82f6" },
@@ -15,7 +15,6 @@ const STATUS_META = {
   cancelled:        { label: "Cancelled",    bg: "#fee2e2", color: "#7f1d1d", dot: "#ef4444" },
 };
 
-/* ─── HELPERS ────────────────────────────────────────────────────────────────── */
 function useIsMobile() {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
@@ -29,7 +28,6 @@ function useIsMobile() {
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 const s = (obj) => ({ fontFamily: "'Nunito',sans-serif", ...obj });
 
-/* ─── STATUS BADGE ───────────────────────────────────────────────────────────── */
 function StatusBadge({ status, size = "sm" }) {
   const m = STATUS_META[status] || { label: status, bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" };
   return (
@@ -45,7 +43,6 @@ function StatusBadge({ status, size = "sm" }) {
   );
 }
 
-/* ─── AMOUNT DISPLAY ─────────────────────────────────────────────────────────── */
 function AmountDisplay({ booking }) {
   if (booking.paidAmount) {
     return (
@@ -71,24 +68,18 @@ function AmountDisplay({ booking }) {
   );
 }
 
-/* ─── BOOKING LIST CARD ──────────────────────────────────────────────────────── */
 function BookingCard({ b, isSelected, onClick }) {
   const hasNew =
     b.status === "pending_approval" ||
     (b.status === "negotiating" && [...(b.negotiation || [])].reverse()[0]?.from === "user");
 
   return (
-    <div
-      onClick={onClick}
-      style={{
-        padding: "14px 16px",
-        borderBottom: "1px solid #f1f5f9",
-        cursor: "pointer",
-        background: isSelected ? "#eff6ff" : "#fff",
-        borderLeft: `3px solid ${isSelected ? "#1e3a8a" : "transparent"}`,
-        transition: "background 0.12s",
-      }}
-    >
+    <div onClick={onClick} style={{
+      padding: "14px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer",
+      background: isSelected ? "#eff6ff" : "#fff",
+      borderLeft: `3px solid ${isSelected ? "#1e3a8a" : "transparent"}`,
+      transition: "background 0.12s",
+    }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={s({ fontWeight: 800, fontSize: 14, color: "#1e293b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" })}>
@@ -105,7 +96,6 @@ function BookingCard({ b, isSelected, onClick }) {
           )}
         </div>
       </div>
-
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={s({ fontSize: 11, color: "#94a3b8" })}>📍 {b.location}</span>
         <AmountDisplay booking={b} />
@@ -114,7 +104,6 @@ function BookingCard({ b, isSelected, onClick }) {
   );
 }
 
-/* ─── NEGOTIATION THREAD ─────────────────────────────────────────────────────── */
 function NegThread({ negotiation, userName }) {
   if (!negotiation?.length) return null;
   return (
@@ -157,41 +146,37 @@ function NegThread({ negotiation, userName }) {
   );
 }
 
-/* ─── LIVE STATUS PANEL (shown in detail view below booking info) ────────────── */
 function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMsg, setOfferMsg, onSendOffer, sending, error }) {
   const { status, agreedPrice, paidAmount, basePrice, userName, negotiation } = booking;
-  const lastUserOffer = [...(negotiation || [])].reverse().find((m) => m.from === "user");
+  const lastUserOffer   = [...(negotiation || [])].reverse().find((m) => m.from === "user");
   const lastArtistOffer = [...(negotiation || [])].reverse().find((m) => m.from === "artist");
-  const canAcceptUser = ["pending_approval", "negotiating"].includes(status) && lastUserOffer && lastUserOffer !== lastArtistOffer;
+  const canAcceptUser   = ["pending_approval", "negotiating"].includes(status) && lastUserOffer && lastUserOffer !== lastArtistOffer;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {/* Real-time status tracker */}
       <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: "14px 16px" }}>
         <div style={s({ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 })}>
           Booking Progress
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
           {[
-            { key: "pending_approval", label: "Request received",   icon: "📥" },
-            { key: "negotiating",      label: "Negotiating price",  icon: "💬" },
-            { key: "price_agreed",     label: "Price agreed",       icon: "🤝" },
-            { key: "payment_pending",  label: "Payment in progress",icon: "💳" },
-            { key: "confirmed",        label: "Booking confirmed",  icon: "✅" },
+            { key: "pending_approval", label: "Request received",    icon: "📥" },
+            { key: "negotiating",      label: "Negotiating price",   icon: "💬" },
+            { key: "price_agreed",     label: "Price agreed",        icon: "🤝" },
+            { key: "payment_pending",  label: "Payment in progress", icon: "💳" },
+            { key: "confirmed",        label: "Booking confirmed",   icon: "✅" },
           ].map((step, idx, arr) => {
-            const statuses = ["pending_approval","negotiating","price_agreed","payment_pending","confirmed"];
+            const statuses   = ["pending_approval","negotiating","price_agreed","payment_pending","confirmed"];
             const currentIdx = statuses.indexOf(status);
-            const stepIdx = statuses.indexOf(step.key);
-            const done = stepIdx < currentIdx || (status !== "cancelled" && step.key === status);
-            const active = step.key === status && status !== "cancelled";
-            const cancelled = status === "cancelled";
-
+            const stepIdx    = statuses.indexOf(step.key);
+            const done       = stepIdx < currentIdx || (status !== "cancelled" && step.key === status);
+            const active     = step.key === status && status !== "cancelled";
+            const cancelled  = status === "cancelled";
             return (
               <div key={step.key} style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
                   <div style={{
-                    width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 14,
+                    width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14,
                     background: cancelled ? "#fee2e2" : done ? (active ? "#1e3a8a" : "#dcfce7") : "#f1f5f9",
                     border: active ? "2px solid #1e3a8a" : "2px solid transparent",
                   }}>
@@ -201,22 +186,17 @@ function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMs
                     <div style={{ width: 2, height: 18, background: stepIdx < currentIdx && !cancelled ? "#16a34a" : "#e2e8f0", margin: "2px 0" }} />
                   )}
                 </div>
-                <div style={{ paddingTop: 4, paddingBottom: idx < arr.length - 1 ? 0 : 0 }}>
+                <div style={{ paddingTop: 4 }}>
                   <div style={s({
-                    fontSize: 12, fontWeight: active ? 800 : 600,
+                    fontSize: 12, fontWeight: active ? 800 : 600, lineHeight: 1.6,
                     color: active ? "#1e293b" : done && !cancelled ? "#16a34a" : "#94a3b8",
-                    lineHeight: 1.6,
                   })}>
                     {step.label}
                     {active && agreedPrice && step.key === "price_agreed" && (
-                      <span style={s({ marginLeft: 6, fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, color: "#15803d" })}>
-                        ₹{fmt(agreedPrice)}
-                      </span>
+                      <span style={s({ marginLeft: 6, fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, color: "#15803d" })}>₹{fmt(agreedPrice)}</span>
                     )}
                     {active && paidAmount && step.key === "confirmed" && (
-                      <span style={s({ marginLeft: 6, fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, color: "#15803d" })}>
-                        ₹{fmt(paidAmount)} received
-                      </span>
+                      <span style={s({ marginLeft: 6, fontFamily: "'Bebas Neue',sans-serif", fontSize: 14, color: "#15803d" })}>₹{fmt(paidAmount)} received</span>
                     )}
                   </div>
                 </div>
@@ -232,66 +212,45 @@ function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMs
         </div>
       </div>
 
-      {/* Accept user counter offer */}
       {canAcceptUser && (
         <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <div>
             <div style={s({ fontSize: 13, fontWeight: 800, color: "#15803d" })}>{userName} offered ₹{fmt(lastUserOffer.price)}</div>
             <div style={s({ fontSize: 11, color: "#16a34a", marginTop: 2 })}>Accept to lock this price</div>
           </div>
-          <button
-            onClick={() => onAccept(lastUserOffer.price)}
-            disabled={sending}
-            style={s({ background: "#16a34a", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: sending ? 0.7 : 1 })}
-          >
+          <button onClick={() => onAccept(lastUserOffer.price)} disabled={sending}
+            style={s({ background: "#16a34a", color: "#fff", border: "none", padding: "8px 16px", borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: sending ? 0.7 : 1 })}>
             Accept ₹{fmt(lastUserOffer.price)}
           </button>
         </div>
       )}
 
-      {/* Send offer panel */}
       {["pending_approval", "negotiating"].includes(status) && (
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 14, padding: "14px 16px" }}>
           <div style={s({ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 })}>
             Send Your Price
           </div>
           <label style={s({ fontSize: 11, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 })}>Your price (₹)</label>
-          <input
-            type="number"
-            value={offerPrice}
-            onChange={(e) => setOfferPrice(e.target.value)}
-            placeholder="Enter price"
-            style={s({ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 10 })}
-          />
+          <input type="number" value={offerPrice} onChange={(e) => setOfferPrice(e.target.value)} placeholder="Enter price"
+            style={s({ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 10 })} />
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
             {[basePrice, Math.round(basePrice * 1.2), Math.round(basePrice * 1.5)].map((p) => (
-              <button
-                key={p}
-                onClick={() => setOfferPrice(p)}
-                style={s({ background: "#fff", border: "1px solid #e2e8f0", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer" })}
-              >
+              <button key={p} onClick={() => setOfferPrice(p)}
+                style={s({ background: "#fff", border: "1px solid #e2e8f0", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer" })}>
                 ₹{fmt(p)}
               </button>
             ))}
           </div>
           <label style={s({ fontSize: 11, fontWeight: 700, color: "#64748b", display: "block", marginBottom: 4 })}>Message to client</label>
-          <textarea
-            value={offerMsg}
-            onChange={(e) => setOfferMsg(e.target.value)}
-            placeholder="Explain your offer…"
-            rows={3}
-            style={s({ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 10 })}
-          />
+          <textarea value={offerMsg} onChange={(e) => setOfferMsg(e.target.value)} placeholder="Explain your offer…" rows={3}
+            style={s({ width: "100%", border: "1px solid #cbd5e1", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", resize: "none", boxSizing: "border-box", marginBottom: 10 })} />
           {error && (
             <div style={s({ background: "#fee2e2", border: "1px solid #fca5a5", color: "#991b1b", padding: 10, borderRadius: 8, fontSize: 12, marginBottom: 10 })}>
               {error}
             </div>
           )}
-          <button
-            onClick={onSendOffer}
-            disabled={sending}
-            style={s({ background: "#1e3a8a", color: "#fff", border: "none", padding: "10px 16px", borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: "pointer", width: "100%", opacity: sending ? 0.7 : 1 })}
-          >
+          <button onClick={onSendOffer} disabled={sending}
+            style={s({ background: "#1e3a8a", color: "#fff", border: "none", padding: "10px 16px", borderRadius: 8, fontWeight: 800, fontSize: 13, cursor: "pointer", width: "100%", opacity: sending ? 0.7 : 1 })}>
             {sending ? "Sending…" : "Send Price Offer →"}
           </button>
         </div>
@@ -300,11 +259,6 @@ function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMs
   );
 }
 
-/* ─── MAIN COMPONENT ─────────────────────────────────────────────────────────── */
-import { useSearchParams } from "react-router-dom"; // add this import at the top alongside useNavigate
-import { getArtist } from "../utils/auth";            // add this import too
-
-/* ─── MAIN COMPONENT ─────────────────────────────────────────────────────────── */
 export default function ArtistDashboard() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -314,7 +268,6 @@ export default function ArtistDashboard() {
   const artist   = getArtist();
   const artistId = artist?._id;
 
-  // ✅ If the URL says tab=profile, redirect to the real profile page
   useEffect(() => {
     if (tab === "profile" && artistId) {
       navigate(`/artist-profile/${artistId}`, { replace: true });
@@ -331,7 +284,6 @@ export default function ArtistDashboard() {
   const [error,      setError]      = useState("");
   const [filter,     setFilter]     = useState("pending_approval");
 
-  /* ── socket listeners ── */
   useEffect(() => {
     if (!artistId) return;
     socket.emit("join_artist_room", artistId);
@@ -356,7 +308,7 @@ export default function ArtistDashboard() {
 
   const updateBooking = (id, fn) => {
     setBookings((bs) => bs.map((b) => (b._id === id ? fn(b) : b)));
-    setSelected((s) => (s?._id === id ? fn(s) : s));
+    setSelected((sel) => (sel?._id === id ? fn(sel) : sel));
   };
 
   const fetchBookings = async () => {
@@ -410,17 +362,21 @@ export default function ArtistDashboard() {
     }
   };
 
-  /* ── filter logic ── */
   const pendingList = bookings.filter((b) => b.status === "pending_approval");
   const ongoingList = bookings.filter((b) => ["negotiating", "price_agreed", "payment_pending"].includes(b.status));
   const pastList    = bookings.filter((b) => ["confirmed", "cancelled"].includes(b.status));
-
   const displayList =
     filter === "pending_approval" ? pendingList :
     filter === "ongoing"          ? ongoingList :
     filter === "past"             ? pastList    : bookings;
 
-  /* ── detail panel ── */
+  const filterTabs = [
+    { id: "pending_approval", label: `Requests (${pendingList.length})` },
+    { id: "ongoing",          label: `Ongoing (${ongoingList.length})` },
+    { id: "past",             label: `Past (${pastList.length})` },
+    { id: "all",              label: `All (${bookings.length})` },
+  ];
+
   const DetailPanel = () => {
     if (!selected) {
       return (
@@ -433,10 +389,8 @@ export default function ArtistDashboard() {
     return (
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", height: "100%" }}>
         {isMobile && (
-          <button
-            onClick={() => setShowDetail(false)}
-            style={s({ alignSelf: "flex-start", background: "#eff6ff", border: "none", color: "#1e3a8a", padding: "6px 14px", borderRadius: 20, fontWeight: 800, fontSize: 12, cursor: "pointer" })}
-          >
+          <button onClick={() => setShowDetail(false)}
+            style={s({ alignSelf: "flex-start", background: "#eff6ff", border: "none", color: "#1e3a8a", padding: "6px 14px", borderRadius: 20, fontWeight: 800, fontSize: 12, cursor: "pointer" })}>
             ← Back
           </button>
         )}
@@ -447,23 +401,21 @@ export default function ArtistDashboard() {
           </div>
           <StatusBadge status={selected.status} size="lg" />
         </div>
-        <button
-          onClick={() => navigate(`/chat/${selected.userId}`)}
-          style={s({ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "10px 14px", borderRadius: 10, width: "100%", fontWeight: 700, cursor: "pointer", fontSize: 13, textAlign: "center" })}
-        >
+        <button onClick={() => navigate(`/chat/${selected.userId}`)}
+          style={s({ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "10px 14px", borderRadius: 10, width: "100%", fontWeight: 700, cursor: "pointer", fontSize: 13, textAlign: "center" })}>
           💬 Chat with {selected.userName}
         </button>
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 14 }}>
           {[
-            ["Event",     selected.eventType],
-            ["Date",      selected.eventDate],
-            ["Time",      selected.eventTime || "TBD"],
-            ["Duration",  selected.duration],
-            ["Location",  selected.location],
-            ["Base price", `₹${fmt(selected.basePrice)}`],
-            selected.agreedPrice && ["Agreed price", `₹${fmt(selected.agreedPrice)}`],
-            selected.discountAmount > 0 && ["Coupon", `${selected.couponCode} (− ₹${fmt(selected.discountAmount)})`],
-            selected.paidAmount && ["Amount received", `₹${fmt(selected.paidAmount)}`],
+            ["Event",          selected.eventType],
+            ["Date",           selected.eventDate],
+            ["Time",           selected.eventTime || "TBD"],
+            ["Duration",       selected.duration],
+            ["Location",       selected.location],
+            ["Base price",     `₹${fmt(selected.basePrice)}`],
+            selected.agreedPrice && ["Agreed price",    `₹${fmt(selected.agreedPrice)}`],
+            selected.discountAmount > 0 && ["Coupon",   `${selected.couponCode} (− ₹${fmt(selected.discountAmount)})`],
+            selected.paidAmount && ["Amount received",  `₹${fmt(selected.paidAmount)}`],
           ].filter(Boolean).map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f8fafc", fontSize: 13, fontFamily: "'Nunito',sans-serif" }}>
               <span style={{ color: "#64748b" }}>{k}</span>
@@ -475,57 +427,32 @@ export default function ArtistDashboard() {
         <LiveStatusPanel
           booking={selected}
           onAccept={acceptUserCounter}
-          offerPrice={offerPrice}
-          setOfferPrice={setOfferPrice}
-          offerMsg={offerMsg}
-          setOfferMsg={setOfferMsg}
+          offerPrice={offerPrice} setOfferPrice={setOfferPrice}
+          offerMsg={offerMsg}    setOfferMsg={setOfferMsg}
           onSendOffer={sendOffer}
-          sending={sending}
-          error={error}
+          sending={sending} error={error}
         />
       </div>
     );
   };
 
-  const filterTabs = [
-    { id: "pending_approval", label: `Requests (${pendingList.length})` },
-    { id: "ongoing",          label: `Ongoing (${ongoingList.length})` },
-    { id: "past",             label: `Past (${pastList.length})` },
-    { id: "all",              label: `All (${bookings.length})` },
-  ];
-
   return (
     <div style={{ display: "flex", height: "100%", fontFamily: "'Nunito',sans-serif" }}>
       {(!isMobile || !showDetail) && (
-        <div style={{
-          width: isMobile ? "100%" : 320,
-          borderRight: "1px solid #e2e8f0",
-          display: "flex", flexDirection: "column",
-          background: "#fff", flexShrink: 0, overflowY: "auto",
-        }}>
+        <div style={{ width: isMobile ? "100%" : 320, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", background: "#fff", flexShrink: 0, overflowY: "auto" }}>
           <div style={{ padding: "18px 16px 12px", borderBottom: "1px solid #f1f5f9", position: "sticky", top: 0, background: "#fff", zIndex: 5 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={s({ fontSize: 18, fontWeight: 800, color: "#1e293b" })}>Bookings</div>
-              <button
-                onClick={() => navigate(`/artist-profile/${artistId}`)}
-                style={s({ background: "#f1f5f9", border: "none", color: "#1e293b", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer" })}
-              >
+              <button onClick={() => navigate(`/artist-profile/${artistId}`)}
+                style={s({ background: "#f1f5f9", border: "none", color: "#1e293b", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer" })}>
                 👤 Profile
               </button>
             </div>
             <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
-              {filterTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setFilter(tab.id)}
-                  style={s({
-                    border: "none", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-                    cursor: "pointer", whiteSpace: "nowrap",
-                    background: filter === tab.id ? "#1e3a8a" : "transparent",
-                    color: filter === tab.id ? "#fff" : "#64748b",
-                  })}
-                >
-                  {tab.label}
+              {filterTabs.map((t) => (
+                <button key={t.id} onClick={() => setFilter(t.id)}
+                  style={s({ border: "none", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap", background: filter === t.id ? "#1e3a8a" : "transparent", color: filter === t.id ? "#fff" : "#64748b" })}>
+                  {t.label}
                 </button>
               ))}
             </div>
