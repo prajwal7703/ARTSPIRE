@@ -399,7 +399,7 @@ export default function ArtistProfile() {
 
   // BUG 1 FIX: check both image fields — artist.image (backend field) and artist.profileImage (legacy field)
   const profileImageSrc = artist.image || artist.profileImage || null;
-const profileImageSrc = artist.image || artist.profileImage || null;
+
 
   // Merge dashboard-uploaded work samples (artist.works) with posts collection
   const works = [
