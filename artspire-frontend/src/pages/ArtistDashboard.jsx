@@ -1,3 +1,5 @@
+// artspire-frontend/src/pages/ArtistDashboard.jsx
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
@@ -36,7 +38,7 @@ function useIsMobile() {
 const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
 const st  = (obj) => ({ fontFamily: "'Nunito',sans-serif", ...obj });
 
-// ─── STATUS BADGE ────────────────────────────────────────────────────────────
+// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
 function StatusBadge({ status, size = "sm" }) {
   const m = STATUS_META[status] || { label: status, bg: "#f1f5f9", color: "#64748b", dot: "#94a3b8" };
   return (
@@ -47,7 +49,7 @@ function StatusBadge({ status, size = "sm" }) {
   );
 }
 
-// ─── AMOUNT DISPLAY ──────────────────────────────────────────────────────────
+// ─── AMOUNT DISPLAY ───────────────────────────────────────────────────────────
 function AmountDisplay({ booking }) {
   const val   = booking.paidAmount || booking.agreedPrice || booking.basePrice;
   const label = booking.paidAmount ? "Received" : booking.agreedPrice ? "Agreed" : "Base";
@@ -60,7 +62,7 @@ function AmountDisplay({ booking }) {
   );
 }
 
-// ─── BOOKING CARD ────────────────────────────────────────────────────────────
+// ─── BOOKING CARD ─────────────────────────────────────────────────────────────
 function BookingCard({ b, isSelected, onClick }) {
   const hasNew = b.status==="pending_approval" || (b.status==="negotiating" && [...(b.negotiation||[])].reverse()[0]?.from==="user");
   return (
@@ -83,7 +85,7 @@ function BookingCard({ b, isSelected, onClick }) {
   );
 }
 
-// ─── NEG THREAD ──────────────────────────────────────────────────────────────
+// ─── NEG THREAD ───────────────────────────────────────────────────────────────
 function NegThread({ negotiation, userName }) {
   if (!negotiation?.length) return null;
   return (
@@ -107,7 +109,7 @@ function NegThread({ negotiation, userName }) {
   );
 }
 
-// ─── LIVE STATUS PANEL ───────────────────────────────────────────────────────
+// ─── LIVE STATUS PANEL ────────────────────────────────────────────────────────
 function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMsg, setOfferMsg, onSendOffer, sending, error }) {
   const { status, agreedPrice, paidAmount, basePrice, userName, negotiation } = booking;
   const lastUserOffer   = [...(negotiation||[])].reverse().find(m=>m.from==="user");
@@ -192,7 +194,7 @@ function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMs
   );
 }
 
-// ─── BOOKINGS TAB ────────────────────────────────────────────────────────────
+// ─── BOOKINGS TAB ─────────────────────────────────────────────────────────────
 function BookingsTab({ artistId }) {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -343,7 +345,7 @@ function BookingsTab({ artistId }) {
   );
 }
 
-// ─── CHAT TAB ────────────────────────────────────────────────────────────────
+// ─── CHAT TAB ─────────────────────────────────────────────────────────────────
 function ChatTab({ artistId }) {
   const [conversations, setConversations] = useState([]);
   const [selected,      setSelected]      = useState(null);
@@ -355,7 +357,6 @@ function ChatTab({ artistId }) {
   const [showChat, setShowChat] = useState(false);
   const bottomRef = useRef(null);
 
-  // Load conversations list
   const fetchConversations = async () => {
     try {
       const r = await axios.get(`${API}/api/chat/conversations/${artistId}`);
@@ -366,30 +367,23 @@ function ChatTab({ artistId }) {
   useEffect(() => {
     if (!artistId) return;
     fetchConversations();
-
-    // Socket: receive new message in real time
     socket.emit("join_artist_room", artistId);
     socket.on("receive_message", (msg) => {
-      // Update conversation list preview
       setConversations(prev => prev.map(c =>
         c.userId === msg.senderId
           ? { ...c, lastMessage: msg.message, lastTime: msg.createdAt, unread: selected?.userId === msg.senderId ? 0 : (c.unread||0)+1 }
           : c
       ));
-      // If this conversation is open, add message live
       if (selected && msg.senderId === selected.userId) {
         setMessages(prev => [...prev, msg]);
       }
     });
-
     return () => { socket.off("receive_message"); };
   }, [artistId, selected]);
 
-  // Load messages when a conversation is selected
   const openConversation = async (conv) => {
     setSelected(conv);
     if (isMobile) setShowChat(true);
-    // Mark as read
     setConversations(prev => prev.map(c => c.userId===conv.userId ? {...c, unread:0} : c));
     try {
       const r = await axios.get(`${API}/api/chat/${artistId}/${conv.userId}`);
@@ -397,7 +391,6 @@ function ChatTab({ artistId }) {
     } catch(e) { console.error(e); setMessages([]); }
   };
 
-  // Scroll to bottom when messages update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior:"smooth" });
   }, [messages]);
@@ -464,7 +457,6 @@ function ChatTab({ artistId }) {
     </div>
   ) : (
     <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#f8fafc" }}>
-      {/* Header */}
       <div style={{ padding:"14px 16px", borderBottom:"1px solid #e2e8f0", background:"#fff", display:"flex", alignItems:"center", gap:10 }}>
         {isMobile && (
           <button onClick={()=>setShowChat(false)} style={st({ background:"none", border:"none", cursor:"pointer", color:"#1e3a8a", fontWeight:800, fontSize:13 })}>← Back</button>
@@ -477,8 +469,6 @@ function ChatTab({ artistId }) {
           <div style={st({ fontSize:11, color:"#94a3b8" })}>Client</div>
         </div>
       </div>
-
-      {/* Messages */}
       <div style={{ flex:1, overflowY:"auto", padding:"16px", display:"flex", flexDirection:"column", gap:10 }}>
         {messages.length===0
           ? <div style={st({ textAlign:"center", color:"#94a3b8", fontSize:13, marginTop:40 })}>No messages yet. Say hello!</div>
@@ -495,8 +485,6 @@ function ChatTab({ artistId }) {
         }
         <div ref={bottomRef} />
       </div>
-
-      {/* Input */}
       <div style={{ padding:"12px 16px", borderTop:"1px solid #e2e8f0", background:"#fff", display:"flex", gap:8 }}>
         <input
           value={text}
@@ -520,16 +508,14 @@ function ChatTab({ artistId }) {
   );
 }
 
-// ─── EDIT PROFILE TAB ────────────────────────────────────────────────────────
+// ─── EDIT PROFILE TAB ─────────────────────────────────────────────────────────
 function EditProfileTab({ artistId }) {
-  const [form,       setForm]       = useState(null);
-  const [loading,    setLoading]    = useState(true);
-  const [saving,     setSaving]     = useState(false);
-  const [msg,        setMsg]        = useState({ type:"", text:"" });
-  const [imageFile,  setImageFile]  = useState(null);
+  const [form,         setForm]         = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [saving,       setSaving]       = useState(false);
+  const [msg,          setMsg]          = useState({ type:"", text:"" });
+  const [imageFile,    setImageFile]    = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-
-  // ── NEW: state for portfolio / work-sample uploads ──────────────────────
   const [uploadingWorks, setUploadingWorks] = useState(false);
 
   const fileRef = useRef(null);
@@ -537,7 +523,6 @@ function EditProfileTab({ artistId }) {
   useEffect(()=>{
     axios.get(`${API}/api/artists/${artistId}`)
       .then(r=>{
-        // Ensure `works` is always an array even if backend hasn't set it yet
         setForm({ works: [], ...r.data });
         setImagePreview(r.data.image||r.data.profileImage||null);
       })
@@ -554,9 +539,7 @@ function EditProfileTab({ artistId }) {
     setImagePreview(URL.createObjectURL(file));
   };
 
-  // ── NEW: upload one or more work-sample images immediately ──────────────
-  // Each file is uploaded right away via the existing /api/artists/upload
-  // endpoint, and the returned URL is pushed into form.works in real time.
+  // ✅ FIXED: compute updatedWorks before setForm to avoid stale closure
   const onWorkFilesChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -573,14 +556,12 @@ function EditProfileTab({ artistId }) {
         if (r.data?.url) uploadedUrls.push(r.data.url);
       }
       if (uploadedUrls.length) {
-        // Update local form state immediately (real-time preview)
-        setForm(f => ({ ...f, works: [...(f.works || []), ...uploadedUrls] }));
-        // Persist immediately so a page refresh doesn't lose the new works,
-        // even if the artist forgets to click "Save Changes" afterward.
+        // ✅ Compute the new list ONCE so both setForm and axios.put use the same array
+        const updatedWorks = [...(form.works || []), ...uploadedUrls];
+        setForm(f => ({ ...f, works: updatedWorks }));
         try {
-          await axios.put(`${API}/api/artists/${artistId}`, {
-            works: [...(form?.works || []), ...uploadedUrls],
-          });
+          await axios.put(`${API}/api/artists/${artistId}`, { works: updatedWorks });
+          setMsg({ type:"ok", text:"Work samples uploaded and saved!" });
         } catch (persistErr) {
           console.error("Auto-save of works failed:", persistErr);
           setMsg({ type:"error", text:"Uploaded, but failed to auto-save — click Save Changes to confirm." });
@@ -591,11 +572,10 @@ function EditProfileTab({ artistId }) {
       setMsg({ type:"error", text:"Failed to upload one or more files." });
     } finally {
       setUploadingWorks(false);
-      e.target.value = ""; // reset input so the same file can be re-selected later
+      e.target.value = "";
     }
   };
 
-  // ── NEW: remove a work sample (also persists immediately) ───────────────
   const removeWork = async (urlToRemove) => {
     const updatedWorks = (form.works || []).filter(u => u !== urlToRemove);
     setForm(f => ({ ...f, works: updatedWorks }));
@@ -610,13 +590,10 @@ function EditProfileTab({ artistId }) {
   const save = async () => {
     setSaving(true); setMsg({ type:"", text:"" });
     try {
-      // If there's a new image, use multipart/form-data
       if (imageFile) {
         const fd = new FormData();
         Object.entries(form).forEach(([k,v]) => {
           if (v === null || v === undefined) return;
-          // NEW: arrays (like `works`) must be stringified for FormData,
-          // otherwise axios/FormData will mangle them into "[object Object]".
           if (Array.isArray(v)) {
             fd.append(k, JSON.stringify(v));
           } else {
@@ -628,7 +605,6 @@ function EditProfileTab({ artistId }) {
           headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
-        // No image change — plain JSON is fine
         await axios.put(`${API}/api/artists/${artistId}`, form);
       }
       setMsg({ type:"ok", text:"Profile saved successfully!" });
@@ -658,11 +634,10 @@ function EditProfileTab({ artistId }) {
     <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
       <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Edit Profile</div>
 
-      {/* Profile Image Upload */}
+      {/* Profile Image */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Profile Photo</div>
         <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-          {/* Avatar preview */}
           <div style={{ width:80, height:80, borderRadius:"50%", overflow:"hidden", border:"2px solid #e2e8f0", background:"#f1f5f9", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
             {imagePreview
               ? <img src={imagePreview} alt="Profile" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
@@ -706,7 +681,7 @@ function EditProfileTab({ artistId }) {
         </div>
       ))}
 
-      {/* ── NEW: Portfolio / Work Samples Upload ───────────────────────── */}
+      {/* Portfolio / Work Samples */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Portfolio / Work Samples</div>
 
@@ -741,6 +716,7 @@ function EditProfileTab({ artistId }) {
         </div>
       </div>
 
+      {/* Bio */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Bio</div>
         <Field label="Bio" k="bio" multiline placeholder="Describe yourself, your experience, and what you offer…" />
@@ -759,7 +735,7 @@ function EditProfileTab({ artistId }) {
   );
 }
 
-// ─── REVIEWS TAB ─────────────────────────────────────────────────────────────
+// ─── REVIEWS TAB ──────────────────────────────────────────────────────────────
 function ReviewsTab({ artistId }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -829,7 +805,7 @@ function ReviewsTab({ artistId }) {
   );
 }
 
-// ─── EARNINGS TAB ────────────────────────────────────────────────────────────
+// ─── EARNINGS TAB ─────────────────────────────────────────────────────────────
 function EarningsTab({ artistId }) {
   const [bookings,    setBookings]    = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -838,14 +814,11 @@ function EarningsTab({ artistId }) {
 
   const fetchEarnings = async () => {
     try {
-      // Try dedicated earnings endpoint first, fall back to bookings endpoint
       let data = [];
       try {
         const r = await axios.get(`${API}/api/artists/${artistId}/earnings`);
-        // Handle both {bookings:[...]} shape and array shape
         data = Array.isArray(r.data) ? r.data : (r.data?.bookings || []);
       } catch {
-        // Fall back: get all bookings and filter confirmed ones
         const r = await axios.get(`${API}/api/bookings/artist/${artistId}`);
         data = (Array.isArray(r.data) ? r.data : []).filter(b => b.status === "confirmed");
       }
@@ -860,21 +833,17 @@ function EarningsTab({ artistId }) {
   useEffect(() => {
     if (!artistId) return;
     fetchEarnings();
-
-    // REAL-TIME: update earnings when a booking is confirmed via socket
     socket.on("booking_confirmed", ({ bookingId, paidAmount }) => {
       setBookings(prev => {
         const exists = prev.find(b => b._id === bookingId);
         if (exists) {
           return prev.map(b => b._id === bookingId ? { ...b, status:"confirmed", paidAmount } : b);
         }
-        // If not in list yet, refetch
         fetchEarnings();
         return prev;
       });
       setLastUpdated(new Date());
     });
-
     return () => { socket.off("booking_confirmed"); };
   }, [artistId]);
 
@@ -887,7 +856,6 @@ function EarningsTab({ artistId }) {
     return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
   }).reduce((s,b) => s + (b.paidAmount || 0), 0);
   const totalGigs   = bookings.length;
-  // Average per gig
   const avgPerGig   = totalGigs > 0 ? Math.round(totalEarned / totalGigs) : 0;
 
   return (
@@ -904,7 +872,6 @@ function EarningsTab({ artistId }) {
 
       {error && <div style={{ background:"#fee2e2", border:"1px solid #fca5a5", color:"#7f1d1d", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif" }}>{error}</div>}
 
-      {/* Summary cards */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
         {[
           { label:"Total Earned",   val:`₹${fmt(totalEarned)}`, color:"#1e3a8a" },
@@ -919,7 +886,6 @@ function EarningsTab({ artistId }) {
         ))}
       </div>
 
-      {/* Completed bookings table */}
       {bookings.length > 0 ? (
         <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
           <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Completed Bookings</div>
@@ -956,7 +922,7 @@ function EarningsTab({ artistId }) {
   );
 }
 
-// ─── MAIN DASHBOARD ──────────────────────────────────────────────────────────
+// ─── MAIN DASHBOARD ───────────────────────────────────────────────────────────
 export default function ArtistDashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

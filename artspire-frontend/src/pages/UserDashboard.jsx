@@ -1,10 +1,9 @@
 // artspire-frontend/src/pages/UserDashboard.jsx
-// Replace your existing UserDashboard.jsx with this file.
-// Shows all user bookings with live status, negotiation thread, accept/counter/pay actions.
 
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import socket from "../socket";
+import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
@@ -31,11 +30,11 @@ const STATUS_META = {
 };
 
 const STEPS = [
-  { key: "pending_approval", label: "Request Sent",     icon: "📤" },
-  { key: "negotiating",      label: "Negotiating",       icon: "💬" },
-  { key: "price_agreed",     label: "Price Agreed",      icon: "🤝" },
-  { key: "payment_pending",  label: "Payment",           icon: "💳" },
-  { key: "confirmed",        label: "Confirmed",         icon: "✅" },
+  { key: "pending_approval", label: "Request Sent",  icon: "📤" },
+  { key: "negotiating",      label: "Negotiating",   icon: "💬" },
+  { key: "price_agreed",     label: "Price Agreed",  icon: "🤝" },
+  { key: "payment_pending",  label: "Payment",       icon: "💳" },
+  { key: "confirmed",        label: "Confirmed",     icon: "✅" },
 ];
 
 const STEP_ORDER = STEPS.map((s) => s.key);
@@ -58,17 +57,18 @@ function loadRazorpay() {
 
 // ── main component ────────────────────────────────────────────────────────────
 export default function UserDashboard() {
-  const account = getCurrentAccount();
-  const userId  = account?._id;
+  const account  = getCurrentAccount();
+  const userId   = account?._id;
+  const navigate = useNavigate();
 
-  const [bookings,  setBookings]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [selected,  setSelected]  = useState(null);
-  const [tab,       setTab]       = useState("active"); // active | all
-  const [sending,   setSending]   = useState(false);
-  const [paying,    setPaying]    = useState(false);
-  const [err,       setErr]       = useState("");
-  const [payErr,    setPayErr]    = useState("");
+  const [bookings,     setBookings]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [selected,     setSelected]     = useState(null);
+  const [tab,          setTab]          = useState("active");
+  const [sending,      setSending]      = useState(false);
+  const [paying,       setPaying]       = useState(false);
+  const [err,          setErr]          = useState("");
+  const [payErr,       setPayErr]       = useState("");
   const [counterPrice, setCounterPrice] = useState("");
   const [counterMsg,   setCounterMsg]   = useState("");
   const threadRef = useRef(null);
@@ -102,7 +102,6 @@ export default function UserDashboard() {
       setSelected((s)  => s?._id === bookingId ? { ...s, ...patch } : s);
     };
 
-    // Artist sent a price offer / accepted a deal
     socket.on("booking_offer", ({ bookingId, price, message, status }) => {
       const entry = { from: "artist", price, message, timestamp: new Date().toISOString() };
       setBookings((bs) => bs.map((b) => {
@@ -192,7 +191,6 @@ export default function UserDashboard() {
       const { orderId, amount, keyId, demo } = orderData;
 
       if (demo) {
-        // No Razorpay keys configured — confirm immediately
         await confirmPayment({ paymentId: `demo_${Date.now()}`, orderId, signature: null });
         return;
       }
@@ -250,8 +248,8 @@ export default function UserDashboard() {
   };
 
   // ── derived data ──
-  const activeBookings = bookings.filter((b) => !["confirmed", "cancelled"].includes(b.status));
-  const list = tab === "active" ? activeBookings : bookings;
+  const activeBookings  = bookings.filter((b) => !["confirmed", "cancelled"].includes(b.status));
+  const list            = tab === "active" ? activeBookings : bookings;
   const lastArtistOffer = selected
     ? [...(selected.negotiation || [])].reverse().find((m) => m.from === "artist")
     : null;
@@ -264,12 +262,37 @@ export default function UserDashboard() {
     <div style={styles.page}>
       {/* ── LEFT PANEL ── */}
       <div style={styles.left}>
+
         {/* Header */}
         <div style={styles.leftHeader}>
-          <div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
             <h2 style={styles.pageTitle}>My Bookings</h2>
-            <p style={styles.pageSubtitle}>Track your requests with artists</p>
+
+            {/* ✅ Messages button */}
+            <button
+              onClick={() => navigate("/user-chat")}
+              style={{
+                padding:     "6px 14px",
+                borderRadius: 20,
+                border:      "1.5px solid #1e3a8a",
+                background:  "#eff6ff",
+                color:       "#1e3a8a",
+                fontSize:    12,
+                fontWeight:  800,
+                cursor:      "pointer",
+                fontFamily:  "'Nunito', sans-serif",
+                display:     "flex",
+                alignItems:  "center",
+                gap:         5,
+                whiteSpace:  "nowrap",
+              }}
+            >
+              💬 Messages
+            </button>
           </div>
+
+          <p style={styles.pageSubtitle}>Track your requests with artists</p>
+
           <div style={styles.tabGroup}>
             {["active", "all"].map((t) => (
               <button
@@ -313,10 +336,13 @@ export default function UserDashboard() {
         {!selected ? (
           <div style={styles.placeholder}>
             <div style={{ fontSize: 52 }}>📋</div>
-            <div style={{ fontSize: 15, color: "#64748b", marginTop: 8 }}>Select a booking to view details</div>
+            <div style={{ fontSize: 15, color: "#64748b", marginTop: 8 }}>
+              Select a booking to view details
+            </div>
           </div>
         ) : (
           <div style={styles.detail}>
+
             {/* Status badge */}
             <div style={styles.statusRow}>
               <StatusBadge status={selected.status} />
@@ -347,7 +373,8 @@ export default function UserDashboard() {
             {canCounter && selected.status !== "price_agreed" && (
               <div style={styles.actionCard}>
                 <div style={styles.actionTitle}>
-                  Artist's offer: <strong style={{ color: "#1e3a8a" }}>₹{fmt(lastArtistOffer.price)}</strong>
+                  Artist's offer:{" "}
+                  <strong style={{ color: "#1e3a8a" }}>₹{fmt(lastArtistOffer.price)}</strong>
                 </div>
                 <div style={styles.actionRow}>
                   <button
@@ -381,7 +408,7 @@ export default function UserDashboard() {
               </div>
             )}
 
-            {/* Just sent a counter, waiting */}
+            {/* Waiting for artist to respond */}
             {selected.status === "negotiating" && !canCounter && (
               <div style={styles.waitingBox}>
                 ⏳ Waiting for artist to respond to your offer…
@@ -442,7 +469,7 @@ export default function UserDashboard() {
   );
 }
 
-// ── sub-components ─────────────────────────────────────────────────────────
+// ── sub-components ────────────────────────────────────────────────────────────
 
 function BookingCard({ booking, selected, onClick }) {
   const meta = STATUS_META[booking.status] || {};
@@ -479,8 +506,8 @@ function Stepper({ currentStatus }) {
   return (
     <div style={styles.stepper}>
       {STEPS.map((step, i) => {
-        const done    = i < ci;
-        const active  = i === ci;
+        const done   = i < ci;
+        const active = i === ci;
         return (
           <div key={step.key} style={styles.stepItem}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -494,7 +521,7 @@ function Stepper({ currentStatus }) {
               </div>
               <div style={{
                 ...styles.stepLabel,
-                color: active ? "#1e3a8a" : done ? "#475569" : "#94a3b8",
+                color:      active ? "#1e3a8a" : done ? "#475569" : "#94a3b8",
                 fontWeight: active ? 700 : 400,
               }}>
                 {step.label}
@@ -515,7 +542,7 @@ function BookingInfo({ booking }) {
     ["Artist",    booking.artistName],
     ["Event",     booking.eventType],
     ["Date",      booking.eventDate],
-    booking.eventTime && ["Time", booking.eventTime],
+    booking.eventTime && ["Time",     booking.eventTime],
     ["Location",  booking.location],
     booking.duration && ["Duration", booking.duration],
     ["Base Price", `₹${fmt(booking.basePrice)}`],
@@ -557,12 +584,13 @@ function NegThread({ negotiation, userName, threadRef }) {
                 {msg.message && <div style={{ marginBottom: msg.price ? 4 : 0 }}>{msg.message}</div>}
                 {msg.price && (
                   <span style={{
-                    display:    "inline-block",
-                    background: isArtist ? "#1e3a8a" : "rgba(255,255,255,0.2)",
-                    color:      "#fff",
-                    padding:    "2px 10px",
+                    display:      "inline-block",
+                    background:   isArtist ? "#1e3a8a" : "rgba(255,255,255,0.2)",
+                    color:        "#fff",
+                    padding:      "2px 10px",
                     borderRadius: 20,
-                    fontSize:   13, fontWeight: 700,
+                    fontSize:     13,
+                    fontWeight:   700,
                   }}>
                     ₹{fmt(msg.price)}
                   </span>
@@ -594,14 +622,14 @@ const styles = {
     background:    "#fff",
   },
   leftHeader: {
-    padding:       "20px 18px 14px",
-    borderBottom:  "1px solid #f1f5f9",
+    padding:      "20px 18px 14px",
+    borderBottom: "1px solid #f1f5f9",
   },
   pageTitle: {
-    margin:      0,
-    fontSize:    20,
-    fontWeight:  800,
-    color:       "#0f172a",
+    margin:        0,
+    fontSize:      20,
+    fontWeight:    800,
+    color:         "#0f172a",
     letterSpacing: "-0.02em",
   },
   pageSubtitle: {
@@ -610,8 +638,8 @@ const styles = {
     color:    "#94a3b8",
   },
   tabGroup: {
-    display:  "flex",
-    gap:      6,
+    display: "flex",
+    gap:     6,
   },
   tabBtn: {
     padding:      "5px 12px",
@@ -630,12 +658,12 @@ const styles = {
     border:     "1px solid #1e3a8a",
   },
   list: {
-    flex:      1,
-    overflowY: "auto",
-    padding:   "10px 12px",
-    display:   "flex",
+    flex:          1,
+    overflowY:     "auto",
+    padding:       "10px 12px",
+    display:       "flex",
     flexDirection: "column",
-    gap:       8,
+    gap:           8,
   },
   empty: {
     textAlign:  "center",
@@ -699,9 +727,9 @@ const styles = {
     flexShrink:   0,
   },
   right: {
-    flex:          1,
-    overflowY:     "auto",
-    background:    "#f8fafc",
+    flex:      1,
+    overflowY: "auto",
+    background:"#f8fafc",
   },
   placeholder: {
     display:        "flex",
@@ -712,12 +740,12 @@ const styles = {
     color:          "#94a3b8",
   },
   detail: {
-    maxWidth:  680,
-    margin:    "0 auto",
-    padding:   "24px 20px",
-    display:   "flex",
+    maxWidth:      680,
+    margin:        "0 auto",
+    padding:       "24px 20px",
+    display:       "flex",
     flexDirection: "column",
-    gap:       16,
+    gap:           16,
   },
   statusRow: {
     display:        "flex",
@@ -736,13 +764,13 @@ const styles = {
     fontFamily:   "'Nunito', sans-serif",
   },
   stepper: {
-    display:        "flex",
-    alignItems:     "flex-start",
-    background:     "#fff",
-    borderRadius:   14,
-    padding:        "16px 12px",
-    border:         "1px solid #e2e8f0",
-    overflowX:      "auto",
+    display:    "flex",
+    alignItems: "flex-start",
+    background: "#fff",
+    borderRadius: 14,
+    padding:    "16px 12px",
+    border:     "1px solid #e2e8f0",
+    overflowX:  "auto",
   },
   stepItem: {
     display:    "flex",
@@ -768,20 +796,20 @@ const styles = {
     whiteSpace: "nowrap",
   },
   stepLine: {
-    flex:   1,
-    height: 2,
-    margin: "0 4px",
+    flex:         1,
+    height:       2,
+    margin:       "0 4px",
     marginBottom: 20,
     borderRadius: 2,
   },
   infoCard: {
-    background:   "#fff",
-    border:       "1px solid #e2e8f0",
-    borderRadius: 14,
-    padding:      "14px 18px",
-    display:      "flex",
+    background:    "#fff",
+    border:        "1px solid #e2e8f0",
+    borderRadius:  14,
+    padding:       "14px 18px",
+    display:       "flex",
     flexDirection: "column",
-    gap:          8,
+    gap:           8,
   },
   infoRow: {
     display:        "flex",
@@ -819,19 +847,19 @@ const styles = {
     overflowY:     "auto",
   },
   bubble: {
-    maxWidth:  "80%",
-    padding:   "9px 14px",
-    fontSize:  13,
+    maxWidth:   "80%",
+    padding:    "9px 14px",
+    fontSize:   13,
     lineHeight: 1.5,
   },
   actionCard: {
-    background:   "#fff",
-    border:       "1.5px solid #1e3a8a",
-    borderRadius: 14,
-    padding:      "18px 18px",
-    display:      "flex",
+    background:    "#fff",
+    border:        "1.5px solid #1e3a8a",
+    borderRadius:  14,
+    padding:       "18px 18px",
+    display:       "flex",
     flexDirection: "column",
-    gap:          12,
+    gap:           12,
   },
   actionTitle: {
     fontSize:   15,
@@ -855,12 +883,12 @@ const styles = {
     fontFamily:   "'Nunito', sans-serif",
   },
   divider: {
-    display:     "flex",
-    alignItems:  "center",
-    gap:         8,
-    color:       "#94a3b8",
-    fontSize:    11,
-    fontWeight:  600,
+    display:       "flex",
+    alignItems:    "center",
+    gap:           8,
+    color:         "#94a3b8",
+    fontSize:      11,
+    fontWeight:    600,
     textTransform: "uppercase",
     letterSpacing: "0.05em",
   },
@@ -901,16 +929,16 @@ const styles = {
     whiteSpace:   "nowrap",
   },
   waitingBox: {
-    background:   "#f8fafc",
-    border:       "1px solid #e2e8f0",
-    borderRadius: 12,
-    padding:      "16px 18px",
-    fontSize:     13,
-    color:        "#475569",
-    fontWeight:   600,
-    display:      "flex",
+    background:    "#f8fafc",
+    border:        "1px solid #e2e8f0",
+    borderRadius:  12,
+    padding:       "16px 18px",
+    fontSize:      13,
+    color:         "#475569",
+    fontWeight:    600,
+    display:       "flex",
     flexDirection: "column",
-    gap:          6,
+    gap:           6,
   },
   payCard: {
     background:    "linear-gradient(135deg,#1e3a8a,#1d4ed8)",
@@ -930,16 +958,16 @@ const styles = {
     opacity:  0.8,
   },
   payBtn: {
-    marginTop:    4,
-    padding:      "12px 0",
-    borderRadius: 10,
-    border:       "none",
-    background:   "#fff",
-    color:        "#1e3a8a",
-    fontSize:     15,
-    fontWeight:   800,
-    cursor:       "pointer",
-    fontFamily:   "'Nunito', sans-serif",
+    marginTop:     4,
+    padding:       "12px 0",
+    borderRadius:  10,
+    border:        "none",
+    background:    "#fff",
+    color:         "#1e3a8a",
+    fontSize:      15,
+    fontWeight:    800,
+    cursor:        "pointer",
+    fontFamily:    "'Nunito', sans-serif",
     letterSpacing: "-0.01em",
   },
   confirmedBox: {

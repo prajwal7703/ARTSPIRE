@@ -16,6 +16,7 @@ import ForgotPassword          from "./pages/ForgotPassword";
 import ResetPassword           from "./pages/ResetPassword";
 import DiscoverPage            from "./pages/DiscoverPage";
 import UserDashboard           from "./pages/UserDashboard";            // ✅ NEW
+import UserChat                from "./pages/UserChat";             // ✅ ADD THIS
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -94,7 +95,9 @@ function App() {
         <Route path="/my-bookings"
           element={<RequireAuth><UserDashboard /></RequireAuth>}
         />
-
+        <Route path="/user-chat"          {/* ✅ ADD THIS */}
+          element={<RequireAuth><UserChat /></RequireAuth>}
+        />
         {/* Fallback */}
         <Route path="/about" element={<Home />} />
         <Route path="*"      element={<Navigate to="/" replace />} />
