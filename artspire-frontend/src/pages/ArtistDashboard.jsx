@@ -478,7 +478,18 @@ function GroupsPanel({ artistId }) {
       </div>
     </div>
   );
+const [showAddMember, setShowAddMember] = useState(false);
+const [addMemberId, setAddMemberId] = useState("");
 
+const addMember = async () => {
+  if (!addMemberId.trim() || !selected) return;
+  try {
+    const r = await axios.post(`${API}/api/groups/${selected._id}/members`, { userId: addMemberId.trim() });
+    setSelected(r.data);
+    setGroups(prev => prev.map(g => g._id === r.data._id ? r.data : g));
+    setAddMemberId(""); setShowAddMember(false);
+  } catch (e) { console.error(e); }
+};
   return (
     <div style={{ display: "flex", height: "100%" }}>
       {(!isMobile || !showChat) && <GroupList />}
@@ -486,6 +497,14 @@ function GroupsPanel({ artistId }) {
     </div>
   );
 }
+<button onClick={() => setShowAddMember(s => !s)} style={st({ marginLeft:"auto", background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"4px 10px", borderRadius:20, fontSize:11, fontWeight:700, cursor:"pointer" })}>+ Add</button>
+{showAddMember && (
+  <div style={{ display:"flex", gap:6, padding:"8px 16px", borderBottom:"1px solid #f1f5f9" }}>
+    <input value={addMemberId} onChange={e=>setAddMemberId(e.target.value)} placeholder="Paste user ID"
+      style={st({ flex:1, border:"1px solid #e2e8f0", borderRadius:8, padding:"6px 10px", fontSize:12, outline:"none" })} />
+    <button onClick={addMember} style={st({ background:"#1e3a8a", color:"#fff", border:"none", borderRadius:8, padding:"6px 14px", fontWeight:700, fontSize:12, cursor:"pointer" })}>Add</button>
+  </div>
+)}
 // ─── CHAT TAB ─────────────────────────────────────────────────────────────────
 function ChatTab({ artistId }) {
   const [conversations, setConversations] = useState([]);

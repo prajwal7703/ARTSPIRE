@@ -46,5 +46,18 @@ router.post("/:groupId/message", async (req, res) => {
     res.status(201).json(entry);
   } catch (e) { res.status(500).json({ message: "Failed to send message" }); }
 });
-
+// POST /api/groups/:groupId/members  -> add a member
+router.post("/:groupId/members", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ message: "userId required" });
+    const group = await Group.findByIdAndUpdate(
+      req.params.groupId,
+      { $addToSet: { members: userId } },
+      { new: true }
+    );
+    if (!group) return res.status(404).json({ message: "Group not found" });
+    res.json(group);
+  } catch (e) { res.status(500).json({ message: "Failed to add member" }); }
+});
 module.exports = router;
