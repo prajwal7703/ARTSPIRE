@@ -301,9 +301,25 @@ function LiveStatusPanel({ booking, onAccept, offerPrice, setOfferPrice, offerMs
 }
 
 /* ─── MAIN COMPONENT ─────────────────────────────────────────────────────────── */
-export default function ArtistBookingDashboard({ artistId }) {
+import { useSearchParams } from "react-router-dom"; // add this import at the top alongside useNavigate
+import { getArtist } from "../utils/auth";            // add this import too
+
+/* ─── MAIN COMPONENT ─────────────────────────────────────────────────────────── */
+export default function ArtistDashboard() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get("tab") || "bookings";
+
+  const artist   = getArtist();
+  const artistId = artist?._id;
+
+  // ✅ If the URL says tab=profile, redirect to the real profile page
+  useEffect(() => {
+    if (tab === "profile" && artistId) {
+      navigate(`/artist-profile/${artistId}`, { replace: true });
+    }
+  }, [tab, artistId, navigate]);
 
   const [bookings,   setBookings]   = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -317,6 +333,7 @@ export default function ArtistBookingDashboard({ artistId }) {
 
   /* ── socket listeners ── */
   useEffect(() => {
+    if (!artistId) return;
     socket.emit("join_artist_room", artistId);
     socket.on("new_booking_request", fetchBookings);
     socket.on("user_counter", ({ bookingId, price, message }) => {
@@ -343,6 +360,7 @@ export default function ArtistBookingDashboard({ artistId }) {
   };
 
   const fetchBookings = async () => {
+    if (!artistId) { setLoading(false); return; }
     try {
       const res = await axios.get(`${API}/api/bookings/artist/${artistId}`);
       setBookings(Array.isArray(res.data) ? res.data : []);
@@ -422,8 +440,6 @@ export default function ArtistBookingDashboard({ artistId }) {
             ← Back
           </button>
         )}
-
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
           <div>
             <div style={s({ fontSize: 20, fontWeight: 800, color: "#1e293b" })}>{selected.userName}</div>
@@ -431,16 +447,12 @@ export default function ArtistBookingDashboard({ artistId }) {
           </div>
           <StatusBadge status={selected.status} size="lg" />
         </div>
-
-        {/* Chat button */}
         <button
           onClick={() => navigate(`/chat/${selected.userId}`)}
           style={s({ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "10px 14px", borderRadius: 10, width: "100%", fontWeight: 700, cursor: "pointer", fontSize: 13, textAlign: "center" })}
         >
           💬 Chat with {selected.userName}
         </button>
-
-        {/* Booking info */}
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 14 }}>
           {[
             ["Event",     selected.eventType],
@@ -459,11 +471,7 @@ export default function ArtistBookingDashboard({ artistId }) {
             </div>
           ))}
         </div>
-
-        {/* Negotiation thread */}
         <NegThread negotiation={selected.negotiation} userName={selected.userName} />
-
-        {/* Live status + actions */}
         <LiveStatusPanel
           booking={selected}
           onAccept={acceptUserCounter}
@@ -479,7 +487,6 @@ export default function ArtistBookingDashboard({ artistId }) {
     );
   };
 
-  /* ── filter tabs ── */
   const filterTabs = [
     { id: "pending_approval", label: `Requests (${pendingList.length})` },
     { id: "ongoing",          label: `Ongoing (${ongoingList.length})` },
@@ -489,7 +496,6 @@ export default function ArtistBookingDashboard({ artistId }) {
 
   return (
     <div style={{ display: "flex", height: "100%", fontFamily: "'Nunito',sans-serif" }}>
-      {/* ── Sidebar list ── */}
       {(!isMobile || !showDetail) && (
         <div style={{
           width: isMobile ? "100%" : 320,
@@ -497,9 +503,16 @@ export default function ArtistBookingDashboard({ artistId }) {
           display: "flex", flexDirection: "column",
           background: "#fff", flexShrink: 0, overflowY: "auto",
         }}>
-          {/* Header + filters */}
           <div style={{ padding: "18px 16px 12px", borderBottom: "1px solid #f1f5f9", position: "sticky", top: 0, background: "#fff", zIndex: 5 }}>
-            <div style={s({ fontSize: 18, fontWeight: 800, color: "#1e293b", marginBottom: 10 })}>Bookings</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={s({ fontSize: 18, fontWeight: 800, color: "#1e293b" })}>Bookings</div>
+              <button
+                onClick={() => navigate(`/artist-profile/${artistId}`)}
+                style={s({ background: "#f1f5f9", border: "none", color: "#1e293b", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer" })}
+              >
+                👤 Profile
+              </button>
+            </div>
             <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
               {filterTabs.map((tab) => (
                 <button
@@ -517,26 +530,17 @@ export default function ArtistBookingDashboard({ artistId }) {
               ))}
             </div>
           </div>
-
-          {/* List */}
           {loading ? (
             <div style={s({ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 14 })}>Loading…</div>
           ) : displayList.length === 0 ? (
             <div style={s({ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 14 })}>No bookings in this category.</div>
           ) : (
             displayList.map((b) => (
-              <BookingCard
-                key={b._id}
-                b={b}
-                isSelected={selected?._id === b._id}
-                onClick={() => openBooking(b)}
-              />
+              <BookingCard key={b._id} b={b} isSelected={selected?._id === b._id} onClick={() => openBooking(b)} />
             ))
           )}
         </div>
       )}
-
-      {/* ── Detail panel ── */}
       {(!isMobile || showDetail) && (
         <div style={{ flex: 1, background: "#f8fafc", overflowY: "auto" }}>
           <DetailPanel />
