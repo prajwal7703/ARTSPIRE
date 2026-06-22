@@ -36,7 +36,7 @@ export default function Navbar() {
 
           {/* LOGO */}
           <Link to="/" style={{ display:"flex", alignItems:"center", gap:"10px", textDecoration:"none" }}>
-            <img src="/logo.jpeg" alt="logo" style={{ width:"44px", height:"44px", borderRadius:"50%", objectFit:"cover", border:"2px solid #f97316" }} />
+            <img src="/logo.jpeg" alt="logo" style={{ width:"44px",height:"44px", borderRadius:"50%", objectFit:"cover", border:"2px solid #f97316" }} />
             <span style={{ fontSize:"28px", fontWeight:900, color:"#fff" }}>Art<span style={{ color:"#f97316" }}>Spire</span></span>
           </Link>
 
@@ -45,6 +45,9 @@ export default function Navbar() {
             <Link to="/artist-register" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Become Artist</Link>
             <Link to="/" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Home</Link>
             <Link to="/artists" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Artists</Link>
+            {user && user.role !== "artist" && (
+              <Link to="/my-bookings" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>My Bookings</Link>
+            )}
           </div>
 
           {/* RIGHT — desktop */}
@@ -57,7 +60,7 @@ export default function Navbar() {
             ) : (
               <>
                 <div style={{ display:"flex", alignItems:"center", gap:"10px", background:"rgba(255,255,255,0.1)", padding:"6px 14px", borderRadius:"50px" }}>
-                  <img src={user.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} alt="profile" style={{ width:"36px", height:"36px", borderRadius:"50%", objectFit:"cover" }} />
+                  <img src={user.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png"} alt="profile" style={{ width:"36px",height:"36px", borderRadius:"50%", objectFit:"cover" }} />
                   <div>
                     <p style={{ fontSize:"11px", color:"#d1d5db", margin:0 }}>Welcome</p>
                     <p style={{ fontSize:"13px", color:"#f97316", fontWeight:700, margin:0 }}>{user.name}</p>
@@ -94,6 +97,7 @@ export default function Navbar() {
               { label:"🏠 Home", to:"/" },
               { label:"🎨 Artists", to:"/artists" },
               { label:"✨ Become Artist", to:"/artist-register" },
+              ...(user && user.role !== "artist" ? [{ label:"📋 My Bookings", to:"/my-bookings" }] : []),
             ].map(({ label, to }) => (
               <Link key={to} to={to} onClick={() => setMenuOpen(false)} style={{ color:"#fff", fontWeight:700, fontSize:"16px", textDecoration:"none", padding:"14px 16px", borderRadius:"14px", background:"rgba(255,255,255,0.06)", display:"block" }}>
                 {label}
@@ -110,7 +114,7 @@ export default function Navbar() {
                 </Link>
               </div>
             ) : (
-              <button onClick={handleLogout} style={{ width:"100%", padding:"13px", borderRadius:"50px", background:"#ef4444", border:"none", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:"15px", marginTop:"4px" }}>Logout</button>
+              <button onClick={handleLogout} style={{ width:"100%",padding:"13px", borderRadius:"50px", background:"#ef4444", border:"none", color:"#fff", fontWeight:700, cursor:"pointer", fontSize:"15px", marginTop:"4px" }}>Logout</button>
             )}
           </div>
         )}
