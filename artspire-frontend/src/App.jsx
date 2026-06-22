@@ -1,18 +1,21 @@
+// artspire-frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getToken, getArtist } from "./utils/auth";
 
-import Home            from "./pages/Home";
-import Register        from "./pages/Register";
-import Artists         from "./pages/Artists";
-import ArtistProfile   from "./pages/ArtistProfile";
-import ArtistDashboard from "./pages/ArtistDashboard";
-import ArtistRegister  from "./pages/ArtistRegister";
-import Chat            from "./pages/chat";
-import UserLogin       from "./pages/UserLogin";
-import ArtistLogin     from "./pages/ArtistLogin";
-import ForgotPassword  from "./pages/ForgotPassword";
-import ResetPassword   from "./pages/ResetPassword";
-import DiscoverPage    from "./pages/DiscoverPage";
+import Home                   from "./pages/Home";
+import Register                from "./pages/Register";
+import Artists                 from "./pages/Artists";
+import ArtistProfile           from "./pages/ArtistProfile";
+import ArtistDashboard         from "./pages/ArtistDashboard";
+import ArtistRegister          from "./pages/ArtistRegister";
+import ArtistBookingDashboard  from "./pages/ArtistBookingDashboard";  // ✅ NEW
+import Chat                    from "./pages/chat";
+import UserLogin               from "./pages/UserLogin";
+import ArtistLogin             from "./pages/ArtistLogin";
+import ForgotPassword          from "./pages/ForgotPassword";
+import ResetPassword           from "./pages/ResetPassword";
+import DiscoverPage            from "./pages/DiscoverPage";
+import UserDashboard           from "./pages/UserDashboard";            // ✅ NEW
 
 // ── Guards ────────────────────────────────────────────────────────────────────
 
@@ -46,29 +49,51 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public */}
-        <Route path="/"                  element={<Home />} />
-        <Route path="/artists"           element={<Artists />} />
-        <Route path="/explore"           element={<Artists />} />
-        <Route path="/discover"          element={<DiscoverPage />} />
-        <Route path="/artist/:id"        element={<ArtistProfile />} />
+        <Route path="/"                   element={<Home />} />
+        <Route path="/artists"            element={<Artists />} />
+        <Route path="/explore"            element={<Artists />} />
+        <Route path="/discover"           element={<DiscoverPage />} />
+        <Route path="/artist/:id"         element={<ArtistProfile />} />
         <Route path="/artist-profile/:id" element={<ArtistProfile />} />
-        <Route path="/forgot-password"   element={<ForgotPassword />} />
-        <Route path="/reset-password"    element={<ResetPassword />} />
+        <Route path="/forgot-password"    element={<ForgotPassword />} />
+        <Route path="/reset-password"     element={<ResetPassword />} />
 
         {/* Auth — redirect away if already logged in as artist */}
-        <Route path="/login"         element={<RedirectIfArtist to="/"><UserLogin /></RedirectIfArtist>} />
-        <Route path="/register"      element={<RedirectIfArtist to="/"><Register /></RedirectIfArtist>} />
-        <Route path="/artist-login"  element={<RedirectIfArtist to="/artist-dashboard"><ArtistLogin /></RedirectIfArtist>} />
+        <Route path="/login"
+          element={<RedirectIfArtist to="/"><UserLogin /></RedirectIfArtist>}
+        />
+        <Route path="/register"
+          element={<RedirectIfArtist to="/"><Register /></RedirectIfArtist>}
+        />
+        <Route path="/artist-login"
+          element={<RedirectIfArtist to="/artist-dashboard"><ArtistLogin /></RedirectIfArtist>}
+        />
 
-        {/* Artist register — redirect to dashboard if already an artist */}
-        <Route path="/artist-register" element={<RedirectIfArtist to="/artist-dashboard"><ArtistRegister /></RedirectIfArtist>} />
-        <Route path="/become-artist"   element={<RedirectIfArtist to="/artist-dashboard"><ArtistRegister /></RedirectIfArtist>} />
+        {/* Artist register */}
+        <Route path="/artist-register"
+          element={<RedirectIfArtist to="/artist-dashboard"><ArtistRegister /></RedirectIfArtist>}
+        />
+        <Route path="/become-artist"
+          element={<RedirectIfArtist to="/artist-dashboard"><ArtistRegister /></RedirectIfArtist>}
+        />
 
-        {/* Protected — artist only */}
-        <Route path="/artist-dashboard" element={<RequireArtist><ArtistDashboard /></RequireArtist>} />
+        {/* ── Protected — artist only ── */}
+        <Route path="/artist-dashboard"
+          element={<RequireArtist><ArtistDashboard /></RequireArtist>}
+        />
+        {/* ✅ NEW — artist booking management */}
+        <Route path="/artist/bookings"
+          element={<RequireArtist><ArtistBookingDashboard /></RequireArtist>}
+        />
 
-        {/* Protected — any logged-in user */}
-        <Route path="/chat/:id" element={<RequireAuth><Chat /></RequireAuth>} />
+        {/* ── Protected — any logged-in user ── */}
+        <Route path="/chat/:id"
+          element={<RequireAuth><Chat /></RequireAuth>}
+        />
+        {/* ✅ NEW — user booking tracking dashboard */}
+        <Route path="/my-bookings"
+          element={<RequireAuth><UserDashboard /></RequireAuth>}
+        />
 
         {/* Fallback */}
         <Route path="/about" element={<Home />} />
