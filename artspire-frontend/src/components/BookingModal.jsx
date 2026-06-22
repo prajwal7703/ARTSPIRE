@@ -78,7 +78,8 @@ export default function BookingModal({ artist, currentUser, onClose, onSuccess }
     }
     setError(""); setLoading(true);
     try {
-      const res = await axios.post(`${API}/api/bookings/request`, {
+// ✅ Fix
+const res = await axios.post(`${API}/api/bookings`, {
         artistId:   artist._id,
         artistName: artist.name,
         userId:     currentUser?._id  || "",
