@@ -64,7 +64,7 @@ export default function ArtistLogin() {
 
       saveAuth(res.data.token, res.data.user);
       showNotif("artist", `Welcome back, ${res.data.user.name}! 🎨`);
-      setTimeout(() => navigate("/artist-dashboard"), 1200);
+      setTimeout(() => navigate("/artist-dashboard?tab=profile"), 1200);
     } catch (err) {
       showNotif("error", err.response?.data?.message || "Invalid email or password.");
     }
@@ -81,7 +81,7 @@ export default function ArtistLogin() {
       });
       saveAuth(res.data.token, res.data.user);
       showNotif("artist", `Welcome, ${user.displayName}! 🎨`);
-      setTimeout(() => navigate("/artist-dashboard"), 1200);
+      setTimeout(() => navigate("/artist-dashboard?tab=profile"), 1200);
     } catch (err) {
       const code = err?.code;
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") { setNotif(null); return; }

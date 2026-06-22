@@ -358,7 +358,7 @@ function ChatTab({ artistId }) {
   // Load conversations list
   const fetchConversations = async () => {
     try {
-      const r = await axios.get(`${API}/api/messages/conversations/artist/${artistId}`);
+      const r = await axios.get(`${API}/api/chat/conversations/${artistId}`);
       setConversations(Array.isArray(r.data) ? r.data : []);
     } catch(e) { console.error(e); } finally { setLoading(false); }
   };
@@ -373,7 +373,7 @@ function ChatTab({ artistId }) {
       // Update conversation list preview
       setConversations(prev => prev.map(c =>
         c.userId === msg.senderId
-          ? { ...c, lastMessage: msg.text, lastTime: msg.createdAt, unread: selected?.userId === msg.senderId ? 0 : (c.unread||0)+1 }
+          ? { ...c, lastMessage: msg.message, lastTime: msg.createdAt, unread: selected?.userId === msg.senderId ? 0 : (c.unread||0)+1 }
           : c
       ));
       // If this conversation is open, add message live
@@ -392,7 +392,7 @@ function ChatTab({ artistId }) {
     // Mark as read
     setConversations(prev => prev.map(c => c.userId===conv.userId ? {...c, unread:0} : c));
     try {
-      const r = await axios.get(`${API}/api/messages/${artistId}/${conv.userId}`);
+      const r = await axios.get(`${API}/api/chat/${artistId}/${conv.userId}`);
       setMessages(Array.isArray(r.data) ? r.data : []);
     } catch(e) { console.error(e); setMessages([]); }
   };
@@ -404,32 +404,32 @@ function ChatTab({ artistId }) {
 
   const sendMessage = async () => {
     if (!text.trim() || !selected) return;
-    const msg = { senderId: artistId, receiverId: selected.userId, text: text.trim(), createdAt: new Date() };
+    const msgText = text.trim();
     setSending(true);
     setText("");
-    setMessages(prev => [...prev, { ...msg, _tempId: Date.now() }]);
+    const optimistic = { _tempId: Date.now(), senderId: artistId, receiverId: selected.userId, message: msgText, createdAt: new Date(), senderRole: "artist" };
+    setMessages(prev => [...prev, optimistic]);
     try {
-      await axios.post(`${API}/api/messages/send`, {
-        senderId: artistId,
+      await axios.post(`${API}/api/chat/send`, {
+        senderId:   artistId,
         receiverId: selected.userId,
-        text: msg.text,
+        message:    msgText,
         senderRole: "artist",
       });
-      // Optionally update conversation preview
       setConversations(prev => prev.map(c =>
-        c.userId===selected.userId ? { ...c, lastMessage: msg.text, lastTime: msg.createdAt } : c
+        c.userId===selected.userId ? { ...c, lastMessage: msgText, lastTime: new Date() } : c
       ));
-      // Emit via socket for real-time delivery to user
       socket.emit("send_message", {
-        senderId: artistId,
+        senderId:   artistId,
         receiverId: selected.userId,
-        text: msg.text,
+        message:    msgText,
         senderRole: "artist",
+        createdAt:  new Date(),
       });
     } catch(e) {
       console.error(e);
-      // Remove optimistic message on failure
-      setMessages(prev => prev.filter(m => !m._tempId));
+      setMessages(prev => prev.filter(m => m._tempId !== optimistic._tempId));
+      setText(msgText);
     } finally { setSending(false); }
   };
 
@@ -487,7 +487,7 @@ function ChatTab({ artistId }) {
             return (
               <div key={msg._id||msg._tempId||i} style={{ display:"flex", justifyContent:isMe?"flex-end":"flex-start" }}>
                 <div style={{ maxWidth:"72%", padding:"9px 13px", borderRadius: isMe?"16px 3px 16px 16px":"3px 16px 16px 16px", background: isMe?"#1e3a8a":"#fff", border: isMe?"none":"1px solid #e2e8f0", color: isMe?"#fff":"#1e293b", fontSize:13, fontFamily:"'Nunito',sans-serif", lineHeight:1.55 }}>
-                  {msg.text}
+                  {msg.message}
                 </div>
               </div>
             );

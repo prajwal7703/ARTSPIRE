@@ -66,15 +66,15 @@ function App() {
           element={<RedirectIfArtist to="/"><Register /></RedirectIfArtist>}
         />
         <Route path="/artist-login"
-          element={<RedirectIfArtist to="/artist-dashboard"><ArtistLogin /></RedirectIfArtist>}
+          element={<RedirectIfArtist to="/artist-dashboard?tab=profile"><ArtistLogin /></RedirectIfArtist>}
         />
 
         {/* Artist register */}
         <Route path="/artist-register"
-          element={<RedirectIfArtist to="/artist-dashboard"><ArtistRegister /></RedirectIfArtist>}
+          element={<RedirectIfArtist to="/artist-dashboard?tab=profile"><ArtistRegister /></RedirectIfArtist>}
         />
         <Route path="/become-artist"
-          element={<RedirectIfArtist to="/artist-dashboard"><ArtistRegister /></RedirectIfArtist>}
+          element={<RedirectIfArtist to="/artist-dashboard?tab=profile"><ArtistRegister /></RedirectIfArtist>}
         />
 
         {/* ── Protected — artist only ── */}
