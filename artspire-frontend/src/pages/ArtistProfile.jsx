@@ -19,7 +19,6 @@ const ICONS = {
   Singer:"🎤", Dancer:"💃", Musician:"🎵", Painter:"🎨",
   Photographer:"📷", Actor:"🎭", Comedian:"😂", default:"✨",
 };
-/* Tape colors for sticky notes */
 const TAPES = ["#f9ca24","#f0932b","#6ab04c","#e84393","#30336b","#eb4d4b"];
 
 function getId(obj) {
@@ -189,22 +188,13 @@ function Lightbox({ post, onClose }) {
 }
 
 /* ── RATING SECTION ──────────────────────────────────────────────────────── */
-function RatingSection({ artist, currentUser, artistId, onUpdate }) {
+// BUG 2 FIX: accepts `reviews` and `avgRating` as props so parent controls the state reactively
+function RatingSection({ artist, currentUser, artistId, reviews, avgRating, onReviewSubmitted }) {
   const [rating,    setRating]    = useState(0);
   const [hover,     setHover]     = useState(0);
   const [review,    setReview]    = useState("");
-  const [reviews,   setReviews]   = useState([]);
   const [submitted, setSubmitted] = useState(false);
   const [loading,   setLoading]   = useState(false);
-
-  useEffect(() => { loadReviews(); }, [artistId]);
-
-  const loadReviews = async () => {
-    try {
-      const res = await axios.get(`${API}/api/artists/${artistId}/reviews`);
-      setReviews(Array.isArray(res.data) ? res.data : []);
-    } catch {}
-  };
 
   const submit = async () => {
     if (!rating || !currentUser) return;
@@ -213,14 +203,13 @@ function RatingSection({ artist, currentUser, artistId, onUpdate }) {
       await axios.post(`${API}/api/artists/${artistId}/reviews`, {
         userId: getId(currentUser), userName: currentUser.name, rating, review: review.trim(),
       });
-      setSubmitted(true); setReview(""); loadReviews(); if (onUpdate) onUpdate();
+      setSubmitted(true);
+      setReview("");
+      // BUG 2 FIX: tell parent to re-fetch both artist data and reviews
+      if (onReviewSubmitted) onReviewSubmitted();
     } catch {}
     setLoading(false);
   };
-
-  const avg = reviews.length
-    ? (reviews.reduce((s,r)=>s+(r.rating||0),0)/reviews.length).toFixed(1)
-    : (artist.rating||5).toFixed(1);
 
   return (
     <div style={{
@@ -242,12 +231,12 @@ function RatingSection({ artist, currentUser, artistId, onUpdate }) {
         ★ Rate {artist.name?.split(" ")[0]}
       </div>
 
-      {/* Average display */}
+      {/* Average display — BUG 2 FIX: uses live avgRating from parent */}
       <div style={{ textAlign:"center", marginBottom:16 }}>
-        <span style={{ fontFamily:"'Caveat',cursive", fontSize:52, fontWeight:700, color:"#f59e0b", lineHeight:1 }}>{avg}</span>
+        <span style={{ fontFamily:"'Caveat',cursive", fontSize:52, fontWeight:700, color:"#f59e0b", lineHeight:1 }}>{avgRating}</span>
         <div style={{ display:"flex", justifyContent:"center", gap:4, margin:"6px 0 2px" }}>
           {Array.from({length:5}).map((_,i)=>(
-            <span key={i} style={{ fontSize:20, color:i<Math.round(avg)?"#f59e0b":"#e0e0e0" }}>★</span>
+            <span key={i} style={{ fontSize:20, color:i<Math.round(avgRating)?"#f59e0b":"#e0e0e0" }}>★</span>
           ))}
         </div>
         <div style={{ color:"#888", fontSize:12, fontWeight:700 }}>{reviews.length} review{reviews.length!==1?"s":""}</div>
@@ -333,6 +322,10 @@ export default function ArtistProfile() {
   const [showBooking, setShowBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
 
+  // BUG 2 FIX: reviews + avgRating lifted to parent so RatingSection can update them reactively
+  const [reviews,    setReviews]    = useState([]);
+  const [avgRating,  setAvgRating]  = useState("5.0");
+
   let loggedArtist = null, loggedUser = null;
   try { loggedArtist = JSON.parse(localStorage.getItem("artist")||"null"); } catch {}
   try { loggedUser   = JSON.parse(localStorage.getItem("user")  ||"null"); } catch {}
@@ -340,7 +333,9 @@ export default function ArtistProfile() {
   const isOwner = loggedArtist && getId(loggedArtist) === id;
 
   useEffect(() => {
-    loadArtist(); loadPosts();
+    loadArtist();
+    loadPosts();
+    loadReviews();
     if (!isOwner) axios.post(`${API}/api/users/${id}/view`).catch(()=>{});
   }, [id]);
 
@@ -360,6 +355,35 @@ export default function ArtistProfile() {
     } catch {}
   };
 
+  // BUG 2 FIX: centralized review loader — recalculates avgRating from fresh data
+  const loadReviews = async () => {
+    try {
+      const res = await axios.get(`${API}/api/artists/${id}/reviews`);
+      const data = Array.isArray(res.data) ? res.data : [];
+      setReviews(data);
+      if (data.length > 0) {
+        const avg = (data.reduce((s, r) => s + (r.rating || 0), 0) / data.length).toFixed(1);
+        setAvgRating(avg);
+      } else {
+        // fall back to artist.rating once artist is loaded (handled below in effect)
+        setAvgRating(null); // null = "use artist.rating"
+      }
+    } catch {}
+  };
+
+  // BUG 2 FIX: when artist loads and no reviews yet, seed avgRating from artist.rating
+  useEffect(() => {
+    if (artist && avgRating === null) {
+      setAvgRating((artist.rating || 5).toFixed(1));
+    }
+  }, [artist, avgRating]);
+
+  // Called by RatingSection after a successful submit
+  const handleReviewSubmitted = () => {
+    loadReviews();
+    loadArtist();
+  };
+
   if (!artist) return (
     <div style={{ background:"#eef2f7", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
       <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet"/>
@@ -371,7 +395,10 @@ export default function ArtistProfile() {
   const accentBg    = CAT_BG[artist.category]     || CAT_BG.default;
   const icon        = ICONS[artist.category]       || ICONS.default;
   const initials    = artist.name ? artist.name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) : "A";
-  const stars       = Math.round(Math.min(5, artist.rating||5));
+  const stars       = Math.round(Math.min(5, parseFloat(avgRating) || artist.rating || 5));
+
+  // BUG 1 FIX: check both image fields — artist.image (backend field) and artist.profileImage (legacy field)
+  const profileImageSrc = artist.image || artist.profileImage || null;
 
   return (
     <div style={{
@@ -429,7 +456,6 @@ export default function ArtistProfile() {
           <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:18, color:"#1a1a2e", lineHeight:1 }}>{artist.name}</div>
           <div style={{ fontSize:10, color:"#9e9e9e", fontWeight:700 }}>{icon} {artist.category}{artist.city?` · ${artist.city}`:""}</div>
         </div>
-        {/* Action buttons in nav */}
         <button onClick={()=>setShowChat(true)} style={{
           background:"linear-gradient(135deg,#3d5afe,#7c4dff)",
           border:"none", color:"#fff", padding:"8px 14px", borderRadius:20,
@@ -445,7 +471,6 @@ export default function ArtistProfile() {
           }}>📅 Book</button>
         )}
         {isOwner && (
-          // FIX: navigate to profile tab directly
           <button onClick={()=>navigate("/artist-dashboard?tab=profile")} style={{
             background:"#f0f2ff", border:"1px solid #e8eaf6", color:"#3d5afe",
             padding:"8px 14px", borderRadius:20,
@@ -523,9 +548,10 @@ export default function ArtistProfile() {
             {/* Stats row */}
             <div style={{ display:"flex", gap:12, marginTop:16, flexWrap:"wrap" }}>
               {[
-                { v:(artist.rating||5).toFixed(1), l:"Rating", emoji:"⭐" },
-                { v:posts.length,                   l:"Works",  emoji:"🎨" },
-                { v:artist.profileViews||0,          l:"Views",  emoji:"👁" },
+                // BUG 2 FIX: use live avgRating here too
+                { v: avgRating || (artist.rating||5).toFixed(1), l:"Rating", emoji:"⭐" },
+                { v:posts.length,                                  l:"Works",  emoji:"🎨" },
+                { v:artist.profileViews||0,                        l:"Views",  emoji:"👁" },
               ].map(({v,l,emoji})=>(
                 <div key={l} style={{
                   background:"#fff", borderRadius:12, padding:"10px 16px",
@@ -540,7 +566,7 @@ export default function ArtistProfile() {
             </div>
           </div>
 
-          {/* Right: polaroid photo */}
+          {/* Right: polaroid photo — BUG 1 FIX: uses profileImageSrc which checks both fields */}
           <div style={{
             flexShrink:0, width:"clamp(130px,30vw,180px)",
             background:"#fff",
@@ -562,8 +588,9 @@ export default function ArtistProfile() {
               display:"flex", alignItems:"center", justifyContent:"center",
               borderRadius:2,
             }}>
-              {artist.profileImage && !imgError ? (
-                <img src={artist.profileImage} alt={artist.name}
+              {/* BUG 1 FIX: profileImageSrc checks artist.image || artist.profileImage */}
+              {profileImageSrc && !imgError ? (
+                <img src={profileImageSrc} alt={artist.name}
                   onError={()=>setImgError(true)}
                   style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }}
                 />
@@ -654,9 +681,10 @@ export default function ArtistProfile() {
               </div>
             )}
 
+            {/* BUG 2 FIX: live star display using avgRating */}
             <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ color:"#f59e0b" }}>{"★".repeat(stars)}{"☆".repeat(5-stars)}</span>
-              <span style={{ color:"#666" }}>{(artist.rating||5).toFixed(1)}/5</span>
+              <span style={{ color:"#666" }}>{avgRating || (artist.rating||5).toFixed(1)}/5</span>
             </div>
 
             {artist.city && (
@@ -696,9 +724,14 @@ export default function ArtistProfile() {
 
         {/* ══ SECTION 3: RATINGS ══ */}
         <div style={{ marginBottom:28, animation:"fadeUp 0.4s ease 0.15s both" }}>
+          {/* BUG 2 FIX: pass reviews + avgRating as props; onReviewSubmitted re-fetches both */}
           <RatingSection
-            artist={artist} currentUser={currentUser}
-            artistId={id} onUpdate={loadArtist}
+            artist={artist}
+            currentUser={currentUser}
+            artistId={id}
+            reviews={reviews}
+            avgRating={avgRating || (artist.rating||5).toFixed(1)}
+            onReviewSubmitted={handleReviewSubmitted}
           />
         </div>
 

@@ -73,6 +73,59 @@ router.get("/:id/reviews", async (req, res) => {
   }
 });
 
+// ── POST /api/artists/:id/reviews  ← NEW: was missing, this is Bug 2's cause ──
+// body: { userName, rating, comment/review, eventType }
+// Pushes review into the artist's reviews array, recalculates avg rating,
+// saves, and returns { artist, reviews } so the frontend can update reactively.
+router.post("/:id/reviews", async (req, res) => {
+  try {
+    const { userName, rating, comment, review, eventType } = req.body;
+    const numericRating = Number(rating);
+
+    if (!numericRating || numericRating < 1 || numericRating > 5) {
+      return res.status(400).json({ message: "A rating between 1 and 5 is required" });
+    }
+
+    const newReview = {
+      userName:  userName || "Anonymous",
+      rating:    numericRating,
+      comment:   comment || review || "",
+      review:    review || comment || "",
+      eventType: eventType || "",
+      createdAt: new Date(),
+    };
+
+    // Try User collection first
+    let artist = await User.findOne({ _id: req.params.id, role: "artist" });
+    let isUserDoc = true;
+
+    if (!artist) {
+      try { artist = await Artist.findById(req.params.id); isUserDoc = false; } catch {}
+    }
+
+    if (!artist) return res.status(404).json({ message: "Artist not found" });
+
+    if (!Array.isArray(artist.reviews)) artist.reviews = [];
+    artist.reviews.push(newReview);
+
+    // Recalculate average rating and store it on the artist doc too,
+    // so any place reading artist.rating directly also stays in sync.
+    const total = artist.reviews.reduce((s, r) => s + (r.rating || 0), 0);
+    artist.rating = Number((total / artist.reviews.length).toFixed(1));
+
+    await artist.save();
+
+    const updatedArtist = isUserDoc
+      ? await User.findById(artist._id).select("-password")
+      : await Artist.findById(artist._id).select("-password");
+
+    res.status(201).json({ artist: updatedArtist, reviews: updatedArtist.reviews });
+  } catch (err) {
+    console.error("POST /:id/reviews error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 // ── GET /api/artists/:id/earnings ────────────────────────────────────────────
 // Returns all confirmed bookings for this artist so the Earnings tab works
 router.get("/:id/earnings", async (req, res) => {

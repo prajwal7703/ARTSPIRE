@@ -344,7 +344,148 @@ function BookingsTab({ artistId }) {
     </div>
   );
 }
+// ─── GROUPS PANEL ─────────────────────────────────────────────────────────────
+function GroupsPanel({ artistId }) {
+  const [groups, setGroups] = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const isMobile = useIsMobile();
+  const [showChat, setShowChat] = useState(false);
+  const bottomRef = useRef(null);
 
+  const fetchGroups = async () => {
+    try {
+      const r = await axios.get(`${API}/api/groups/${artistId}`);
+      setGroups(Array.isArray(r.data) ? r.data : []);
+    } catch (e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  useEffect(() => { if (artistId) fetchGroups(); }, [artistId]);
+
+  useEffect(() => {
+    socket.on("group_message", (msg) => {
+      if (selected && msg.groupId === selected._id) {
+        setMessages(prev => [...prev, msg]);
+      }
+    });
+    return () => { socket.off("group_message"); };
+  }, [selected]);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const createGroup = async () => {
+    if (!newName.trim()) return;
+    try {
+      const r = await axios.post(`${API}/api/groups/create`, { name: newName.trim(), createdBy: artistId });
+      setGroups(prev => [r.data, ...prev]);
+      setNewName(""); setShowCreate(false);
+    } catch (e) { console.error(e); }
+  };
+
+  const openGroup = async (g) => {
+    setSelected(g);
+    if (isMobile) setShowChat(true);
+    socket.emit("join_group", g._id);
+    try {
+      const r = await axios.get(`${API}/api/groups/${g._id}/messages`);
+      setMessages(Array.isArray(r.data) ? r.data : []);
+    } catch (e) { console.error(e); setMessages([]); }
+  };
+
+  const sendGroupMessage = async () => {
+    if (!text.trim() || !selected) return;
+    const msgText = text.trim();
+    setText("");
+    try {
+      await axios.post(`${API}/api/groups/${selected._id}/message`, { senderId: artistId, message: msgText });
+    } catch (e) { console.error(e); setText(msgText); }
+  };
+
+  const GroupList = () => (
+    <div style={{ width: isMobile ? "100%" : 300, borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column", background: "#fff", flexShrink: 0 }}>
+      <div style={{ padding: "18px 16px 12px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={st({ fontSize: 18, fontWeight: 800, color: "#1e293b" })}>Groups</div>
+        <button onClick={() => setShowCreate(s => !s)} style={st({ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer" })}>+ New</button>
+      </div>
+      {showCreate && (
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", gap: 6 }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Group name"
+            onKeyDown={e => { if (e.key === "Enter") createGroup(); }}
+            style={st({ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "6px 10px", fontSize: 13, outline: "none" })} />
+          <button onClick={createGroup} style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer" })}>Create</button>
+        </div>
+      )}
+      <div style={{ overflowY: "auto", flex: 1 }}>
+        {loading
+          ? <div style={st({ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 14 })}>Loading…</div>
+          : groups.length === 0
+            ? <div style={st({ padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 14 })}>No groups yet.</div>
+            : groups.map(g => (
+              <div key={g._id} onClick={() => openGroup(g)} style={{ padding: "13px 16px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: selected?._id === g._id ? "#eff6ff" : "#fff", borderLeft: `3px solid ${selected?._id === g._id ? "#1e3a8a" : "transparent"}` }}>
+                <div style={st({ fontWeight: 800, fontSize: 14, color: "#1e293b" })}>{g.name}</div>
+                <div style={st({ fontSize: 12, color: "#94a3b8", marginTop: 2 })}>{g.members?.length || 0} members</div>
+              </div>
+            ))
+        }
+      </div>
+    </div>
+  );
+
+  const GroupChatWindow = () => !selected ? (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#94a3b8", gap: 10 }}>
+      <div style={{ fontSize: 40 }}>👥</div>
+      <div style={st({ fontSize: 14 })}>Select a group</div>
+    </div>
+  ) : (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f8fafc" }}>
+      <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", background: "#fff", display: "flex", alignItems: "center", gap: 10 }}>
+        {isMobile && <button onClick={() => setShowChat(false)} style={st({ background: "none", border: "none", cursor: "pointer", color: "#1e3a8a", fontWeight: 800, fontSize: 13 })}>← Back</button>}
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#1e3a8a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue',sans-serif", fontSize: 18 }}>
+          {selected.name?.[0]?.toUpperCase()}
+        </div>
+        <div>
+          <div style={st({ fontWeight: 800, fontSize: 14, color: "#1e293b" })}>{selected.name}</div>
+          <div style={st({ fontSize: 11, color: "#94a3b8" })}>{selected.members?.length || 0} members</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: 10 }}>
+        {messages.length === 0
+          ? <div style={st({ textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 40 })}>No messages yet. Say hello!</div>
+          : messages.map((msg, i) => {
+            const isMe = msg.senderId === artistId;
+            return (
+              <div key={msg._id || i} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
+                {!isMe && <span style={st({ fontSize: 10, color: "#94a3b8", marginBottom: 2 })}>{msg.senderId}</span>}
+                <div style={{ maxWidth: "72%", padding: "9px 13px", borderRadius: isMe ? "16px 3px 16px 16px" : "3px 16px 16px 16px", background: isMe ? "#1e3a8a" : "#fff", border: isMe ? "none" : "1px solid #e2e8f0", color: isMe ? "#fff" : "#1e293b", fontSize: 13, fontFamily: "'Nunito',sans-serif", lineHeight: 1.55 }}>
+                  {msg.message}
+                </div>
+              </div>
+            );
+          })
+        }
+        <div ref={bottomRef} />
+      </div>
+      <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8 }}>
+        <input value={text} onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendGroupMessage(); } }}
+          placeholder="Type a message…"
+          style={st({ flex: 1, border: "1px solid #e2e8f0", borderRadius: 24, padding: "9px 16px", fontSize: 13, outline: "none", background: "#f8fafc" })} />
+        <button onClick={sendGroupMessage} disabled={!text.trim()} style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 24, padding: "9px 18px", fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: !text.trim() ? 0.5 : 1 })}>Send</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", height: "100%" }}>
+      {(!isMobile || !showChat) && <GroupList />}
+      {(!isMobile || showChat) && <GroupChatWindow />}
+    </div>
+  );
+}
 // ─── CHAT TAB ─────────────────────────────────────────────────────────────────
 function ChatTab({ artistId }) {
   const [conversations, setConversations] = useState([]);
@@ -356,7 +497,7 @@ function ChatTab({ artistId }) {
   const isMobile = useIsMobile();
   const [showChat, setShowChat] = useState(false);
   const bottomRef = useRef(null);
-
+const [view, setView] = useState("direct"); // "direct" | "groups"
   const fetchConversations = async () => {
     try {
       const r = await axios.get(`${API}/api/chat/conversations/${artistId}`);
@@ -400,7 +541,7 @@ function ChatTab({ artistId }) {
     const msgText = text.trim();
     setSending(true);
     setText("");
-    const optimistic = { _tempId: Date.now(), senderId: artistId, receiverId: selected.userId, message: msgText, createdAt: new Date(), senderRole: "artist" };
+   const optimistic = { _tempId: Date.now(), senderId: artistId, receiverId: selected.userId, message: msgText, createdAt: new Date(), senderRole: "artist" };
     setMessages(prev => [...prev, optimistic]);
     try {
       await axios.post(`${API}/api/chat/send`, {
@@ -501,9 +642,24 @@ function ChatTab({ artistId }) {
   );
 
   return (
-    <div style={{ display:"flex", height:"100%" }}>
-      {(!isMobile||!showChat) && <ConvList />}
-      {(!isMobile||showChat)  && <ChatWindow />}
+    <div style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+      <div style={{ display:"flex", gap:6, padding:"12px 16px 0", background:"#fff", borderBottom:"1px solid #e2e8f0" }}>
+        {[{ id:"direct", label:"💬 Direct Messages" }, { id:"groups", label:"👥 Groups" }].map(v => (
+          <button key={v.id} onClick={()=>setView(v.id)} style={st({ border:"none", background: view===v.id?"#1e3a8a":"#f1f5f9", color: view===v.id?"#fff":"#475569", padding:"8px 16px", borderRadius:"10px 10px 0 0", fontWeight:700, fontSize:13, cursor:"pointer" })}>
+            {v.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ display:"flex", flex:1, minHeight:0 }}>
+        {view === "direct" ? (
+          <>
+            {(!isMobile||!showChat) && <ConvList />}
+            {(!isMobile||showChat)  && <ChatWindow />}
+          </>
+        ) : (
+          <GroupsPanel artistId={artistId} />
+        )}
+      </div>
     </div>
   );
 }
