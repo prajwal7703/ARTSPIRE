@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import socket from "../socket";
@@ -8,6 +8,7 @@ const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onren
 
 const TABS = [
   { id: "bookings", label: "Bookings",     icon: "📋" },
+  { id: "chat",     label: "Messages",     icon: "💬" },
   { id: "profile",  label: "Edit Profile", icon: "✏️" },
   { id: "reviews",  label: "Reviews",      icon: "⭐" },
   { id: "earnings", label: "Earnings",     icon: "₹"  },
@@ -215,15 +216,25 @@ function BookingsTab({ artistId }) {
     });
     socket.on("price_accepted",    ({ bookingId, price })       => upd(bookingId, b=>({ ...b, status:"price_agreed", agreedPrice:price })));
     socket.on("booking_confirmed", ({ bookingId, paidAmount })  => upd(bookingId, b=>({ ...b, status:"confirmed",    paidAmount })));
-    return () => { socket.off("new_booking_request"); socket.off("user_counter"); socket.off("price_accepted"); socket.off("booking_confirmed"); };
+    return () => {
+      socket.off("new_booking_request");
+      socket.off("user_counter");
+      socket.off("price_accepted");
+      socket.off("booking_confirmed");
+    };
   }, [artistId]);
 
-  const upd = (id,fn) => { setBookings(bs=>bs.map(b=>b._id===id?fn(b):b)); setSelected(s=>s?._id===id?fn(s):s); };
+  const upd = (id,fn) => {
+    setBookings(bs=>bs.map(b=>b._id===id?fn(b):b));
+    setSelected(s=>s?._id===id?fn(s):s);
+  };
 
   const fetchBookings = async () => {
     if (!artistId) { setLoading(false); return; }
-    try { const r = await axios.get(`${API}/api/bookings/artist/${artistId}`); setBookings(Array.isArray(r.data)?r.data:[]); }
-    catch(e) { console.error(e); } finally { setLoading(false); }
+    try {
+      const r = await axios.get(`${API}/api/bookings/artist/${artistId}`);
+      setBookings(Array.isArray(r.data)?r.data:[]);
+    } catch(e) { console.error(e); } finally { setLoading(false); }
   };
   useEffect(()=>{ fetchBookings(); },[artistId]);
 
@@ -332,26 +343,232 @@ function BookingsTab({ artistId }) {
   );
 }
 
+// ─── CHAT TAB ────────────────────────────────────────────────────────────────
+function ChatTab({ artistId }) {
+  const [conversations, setConversations] = useState([]);
+  const [selected,      setSelected]      = useState(null);
+  const [messages,      setMessages]      = useState([]);
+  const [text,          setText]          = useState("");
+  const [loading,       setLoading]       = useState(true);
+  const [sending,       setSending]       = useState(false);
+  const isMobile = useIsMobile();
+  const [showChat, setShowChat] = useState(false);
+  const bottomRef = useRef(null);
+
+  // Load conversations list
+  const fetchConversations = async () => {
+    try {
+      const r = await axios.get(`${API}/api/messages/conversations/artist/${artistId}`);
+      setConversations(Array.isArray(r.data) ? r.data : []);
+    } catch(e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (!artistId) return;
+    fetchConversations();
+
+    // Socket: receive new message in real time
+    socket.emit("join_artist_room", artistId);
+    socket.on("receive_message", (msg) => {
+      // Update conversation list preview
+      setConversations(prev => prev.map(c =>
+        c.userId === msg.senderId
+          ? { ...c, lastMessage: msg.text, lastTime: msg.createdAt, unread: selected?.userId === msg.senderId ? 0 : (c.unread||0)+1 }
+          : c
+      ));
+      // If this conversation is open, add message live
+      if (selected && msg.senderId === selected.userId) {
+        setMessages(prev => [...prev, msg]);
+      }
+    });
+
+    return () => { socket.off("receive_message"); };
+  }, [artistId, selected]);
+
+  // Load messages when a conversation is selected
+  const openConversation = async (conv) => {
+    setSelected(conv);
+    if (isMobile) setShowChat(true);
+    // Mark as read
+    setConversations(prev => prev.map(c => c.userId===conv.userId ? {...c, unread:0} : c));
+    try {
+      const r = await axios.get(`${API}/api/messages/${artistId}/${conv.userId}`);
+      setMessages(Array.isArray(r.data) ? r.data : []);
+    } catch(e) { console.error(e); setMessages([]); }
+  };
+
+  // Scroll to bottom when messages update
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!text.trim() || !selected) return;
+    const msg = { senderId: artistId, receiverId: selected.userId, text: text.trim(), createdAt: new Date() };
+    setSending(true);
+    setText("");
+    setMessages(prev => [...prev, { ...msg, _tempId: Date.now() }]);
+    try {
+      await axios.post(`${API}/api/messages/send`, {
+        senderId: artistId,
+        receiverId: selected.userId,
+        text: msg.text,
+        senderRole: "artist",
+      });
+      // Optionally update conversation preview
+      setConversations(prev => prev.map(c =>
+        c.userId===selected.userId ? { ...c, lastMessage: msg.text, lastTime: msg.createdAt } : c
+      ));
+      // Emit via socket for real-time delivery to user
+      socket.emit("send_message", {
+        senderId: artistId,
+        receiverId: selected.userId,
+        text: msg.text,
+        senderRole: "artist",
+      });
+    } catch(e) {
+      console.error(e);
+      // Remove optimistic message on failure
+      setMessages(prev => prev.filter(m => !m._tempId));
+    } finally { setSending(false); }
+  };
+
+  const ConvList = () => (
+    <div style={{ width: isMobile?"100%":300, borderRight:"1px solid #e2e8f0", display:"flex", flexDirection:"column", background:"#fff", flexShrink:0 }}>
+      <div style={{ padding:"18px 16px 12px", borderBottom:"1px solid #f1f5f9" }}>
+        <div style={st({ fontSize:18, fontWeight:800, color:"#1e293b" })}>Messages</div>
+      </div>
+      <div style={{ overflowY:"auto", flex:1 }}>
+        {loading
+          ? <div style={st({ padding:40, textAlign:"center", color:"#94a3b8", fontSize:14 })}>Loading…</div>
+          : conversations.length===0
+            ? <div style={st({ padding:40, textAlign:"center", color:"#94a3b8", fontSize:14 })}>No conversations yet.</div>
+            : conversations.map(conv => (
+              <div key={conv.userId} onClick={()=>openConversation(conv)} style={{ padding:"13px 16px", borderBottom:"1px solid #f1f5f9", cursor:"pointer", background: selected?.userId===conv.userId?"#eff6ff":"#fff", borderLeft:`3px solid ${selected?.userId===conv.userId?"#1e3a8a":"transparent"}`, transition:"background 0.12s" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{conv.userName}</div>
+                  {conv.unread>0 && <span style={st({ background:"#1e3a8a", color:"#fff", fontSize:10, fontWeight:800, borderRadius:20, padding:"2px 7px" })}>{conv.unread}</span>}
+                </div>
+                <div style={st({ fontSize:12, color:"#94a3b8", marginTop:3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" })}>{conv.lastMessage||"Start chatting"}</div>
+              </div>
+            ))
+        }
+      </div>
+    </div>
+  );
+
+  const ChatWindow = () => !selected ? (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", color:"#94a3b8", gap:10 }}>
+      <div style={{ fontSize:40 }}>💬</div>
+      <div style={st({ fontSize:14 })}>Select a conversation</div>
+    </div>
+  ) : (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#f8fafc" }}>
+      {/* Header */}
+      <div style={{ padding:"14px 16px", borderBottom:"1px solid #e2e8f0", background:"#fff", display:"flex", alignItems:"center", gap:10 }}>
+        {isMobile && (
+          <button onClick={()=>setShowChat(false)} style={st({ background:"none", border:"none", cursor:"pointer", color:"#1e3a8a", fontWeight:800, fontSize:13 })}>← Back</button>
+        )}
+        <div style={{ width:36, height:36, borderRadius:"50%", background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:18 }}>
+          {selected.userName?.[0]?.toUpperCase()}
+        </div>
+        <div>
+          <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{selected.userName}</div>
+          <div style={st({ fontSize:11, color:"#94a3b8" })}>Client</div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:"auto", padding:"16px", display:"flex", flexDirection:"column", gap:10 }}>
+        {messages.length===0
+          ? <div style={st({ textAlign:"center", color:"#94a3b8", fontSize:13, marginTop:40 })}>No messages yet. Say hello!</div>
+          : messages.map((msg, i) => {
+            const isMe = msg.senderId === artistId || msg.senderRole === "artist";
+            return (
+              <div key={msg._id||msg._tempId||i} style={{ display:"flex", justifyContent:isMe?"flex-end":"flex-start" }}>
+                <div style={{ maxWidth:"72%", padding:"9px 13px", borderRadius: isMe?"16px 3px 16px 16px":"3px 16px 16px 16px", background: isMe?"#1e3a8a":"#fff", border: isMe?"none":"1px solid #e2e8f0", color: isMe?"#fff":"#1e293b", fontSize:13, fontFamily:"'Nunito',sans-serif", lineHeight:1.55 }}>
+                  {msg.text}
+                </div>
+              </div>
+            );
+          })
+        }
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ padding:"12px 16px", borderTop:"1px solid #e2e8f0", background:"#fff", display:"flex", gap:8 }}>
+        <input
+          value={text}
+          onChange={e=>setText(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); sendMessage(); } }}
+          placeholder="Type a message…"
+          style={st({ flex:1, border:"1px solid #e2e8f0", borderRadius:24, padding:"9px 16px", fontSize:13, outline:"none", background:"#f8fafc" })}
+        />
+        <button onClick={sendMessage} disabled={sending||!text.trim()} style={st({ background:"#1e3a8a", color:"#fff", border:"none", borderRadius:24, padding:"9px 18px", fontWeight:800, fontSize:13, cursor:"pointer", opacity:(sending||!text.trim())?0.5:1 })}>
+          Send
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", height:"100%" }}>
+      {(!isMobile||!showChat) && <ConvList />}
+      {(!isMobile||showChat)  && <ChatWindow />}
+    </div>
+  );
+}
+
 // ─── EDIT PROFILE TAB ────────────────────────────────────────────────────────
 function EditProfileTab({ artistId }) {
-  const [form,    setForm]    = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [msg,     setMsg]     = useState({ type:"", text:"" });
+  const [form,       setForm]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const [msg,        setMsg]        = useState({ type:"", text:"" });
+  const [imageFile,  setImageFile]  = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileRef = useRef(null);
 
   useEffect(()=>{
     axios.get(`${API}/api/artists/${artistId}`)
-      .then(r=>setForm(r.data))
+      .then(r=>{ setForm(r.data); setImagePreview(r.data.image||r.data.profileImage||null); })
       .catch(()=>setMsg({ type:"error", text:"Failed to load profile." }))
       .finally(()=>setLoading(false));
   },[artistId]);
 
   const set = (k,v) => setForm(f=>({ ...f, [k]:v }));
 
+  const onImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
   const save = async () => {
     setSaving(true); setMsg({ type:"", text:"" });
-    try { await axios.put(`${API}/api/artists/${artistId}`, form); setMsg({ type:"ok", text:"Profile saved!" }); }
-    catch { setMsg({ type:"error", text:"Failed to save." }); } finally { setSaving(false); }
+    try {
+      // If there's a new image, use multipart/form-data
+      if (imageFile) {
+        const fd = new FormData();
+        Object.entries(form).forEach(([k,v]) => {
+          if (v !== null && v !== undefined) fd.append(k, v);
+        });
+        fd.append("image", imageFile);
+        await axios.put(`${API}/api/artists/${artistId}`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        // No image change — plain JSON is fine
+        await axios.put(`${API}/api/artists/${artistId}`, form);
+      }
+      setMsg({ type:"ok", text:"Profile saved successfully!" });
+      setImageFile(null);
+    } catch(e) {
+      console.error(e);
+      setMsg({ type:"error", text: e?.response?.data?.message || "Failed to save. Please try again." });
+    } finally { setSaving(false); }
   };
 
   if (loading) return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Loading…</div>;
@@ -361,8 +578,10 @@ function EditProfileTab({ artistId }) {
     <div style={{ marginBottom:14 }}>
       <label style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8, display:"block", marginBottom:4 })}>{label}</label>
       {multiline
-        ? <textarea value={form[k]||""} onChange={e=>set(k,e.target.value)} placeholder={placeholder} rows={4} style={st({ padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, outline:"none", width:"100%", boxSizing:"border-box", resize:"vertical" })} />
-        : <input type={type} value={form[k]||""} onChange={e=>set(k,e.target.value)} placeholder={placeholder} style={st({ padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, outline:"none", width:"100%", boxSizing:"border-box" })} />
+        ? <textarea value={form[k]||""} onChange={e=>set(k,e.target.value)} placeholder={placeholder} rows={4}
+            style={st({ padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, outline:"none", width:"100%", boxSizing:"border-box", resize:"vertical" })} />
+        : <input type={type} value={form[k]||""} onChange={e=>set(k,e.target.value)} placeholder={placeholder}
+            style={st({ padding:"9px 11px", borderRadius:10, border:"1.5px solid #e2e8f0", background:"#f8fafc", color:"#1e293b", fontSize:13, fontWeight:600, outline:"none", width:"100%", boxSizing:"border-box" })} />
       }
     </div>
   );
@@ -370,16 +589,45 @@ function EditProfileTab({ artistId }) {
   return (
     <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
       <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Edit Profile</div>
+
+      {/* Profile Image Upload */}
+      <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+        <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Profile Photo</div>
+        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+          {/* Avatar preview */}
+          <div style={{ width:80, height:80, borderRadius:"50%", overflow:"hidden", border:"2px solid #e2e8f0", background:"#f1f5f9", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            {imagePreview
+              ? <img src={imagePreview} alt="Profile" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+              : <span style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, color:"#94a3b8" })}>{form.name?.[0]?.toUpperCase()||"A"}</span>
+            }
+          </div>
+          <div>
+            <button onClick={()=>fileRef.current?.click()} style={st({ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"8px 16px", borderRadius:10, fontWeight:700, fontSize:13, cursor:"pointer", marginBottom:6, display:"block" })}>
+              📷 Choose Photo
+            </button>
+            <div style={st({ fontSize:11, color:"#94a3b8" })}>JPG, PNG or WebP · Max 5MB</div>
+            {imageFile && <div style={st({ fontSize:11, color:"#16a34a", marginTop:4 })}>✓ {imageFile.name} selected</div>}
+          </div>
+          <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" onChange={onImageChange} style={{ display:"none" }} />
+        </div>
+      </div>
+
+      {/* Form fields */}
       {[
         { title:"Basic Info", fields:[
-          { label:"Artist Name", k:"name" }, { label:"Category", k:"category", placeholder:"e.g. Musician" },
-          { label:"Location",    k:"location" }, { label:"Phone", k:"phone" },
+          { label:"Artist Name", k:"name" },
+          { label:"Category",    k:"category", placeholder:"e.g. Musician" },
+          { label:"Location",    k:"location" },
+          { label:"Phone",       k:"phone" },
         ]},
         { title:"Pricing", fields:[
-          { label:"Base Price (₹)", k:"basePrice", type:"number" }, { label:"Price Note", k:"priceNote", placeholder:"e.g. per event" },
+          { label:"Base Price (₹)", k:"basePrice", type:"number" },
+          { label:"Price Note",     k:"priceNote", placeholder:"e.g. per event" },
         ]},
         { title:"Social & Portfolio", fields:[
-          { label:"Instagram", k:"instagram", placeholder:"@handle" }, { label:"Portfolio URL", k:"portfolioUrl", placeholder:"https://…" },
+          { label:"Instagram",     k:"instagram",    placeholder:"@handle" },
+          { label:"Portfolio URL", k:"portfolioUrl", placeholder:"https://…" },
+          { label:"YouTube",       k:"youtube",      placeholder:"https://youtube.com/…" },
         ]},
       ].map(section=>(
         <div key={section.title} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
@@ -389,11 +637,18 @@ function EditProfileTab({ artistId }) {
           </div>
         </div>
       ))}
+
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Bio</div>
-        <Field label="Bio" k="bio" multiline placeholder="Describe yourself…" />
+        <Field label="Bio" k="bio" multiline placeholder="Describe yourself, your experience, and what you offer…" />
       </div>
-      {msg.text && <div style={{ border:"1px solid", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif", background:msg.type==="ok"?"#f0fdf4":"#fee2e2", color:msg.type==="ok"?"#15803d":"#7f1d1d", borderColor:msg.type==="ok"?"#86efac":"#fca5a5" }}>{msg.text}</div>}
+
+      {msg.text && (
+        <div style={{ border:"1px solid", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif", background:msg.type==="ok"?"#f0fdf4":"#fee2e2", color:msg.type==="ok"?"#15803d":"#7f1d1d", borderColor:msg.type==="ok"?"#86efac":"#fca5a5" }}>
+          {msg.text}
+        </div>
+      )}
+
       <button onClick={save} disabled={saving} style={st({ background:"#1e3a8a", color:"#fff", border:"none", padding:"13px 24px", borderRadius:20, fontWeight:800, fontSize:14, cursor:"pointer", alignSelf:"flex-start", opacity:saving?0.7:1 })}>
         {saving?"Saving…":"Save Changes →"}
       </button>
@@ -473,35 +728,86 @@ function ReviewsTab({ artistId }) {
 
 // ─── EARNINGS TAB ────────────────────────────────────────────────────────────
 function EarningsTab({ artistId }) {
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState("");
+  const [bookings,    setBookings]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
 
-  useEffect(()=>{
-    axios.get(`${API}/api/artists/${artistId}/earnings`)
-      .then(r=>setData(r.data))
-      .catch(()=>setError("Could not load earnings."))
-      .finally(()=>setLoading(false));
-  },[artistId]);
+  const fetchEarnings = async () => {
+    try {
+      // Try dedicated earnings endpoint first, fall back to bookings endpoint
+      let data = [];
+      try {
+        const r = await axios.get(`${API}/api/artists/${artistId}/earnings`);
+        // Handle both {bookings:[...]} shape and array shape
+        data = Array.isArray(r.data) ? r.data : (r.data?.bookings || []);
+      } catch {
+        // Fall back: get all bookings and filter confirmed ones
+        const r = await axios.get(`${API}/api/bookings/artist/${artistId}`);
+        data = (Array.isArray(r.data) ? r.data : []).filter(b => b.status === "confirmed");
+      }
+      setBookings(data);
+      setLastUpdated(new Date());
+    } catch(e) {
+      console.error(e);
+      setError("Could not load earnings.");
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => {
+    if (!artistId) return;
+    fetchEarnings();
+
+    // REAL-TIME: update earnings when a booking is confirmed via socket
+    socket.on("booking_confirmed", ({ bookingId, paidAmount }) => {
+      setBookings(prev => {
+        const exists = prev.find(b => b._id === bookingId);
+        if (exists) {
+          return prev.map(b => b._id === bookingId ? { ...b, status:"confirmed", paidAmount } : b);
+        }
+        // If not in list yet, refetch
+        fetchEarnings();
+        return prev;
+      });
+      setLastUpdated(new Date());
+    });
+
+    return () => { socket.off("booking_confirmed"); };
+  }, [artistId]);
 
   if (loading) return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Loading…</div>;
 
-  const bookings     = Array.isArray(data)?data:(data?.bookings||[]);
-  const totalEarned  = data?.totalEarned  ?? bookings.reduce((s,b)=>s+(b.paidAmount||0),0);
-  const totalGigs    = data?.totalBookings ?? bookings.length;
-  const pending      = data?.pendingPayout ?? 0;
-  const thisMonth    = data?.thisMonth     ?? bookings.filter(b=>new Date(b.updatedAt).getMonth()===new Date().getMonth()).reduce((s,b)=>s+(b.paidAmount||0),0);
+  const totalEarned = bookings.reduce((s,b) => s + (b.paidAmount || 0), 0);
+  const thisMonth   = bookings.filter(b => {
+    const d = new Date(b.updatedAt || b.createdAt);
+    const n = new Date();
+    return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+  }).reduce((s,b) => s + (b.paidAmount || 0), 0);
+  const totalGigs   = bookings.length;
+  // Average per gig
+  const avgPerGig   = totalGigs > 0 ? Math.round(totalEarned / totalGigs) : 0;
 
   return (
     <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
-      <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Earnings</div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Earnings</div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {lastUpdated && <span style={st({ fontSize:11, color:"#94a3b8" })}>Updated {lastUpdated.toLocaleTimeString()}</span>}
+          <button onClick={fetchEarnings} style={st({ background:"#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"6px 14px", borderRadius:20, fontSize:12, fontWeight:700, cursor:"pointer" })}>
+            ↻ Refresh
+          </button>
+        </div>
+      </div>
+
       {error && <div style={{ background:"#fee2e2", border:"1px solid #fca5a5", color:"#7f1d1d", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif" }}>{error}</div>}
+
+      {/* Summary cards */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
         {[
-          { label:"Total Earned",   val:`₹${fmt(totalEarned)}`,  color:"#1e3a8a" },
-          { label:"This Month",     val:`₹${fmt(thisMonth)}`,    color:"#15803d" },
-          { label:"Pending Payout", val:`₹${fmt(pending)}`,      color:"#7e22ce" },
-          { label:"Completed Gigs", val:totalGigs,               color:"#0e7490" },
+          { label:"Total Earned",   val:`₹${fmt(totalEarned)}`, color:"#1e3a8a" },
+          { label:"This Month",     val:`₹${fmt(thisMonth)}`,   color:"#15803d" },
+          { label:"Avg per Gig",    val:`₹${fmt(avgPerGig)}`,   color:"#7e22ce" },
+          { label:"Completed Gigs", val:totalGigs,              color:"#0e7490" },
         ].map(s=>(
           <div key={s.label} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"18px 16px", textAlign:"center" }}>
             <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, color:s.color, letterSpacing:1 })}>{s.val}</div>
@@ -509,7 +815,9 @@ function EarningsTab({ artistId }) {
           </div>
         ))}
       </div>
-      {bookings.length>0 && (
+
+      {/* Completed bookings table */}
+      {bookings.length > 0 ? (
         <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
           <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Completed Bookings</div>
           <div style={{ overflowX:"auto" }}>
@@ -534,6 +842,12 @@ function EarningsTab({ artistId }) {
             </table>
           </div>
         </div>
+      ) : (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"40px 20px", textAlign:"center", color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
+          <div style={{ fontSize:36, marginBottom:10 }}>₹</div>
+          <div style={{ fontWeight:700 }}>No completed bookings yet</div>
+          <div style={{ fontSize:13, marginTop:6 }}>Earnings appear here once a client confirms payment</div>
+        </div>
       )}
     </div>
   );
@@ -543,7 +857,7 @@ function EarningsTab({ artistId }) {
 export default function ArtistDashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "bookings");
+  const [activeTab,  setActiveTab]  = useState(searchParams.get("tab") || "bookings");
   const [artistData, setArtistData] = useState(null);
 
   const artist   = getArtist();
@@ -565,8 +879,11 @@ export default function ArtistDashboard() {
       {/* Sidebar */}
       <aside style={{ width:220, background:"#1e3a8a", display:"flex", flexDirection:"column", padding:"24px 14px 16px", flexShrink:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28, paddingBottom:20, borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ width:42, height:42, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:22, flexShrink:0 }}>
-            {displayName[0]?.toUpperCase()}
+          <div style={{ width:42, height:42, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:22, flexShrink:0, overflow:"hidden" }}>
+            {artistData?.image || artistData?.profileImage
+              ? <img src={artistData.image||artistData.profileImage} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+              : displayName[0]?.toUpperCase()
+            }
           </div>
           <div style={{ minWidth:0 }}>
             <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:"#fff", letterSpacing:0.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{displayName}</div>
@@ -588,9 +905,6 @@ export default function ArtistDashboard() {
         </div>
       </aside>
 
-      {/* Mobile tab bar */}
-      <div style={{ display:"none" }} className="mobile-tabs" />
-
       {/* Main */}
       <main style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
         {!artistId ? (
@@ -598,6 +912,7 @@ export default function ArtistDashboard() {
         ) : (
           <>
             {activeTab==="bookings" && <BookingsTab    artistId={artistId} />}
+            {activeTab==="chat"     && <ChatTab        artistId={artistId} />}
             {activeTab==="profile"  && <EditProfileTab artistId={artistId} />}
             {activeTab==="reviews"  && <ReviewsTab     artistId={artistId} />}
             {activeTab==="earnings" && <EarningsTab    artistId={artistId} />}
