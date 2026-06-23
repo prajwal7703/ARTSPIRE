@@ -607,9 +607,9 @@ function ChatTab({ artistId }) {
 
   // ✅ FIX: Normalize conversation to always have a displayable name
   const normalizeConv = (c) => ({
-    ...c,
-    userName: c.userName || c.name || c.userEmail?.split("@")[0] || "Unknown User",
-  });
+  ...c,
+  userName: c.userName || c.name || c.userEmail?.split("@")[0] || "Unknown User",
+});
 
   const fetchConversations = async () => {
     try {

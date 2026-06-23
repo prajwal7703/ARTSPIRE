@@ -105,20 +105,21 @@ router.post("/:id/reviews", async (req, res) => {
 
     if (!artist) return res.status(404).json({ message: "Artist not found" });
 
-    if (!Array.isArray(artist.reviews)) artist.reviews = [];
-    artist.reviews.push(newReview);
+    // Use direct DB update to avoid schema-cache issues on live servers
+    const Model = isUserDoc ? User : Artist;
 
-    // Recalculate average rating and store it on the artist doc too,
-    // so any place reading artist.rating directly also stays in sync.
-    const total = artist.reviews.reduce((s, r) => s + (r.rating || 0), 0);
-    artist.rating = Number((total / artist.reviews.length).toFixed(1));
+    await Model.findByIdAndUpdate(artist._id, {
+      $push: { reviews: newReview },
+    });
 
-    await artist.save();
+    // Recalculate avg from fresh DB data
+    const fresh = await Model.findById(artist._id);
+    const total = fresh.reviews.reduce((s, r) => s + (r.rating || 0), 0);
+    const newAvg = Number((total / fresh.reviews.length).toFixed(1));
 
-    const updatedArtist = isUserDoc
-      ? await User.findById(artist._id).select("-password")
-      : await Artist.findById(artist._id).select("-password");
+    await Model.findByIdAndUpdate(artist._id, { $set: { rating: newAvg } });
 
+    const updatedArtist = await Model.findById(artist._id).select("-password");
     res.status(201).json({ artist: updatedArtist, reviews: updatedArtist.reviews });
   } catch (err) {
     console.error("POST /:id/reviews error:", err);

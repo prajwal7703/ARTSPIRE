@@ -91,8 +91,8 @@ exports.getConversations = async (req, res) => {
 
     const conversations = await Promise.all(
       Object.values(convMap).map(async (conv) => {
-        let name  = "Unknown";
-        let image = null;
+        let name  = name;
+        let image = image;
         let role  = "user"; // what role is the OTHER person
 
         try {
@@ -132,8 +132,8 @@ exports.getConversations = async (req, res) => {
           artistImage: role === "artist" ? image : null,
           // artist-side keys (ArtistDashboard ChatTab)
           userId:      conv.otherId,
-          userName:    role === "user" ? name : null,
-          userImage:   role === "user" ? image : null,
+          userName:    name,
+userImage:   image,
         };
       })
     );

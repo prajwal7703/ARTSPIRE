@@ -18,6 +18,16 @@ const artistSchema = new mongoose.Schema(
     profileViews:  { type: Number, default: 0 },
     price:         { type: Number, default: 0 },   // ✅ added — artist's base price for booking
     passwordResetToken: { type: String, default: null },
+    reviews: [
+      {
+        userId:    { type: String },
+        userName:  { type: String },
+        rating:    { type: Number, required: true },
+        comment:   { type: String, default: "" },
+        eventType: { type: String, default: "" },
+        createdAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );

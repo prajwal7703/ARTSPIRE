@@ -21,7 +21,17 @@ const userSchema = new mongoose.Schema({
   rating:       { type: Number, default: 5 },
   portfolio:    [{ type: String }],
   profileViews: { type: Number, default: 0 },
-  price:        { type: Number, default: 0 },   // ✅ added — artist's base price for booking
+ price:        { type: Number, default: 0 },   // ✅ added — artist's base price for booking
+  reviews: [
+    {
+      userId:    { type: String },
+      userName:  { type: String },
+      rating:    { type: Number, required: true },
+      comment:   { type: String, default: "" },
+      review:    { type: String, default: "" },
+      eventType: { type: String, default: "" },
+      createdAt: { type: Date, default: Date.now },
+    },
+  ],
 }, { timestamps: true });
-
 module.exports = mongoose.model("user", userSchema);
