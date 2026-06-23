@@ -91,6 +91,7 @@ exports.getConversations = async (req, res) => {
 
     const conversations = await Promise.all(
       Object.values(convMap).map(async (conv) => {
+        // ✅ FIX 1: Initialize with defaults instead of assigning to itself
         let name  = "Unknown";
         let image = null;
         let role  = "user"; // what role is the OTHER person
@@ -113,8 +114,10 @@ exports.getConversations = async (req, res) => {
           }
         } catch (e) {
           console.error("Name lookup failed for", conv.otherId, e.message);
+          // Continue with defaults if lookup fails
         }
 
+        // ✅ FIX 2: Fixed indentation and syntax
         // Return BOTH naming conventions so UserChat and ArtistDashboard
         // both work without backend changes:
         //   UserChat        reads: artistId, artistName, artistImage
@@ -133,7 +136,7 @@ exports.getConversations = async (req, res) => {
           // artist-side keys (ArtistDashboard ChatTab)
           userId:      conv.otherId,
           userName:    name,
-userImage:   image,
+          userImage:   image,
         };
       })
     );
