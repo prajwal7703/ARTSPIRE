@@ -1018,24 +1018,44 @@ function EditProfileTab({ artistId }) {
 }
 
 // ─── REVIEWS TAB ──────────────────────────────────────────────────────────────
+// ✅ FIXED: Proper error handling, rating display, and fallbacks
 function ReviewsTab({ artistId }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(()=>{
+    if (!artistId) { setLoading(false); return; }
     axios.get(`${API}/api/artists/${artistId}/reviews`)
-      .then(r=>setReviews(Array.isArray(r.data)?r.data:[]))
-      .catch(()=>{})
+      .then(r=>{
+        console.log("Reviews loaded:", r.data);
+        const revs = Array.isArray(r.data) ? r.data : [];
+        setReviews(revs);
+        setError("");
+      })
+      .catch(err=>{
+        console.error("Failed to load reviews:", err);
+        setError("Could not load reviews.");
+        setReviews([]);
+      })
       .finally(()=>setLoading(false));
   },[artistId]);
 
-  const avg = reviews.length ? (reviews.reduce((s,r)=>s+(r.rating||0),0)/reviews.length).toFixed(1) : null;
+  // Calculate average rating safely
+  const avg = reviews.length ? (reviews.reduce((s,r)=>s+(Number(r.rating)||0),0)/reviews.length).toFixed(1) : null;
 
   if (loading) return <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"60%", color:"#94a3b8", fontSize:14 })}>Loading…</div>;
 
   return (
     <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
       <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Reviews</div>
+
+      {/* Error message */}
+      {error && (
+        <div style={{ background:"#fee2e2", border:"1px solid #fca5a5", color:"#7f1d1d", borderRadius:12, padding:"10px 14px", fontSize:13, fontWeight:700, fontFamily:"'Nunito',sans-serif" }}>
+          ⚠ {error}
+        </div>
+      )}
 
       {/* ✅ FIX: Always show summary if reviews exist, including stars */}
       {reviews.length > 0 && (
@@ -1051,7 +1071,7 @@ function ReviewsTab({ artistId }) {
           </div>
           <div style={{ flex:1, minWidth:160 }}>
             {[5,4,3,2,1].map(star=>{
-              const count = reviews.filter(r=>Math.round(r.rating)===star).length;
+              const count = reviews.filter(r=>Math.round(Number(r.rating)||0)===star).length;
               const pct   = Math.round((count/reviews.length)*100);
               return (
                 <div key={star} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
@@ -1071,43 +1091,49 @@ function ReviewsTab({ artistId }) {
         </div>
       )}
 
-      {/* ✅ FIX: Each review card shows stars prominently */}
+      {/* ✅ FIX: Each review card shows stars prominently with proper rating display */}
       {reviews.length===0 ? (
         <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"40px 20px", textAlign:"center", color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
           <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
           <div style={{ fontWeight:700 }}>No reviews yet</div>
           <div style={{ fontSize:13, marginTop:6 }}>Reviews from clients will appear here after confirmed bookings</div>
         </div>
-      ) : reviews.map((r,i)=>(
-        <div key={r._id||i} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-              {/* ✅ FIX: Avatar for reviewer */}
-              <div style={{ width:38, height:38, borderRadius:"50%", background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:18, flexShrink:0 }}>
-                {(r.userName||"A")?.[0]?.toUpperCase()}
+      ) : reviews.map((r,i)=>{
+        // ✅ FIX: Ensure rating is a number
+        const rating = Number(r.rating) || 0;
+        const roundedRating = Math.round(rating);
+        
+        return (
+          <div key={r._id||i} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                {/* ✅ FIX: Avatar for reviewer */}
+                <div style={{ width:38, height:38, borderRadius:"50%", background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:18, flexShrink:0 }}>
+                  {(r.userName||"A")?.[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{r.userName||"Anonymous"}</div>
+                  <div style={st({ fontSize:11, color:"#94a3b8" })}>{r.eventType || "Client"}</div>
+                </div>
               </div>
-              <div>
-                <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{r.userName||"Anonymous"}</div>
-                <div style={st({ fontSize:11, color:"#94a3b8" })}>{r.eventType}</div>
+              {/* ✅ FIX: Star rating displayed prominently with numeric value */}
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2 }}>
+                <div style={{ display:"flex", gap:2 }}>
+                  {[1,2,3,4,5].map(s=>(
+                    <span key={s} style={{ fontSize:16, color: s <= roundedRating ? "#f59e0b" : "#e2e8f0" }}>★</span>
+                  ))}
+                </div>
+                <span style={st({ fontSize:11, fontWeight:800, color:"#64748b" })}>{rating.toFixed(1)} / 5</span>
               </div>
             </div>
-            {/* ✅ FIX: Star rating displayed prominently */}
-            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2 }}>
-              <div style={{ display:"flex", gap:2 }}>
-                {[1,2,3,4,5].map(s=>(
-                  <span key={s} style={{ fontSize:16, color:s<=Math.round(r.rating)?"#f59e0b":"#e2e8f0" }}>★</span>
-                ))}
+            {(r.comment || r.review) && (
+              <div style={{ background:"#f8fafc", borderRadius:10, padding:"10px 12px" }}>
+                <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.comment || r.review}</div>
               </div>
-              <span style={st({ fontSize:11, fontWeight:800, color:"#64748b" })}>{Number(r.rating).toFixed(1)} / 5</span>
-            </div>
+            )}
           </div>
-          {(r.comment || r.review) && (
-            <div style={{ background:"#f8fafc", borderRadius:10, padding:"10px 12px" }}>
-              <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.comment || r.review}</div>
-            </div>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
