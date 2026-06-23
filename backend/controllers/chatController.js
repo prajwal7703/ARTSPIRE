@@ -91,8 +91,8 @@ exports.getConversations = async (req, res) => {
 
     const conversations = await Promise.all(
       Object.values(convMap).map(async (conv) => {
-        let name  = name;
-        let image = image;
+        let name  = "Unknown";
+        let image = null;
         let role  = "user"; // what role is the OTHER person
 
         try {

@@ -95,10 +95,7 @@ router.delete("/:groupId/members/:userId", async (req, res) => {
 module.exports = router;
 
 
-// ─────────────────────────────────────────────────────────────────
-// models/Group.js
-// ─────────────────────────────────────────────────────────────────
-/*
+
 const mongoose = require("mongoose");
 
 const groupSchema = new mongoose.Schema({
@@ -113,7 +110,7 @@ const groupSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model("Group", groupSchema);
-*/
+
 
 
 // ─────────────────────────────────────────────────────────────────
