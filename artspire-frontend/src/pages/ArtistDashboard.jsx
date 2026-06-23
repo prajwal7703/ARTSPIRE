@@ -347,17 +347,18 @@ function BookingsTab({ artistId }) {
 
 // ─── GROUPS PANEL ─────────────────────────────────────────────────────────────
 function GroupsPanel({ artistId }) {
-  // ── state ──────────────────────────────────────────────────────────────────
-  const [groups,         setGroups]         = useState([]);
-  const [selected,       setSelected]       = useState(null);
-  const [messages,       setMessages]       = useState([]);
-  const [text,           setText]           = useState("");
-  const [loading,        setLoading]        = useState(true);
-  const [showCreate,     setShowCreate]     = useState(false);
-  const [newName,        setNewName]        = useState("");
-  const [showAddMember,  setShowAddMember]  = useState(false); // ✅ ADD MEMBER state
-  const [addMemberId,    setAddMemberId]    = useState("");    // ✅ ADD MEMBER state
-  const isMobile = useIsMobile();
+  const [groups,        setGroups]        = useState([]);
+  const [selected,      setSelected]      = useState(null);
+  const [messages,      setMessages]      = useState([]);
+  const [text,          setText]          = useState("");
+  const [loading,       setLoading]       = useState(true);
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [newName,       setNewName]       = useState("");
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addMemberId,   setAddMemberId]   = useState("");
+  const [addMemberErr,  setAddMemberErr]  = useState("");
+  const [addingMember,  setAddingMember]  = useState(false);
+  const isMobile  = useIsMobile();
   const [showChat, setShowChat] = useState(false);
   const bottomRef = useRef(null);
 
@@ -371,13 +372,27 @@ function GroupsPanel({ artistId }) {
 
   useEffect(() => { if (artistId) fetchGroups(); }, [artistId]);
 
+  // ── socket listeners ───────────────────────────────────────────────────────
   useEffect(() => {
+    // New group message
     socket.on("group_message", (msg) => {
       if (selected && msg.groupId === selected._id) {
         setMessages(prev => [...prev, msg]);
       }
     });
-    return () => { socket.off("group_message"); };
+
+    // ✅ FIX: Real-time group member added
+    socket.on("group_member_added", ({ groupId, updatedGroup }) => {
+      setGroups(prev => prev.map(g => g._id === groupId ? updatedGroup : g));
+      if (selected?._id === groupId) {
+        setSelected(updatedGroup);
+      }
+    });
+
+    return () => {
+      socket.off("group_message");
+      socket.off("group_member_added");
+    };
   }, [selected]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
@@ -394,8 +409,9 @@ function GroupsPanel({ artistId }) {
 
   const openGroup = async (g) => {
     setSelected(g);
-    setShowAddMember(false); // reset add-member panel when switching groups
+    setShowAddMember(false);
     setAddMemberId("");
+    setAddMemberErr("");
     if (isMobile) setShowChat(true);
     socket.emit("join_group", g._id);
     try {
@@ -413,16 +429,33 @@ function GroupsPanel({ artistId }) {
     } catch (e) { console.error(e); setText(msgText); }
   };
 
-  // ✅ ADD MEMBER action
+  // ✅ FIX: Add member with real-time socket emit + error handling
   const addMember = async () => {
     if (!addMemberId.trim() || !selected) return;
+    setAddingMember(true);
+    setAddMemberErr("");
     try {
       const r = await axios.post(`${API}/api/groups/${selected._id}/members`, { userId: addMemberId.trim() });
-      setSelected(r.data);
-      setGroups(prev => prev.map(g => g._id === r.data._id ? r.data : g));
+      const updatedGroup = r.data;
+
+      // Update local state immediately
+      setSelected(updatedGroup);
+      setGroups(prev => prev.map(g => g._id === updatedGroup._id ? updatedGroup : g));
+
+      // ✅ Broadcast to all members in real-time via socket
+      socket.emit("group_member_added", {
+        groupId: selected._id,
+        updatedGroup,
+      });
+
       setAddMemberId("");
       setShowAddMember(false);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setAddMemberErr(e?.response?.data?.message || "Could not add member. Check the user ID.");
+    } finally {
+      setAddingMember(false);
+    }
   };
 
   // ── sub-components ─────────────────────────────────────────────────────────
@@ -477,31 +510,38 @@ function GroupsPanel({ artistId }) {
           <div style={st({ fontSize: 11, color: "#94a3b8" })}>{selected.members?.length || 0} members</div>
         </div>
 
-        {/* ✅ ADD MEMBER — toggle button, pushed to the right */}
+        {/* ✅ Add Member toggle button */}
         <button
-          onClick={() => setShowAddMember(s => !s)}
+          onClick={() => { setShowAddMember(s => !s); setAddMemberErr(""); setAddMemberId(""); }}
           style={st({ marginLeft: "auto", background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e40af", padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer" })}
         >
-          + Add
+          + Add Member
         </button>
       </div>
 
-      {/* ✅ ADD MEMBER — expandable input row, sits just below the header */}
+      {/* ✅ FIX: Add Member expandable panel with error feedback */}
       {showAddMember && (
-        <div style={{ display: "flex", gap: 6, padding: "8px 16px", borderBottom: "1px solid #f1f5f9", background: "#fff" }}>
-          <input
-            value={addMemberId}
-            onChange={e => setAddMemberId(e.target.value)}
-            placeholder="Paste user ID"
-            onKeyDown={e => { if (e.key === "Enter") addMember(); }}
-            style={st({ flex: 1, border: "1px solid #e2e8f0", borderRadius: 8, padding: "6px 10px", fontSize: 12, outline: "none" })}
-          />
-          <button
-            onClick={addMember}
-            style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 8, padding: "6px 14px", fontWeight: 700, fontSize: 12, cursor: "pointer" })}
-          >
-            Add
-          </button>
+        <div style={{ padding: "10px 16px 12px", borderBottom: "1px solid #f1f5f9", background: "#fff" }}>
+          <div style={st({ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 })}>Add Member by User ID</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <input
+              value={addMemberId}
+              onChange={e => { setAddMemberId(e.target.value); setAddMemberErr(""); }}
+              placeholder="Paste user ID here…"
+              onKeyDown={e => { if (e.key === "Enter") addMember(); }}
+              style={st({ flex: 1, border: `1px solid ${addMemberErr ? "#fca5a5" : "#e2e8f0"}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, outline: "none" })}
+            />
+            <button
+              onClick={addMember}
+              disabled={addingMember || !addMemberId.trim()}
+              style={st({ background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 8, padding: "7px 16px", fontWeight: 700, fontSize: 13, cursor: addingMember || !addMemberId.trim() ? "not-allowed" : "pointer", opacity: addingMember || !addMemberId.trim() ? 0.6 : 1, whiteSpace: "nowrap" })}
+            >
+              {addingMember ? "Adding…" : "Add"}
+            </button>
+          </div>
+          {addMemberErr && (
+            <div style={st({ fontSize: 11, color: "#dc2626", marginTop: 5, fontWeight: 600 })}>⚠ {addMemberErr}</div>
+          )}
         </div>
       )}
 
@@ -513,7 +553,7 @@ function GroupsPanel({ artistId }) {
             const isMe = msg.senderId === artistId;
             return (
               <div key={msg._id || i} style={{ display: "flex", flexDirection: "column", alignItems: isMe ? "flex-end" : "flex-start" }}>
-                {!isMe && <span style={st({ fontSize: 10, color: "#94a3b8", marginBottom: 2 })}>{msg.senderId}</span>}
+                {!isMe && <span style={st({ fontSize: 10, color: "#94a3b8", marginBottom: 2 })}>{msg.senderName || msg.senderId}</span>}
                 <div style={{ maxWidth: "72%", padding: "9px 13px", borderRadius: isMe ? "16px 3px 16px 16px" : "3px 16px 16px 16px", background: isMe ? "#1e3a8a" : "#fff", border: isMe ? "none" : "1px solid #e2e8f0", color: isMe ? "#fff" : "#1e293b", fontSize: 13, fontFamily: "'Nunito',sans-serif", lineHeight: 1.55 }}>
                   {msg.message}
                 </div>
@@ -565,10 +605,17 @@ function ChatTab({ artistId }) {
   const [view,     setView]     = useState("direct"); // "direct" | "groups"
   const bottomRef = useRef(null);
 
+  // ✅ FIX: Normalize conversation to always have a displayable name
+  const normalizeConv = (c) => ({
+    ...c,
+    userName: c.userName || c.name || c.userEmail?.split("@")[0] || "Unknown User",
+  });
+
   const fetchConversations = async () => {
     try {
       const r = await axios.get(`${API}/api/chat/conversations/${artistId}`);
-      setConversations(Array.isArray(r.data) ? r.data : []);
+      const convs = Array.isArray(r.data) ? r.data : [];
+      setConversations(convs.map(normalizeConv));
     } catch(e) { console.error(e); } finally { setLoading(false); }
   };
 
@@ -576,6 +623,7 @@ function ChatTab({ artistId }) {
     if (!artistId) return;
     fetchConversations();
     socket.emit("join_artist_room", artistId);
+
     socket.on("receive_message", (msg) => {
       setConversations(prev => prev.map(c =>
         c.userId === msg.senderId
@@ -586,6 +634,7 @@ function ChatTab({ artistId }) {
         setMessages(prev => [...prev, msg]);
       }
     });
+
     return () => { socket.off("receive_message"); };
   }, [artistId, selected]);
 
@@ -646,11 +695,19 @@ function ChatTab({ artistId }) {
             ? <div style={st({ padding:40, textAlign:"center", color:"#94a3b8", fontSize:14 })}>No conversations yet.</div>
             : conversations.map(conv => (
               <div key={conv.userId} onClick={()=>openConversation(conv)} style={{ padding:"13px 16px", borderBottom:"1px solid #f1f5f9", cursor:"pointer", background: selected?.userId===conv.userId?"#eff6ff":"#fff", borderLeft:`3px solid ${selected?.userId===conv.userId?"#1e3a8a":"transparent"}`, transition:"background 0.12s" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                  <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{conv.userName}</div>
-                  {conv.unread>0 && <span style={st({ background:"#1e3a8a", color:"#fff", fontSize:10, fontWeight:800, borderRadius:20, padding:"2px 7px" })}>{conv.unread}</span>}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:6 }}>
+                  {/* ✅ FIX: Avatar initial from userName */}
+                  <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                    <div style={{ width:32, height:32, borderRadius:"50%", background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:16, flexShrink:0 }}>
+                      {conv.userName?.[0]?.toUpperCase() || "?"}
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" })}>{conv.userName}</div>
+                      <div style={st({ fontSize:12, color:"#94a3b8", marginTop:1, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" })}>{conv.lastMessage || "Start chatting"}</div>
+                    </div>
+                  </div>
+                  {conv.unread>0 && <span style={st({ background:"#1e3a8a", color:"#fff", fontSize:10, fontWeight:800, borderRadius:20, padding:"2px 7px", flexShrink:0 })}>{conv.unread}</span>}
                 </div>
-                <div style={st({ fontSize:12, color:"#94a3b8", marginTop:3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" })}>{conv.lastMessage||"Start chatting"}</div>
               </div>
             ))
         }
@@ -665,18 +722,23 @@ function ChatTab({ artistId }) {
     </div>
   ) : (
     <div style={{ flex:1, display:"flex", flexDirection:"column", background:"#f8fafc" }}>
+      {/* ✅ FIX: Chat header shows real user name */}
       <div style={{ padding:"14px 16px", borderBottom:"1px solid #e2e8f0", background:"#fff", display:"flex", alignItems:"center", gap:10 }}>
         {isMobile && (
           <button onClick={()=>setShowChat(false)} style={st({ background:"none", border:"none", cursor:"pointer", color:"#1e3a8a", fontWeight:800, fontSize:13 })}>← Back</button>
         )}
         <div style={{ width:36, height:36, borderRadius:"50%", background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:18 }}>
-          {selected.userName?.[0]?.toUpperCase()}
+          {selected.userName?.[0]?.toUpperCase() || "?"}
         </div>
         <div>
+          {/* ✅ FIX: Display actual userName not hardcoded "Client" */}
           <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{selected.userName}</div>
-          <div style={st({ fontSize:11, color:"#94a3b8" })}>Client</div>
+          <div style={st({ fontSize:11, color:"#94a3b8" })}>
+            {selected.userEmail || "Client"}
+          </div>
         </div>
       </div>
+
       <div style={{ flex:1, overflowY:"auto", padding:"16px", display:"flex", flexDirection:"column", gap:10 }}>
         {messages.length===0
           ? <div style={st({ textAlign:"center", color:"#94a3b8", fontSize:13, marginTop:40 })}>No messages yet. Say hello!</div>
@@ -693,6 +755,7 @@ function ChatTab({ artistId }) {
         }
         <div ref={bottomRef} />
       </div>
+
       <div style={{ padding:"12px 16px", borderTop:"1px solid #e2e8f0", background:"#fff", display:"flex", gap:8 }}>
         <input
           value={text}
@@ -973,13 +1036,20 @@ function ReviewsTab({ artistId }) {
   return (
     <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
       <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:26, color:"#1e3a8a", letterSpacing:1 })}>Reviews</div>
-      {reviews.length>0 && (
-        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"18px 22px", display:"flex", gap:32, alignItems:"center" }}>
+
+      {/* ✅ FIX: Always show summary if reviews exist, including stars */}
+      {reviews.length > 0 && (
+        <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"18px 22px", display:"flex", gap:32, alignItems:"center", flexWrap:"wrap" }}>
           <div style={{ textAlign:"center" }}>
             <div style={st({ fontFamily:"'Bebas Neue',sans-serif", fontSize:48, color:"#1e3a8a", lineHeight:1 })}>{avg}</div>
-            <div style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8 })}>Overall</div>
+            <div style={{ display:"flex", justifyContent:"center", gap:2, marginTop:4 }}>
+              {[1,2,3,4,5].map(s=>(
+                <span key={s} style={{ fontSize:20, color: s <= Math.round(parseFloat(avg)) ? "#f59e0b" : "#e2e8f0" }}>★</span>
+              ))}
+            </div>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:0.8, marginTop:4 })}>Overall</div>
           </div>
-          <div style={{ flex:1 }}>
+          <div style={{ flex:1, minWidth:160 }}>
             {[5,4,3,2,1].map(star=>{
               const count = reviews.filter(r=>Math.round(r.rating)===star).length;
               const pct   = Math.round((count/reviews.length)*100);
@@ -987,7 +1057,7 @@ function ReviewsTab({ artistId }) {
                 <div key={star} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
                   <span style={st({ fontSize:11, color:"#64748b", width:14 })}>{star}</span>
                   <div style={{ flex:1, height:6, borderRadius:4, background:"#e2e8f0", overflow:"hidden" }}>
-                    <div style={{ width:`${pct}%`, height:"100%", background:"#1e3a8a", borderRadius:4 }} />
+                    <div style={{ width:`${pct}%`, height:"100%", background:"#1e3a8a", borderRadius:4, transition:"width 0.4s" }} />
                   </div>
                   <span style={st({ fontSize:11, color:"#94a3b8", width:28 })}>{count}</span>
                 </div>
@@ -1000,24 +1070,42 @@ function ReviewsTab({ artistId }) {
           </div>
         </div>
       )}
+
+      {/* ✅ FIX: Each review card shows stars prominently */}
       {reviews.length===0 ? (
         <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"40px 20px", textAlign:"center", color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
           <div style={{ fontSize:36, marginBottom:10 }}>⭐</div>
           <div style={{ fontWeight:700 }}>No reviews yet</div>
+          <div style={{ fontSize:13, marginTop:6 }}>Reviews from clients will appear here after confirmed bookings</div>
         </div>
       ) : reviews.map((r,i)=>(
         <div key={r._id||i} style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-            <div>
-              <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{r.userName||"Anonymous"}</div>
-              <div style={st({ fontSize:11, color:"#94a3b8" })}>{r.eventType}</div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              {/* ✅ FIX: Avatar for reviewer */}
+              <div style={{ width:38, height:38, borderRadius:"50%", background:"#1e3a8a", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:18, flexShrink:0 }}>
+                {(r.userName||"A")?.[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div style={st({ fontWeight:800, fontSize:14, color:"#1e293b" })}>{r.userName||"Anonymous"}</div>
+                <div style={st({ fontSize:11, color:"#94a3b8" })}>{r.eventType}</div>
+              </div>
             </div>
-            <div style={{ display:"flex", gap:2 }}>
-              {[1,2,3,4,5].map(s=><span key={s} style={{ fontSize:14, color:s<=Math.round(r.rating)?"#f59e0b":"#e2e8f0" }}>★</span>)}
+            {/* ✅ FIX: Star rating displayed prominently */}
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:2 }}>
+              <div style={{ display:"flex", gap:2 }}>
+                {[1,2,3,4,5].map(s=>(
+                  <span key={s} style={{ fontSize:16, color:s<=Math.round(r.rating)?"#f59e0b":"#e2e8f0" }}>★</span>
+                ))}
+              </div>
+              <span style={st({ fontSize:11, fontWeight:800, color:"#64748b" })}>{Number(r.rating).toFixed(1)} / 5</span>
             </div>
           </div>
-          {r.comment && <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.comment}</div>}
-          {r.review  && <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.review}</div>}
+          {(r.comment || r.review) && (
+            <div style={{ background:"#f8fafc", borderRadius:10, padding:"10px 12px" }}>
+              <div style={st({ fontSize:13, color:"#475569", lineHeight:1.6 })}>{r.comment || r.review}</div>
+            </div>
+          )}
         </div>
       ))}
     </div>
