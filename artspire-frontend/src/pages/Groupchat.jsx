@@ -5,7 +5,6 @@ import socket from "../socket";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const API = import.meta.env.VITE_API_URL;
-const isMobile = () => window.innerWidth < 768;
 
 const formatTime = (d) => {
   if (!d) return "";
@@ -146,7 +145,8 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
     setCreating(false);
   };
 
-  const mobile = isMobile();
+  const [mobile, setMobile] = useState(window.innerWidth < 768);
+  useEffect(() => { const fn = () => setMobile(window.innerWidth < 768); window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn); }, []);
 
   return (
     <div style={{...modal.overlay, zIndex: 1000}} onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -362,7 +362,8 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
 // ─── Group Info Panel ────────────────────────────────────────────────────────
 const GroupInfoPanel = ({ group, currentUser, onClose, onLeave }) => {
   const typeInfo = BAND_TYPES.find(b => b.value === group.type);
-  const mobile = isMobile();
+  const [mobile, setMobile] = useState(window.innerWidth < 768);
+  useEffect(() => { const fn = () => setMobile(window.innerWidth < 768); window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn); }, []);
 
   return (
     <div style={{
@@ -694,7 +695,8 @@ export default function GroupChat() {
     return acc;
   }, {});
 
-  const mobile = isMobile();
+  const [mobile, setMobile] = useState(window.innerWidth < 768);
+  useEffect(() => { const fn = () => setMobile(window.innerWidth < 768); window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn); }, []);
 
   if (!currentUser) {
     return (

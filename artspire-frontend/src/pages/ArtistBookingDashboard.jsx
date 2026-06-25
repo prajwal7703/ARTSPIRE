@@ -8,7 +8,6 @@ import axios from "axios";
 import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
-const isMobile = () => window.innerWidth < 768;
 
 const fmt = (n) => Number(n).toLocaleString("en-IN");
 
@@ -54,7 +53,8 @@ export default function ArtistBookingDashboard() {
   const [offerPrice,   setOfferPrice]   = useState("");
   const [offerMsg,     setOfferMsg]     = useState("");
   const threadRef = useRef(null);
-  const mobile = isMobile();
+  const [mobile, setMobile] = useState(window.innerWidth < 768);
+  useEffect(() => { const fn = () => setMobile(window.innerWidth < 768); window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn); }, []);
 
   // ── fetch ──
   const fetchBookings = async () => {

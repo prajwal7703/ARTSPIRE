@@ -5,7 +5,6 @@ import socket from "../socket";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
-const isMobile = () => window.innerWidth < 768;
 
 const getCurrentUser = () => {
   try { return JSON.parse(localStorage.getItem("user")) || null; }
@@ -26,7 +25,8 @@ export default function UserChat() {
   const [loading,       setLoading]       = useState(true);
   const [sending,       setSending]       = useState(false);
   const bottomRef = useRef(null);
-  const mobile = isMobile();
+  const [mobile, setMobile] = useState(window.innerWidth < 768);
+  useEffect(() => { const fn = () => setMobile(window.innerWidth < 768); window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn); }, []);
 
   // ── load conversations ────────────────────────────────────────────────────
   const fetchConversations = async () => {
