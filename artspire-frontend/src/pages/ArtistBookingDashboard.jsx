@@ -8,6 +8,7 @@ import axios from "axios";
 import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+const isMobile = () => window.innerWidth < 768;
 
 const fmt = (n) => Number(n).toLocaleString("en-IN");
 
@@ -47,12 +48,13 @@ export default function ArtistBookingDashboard() {
   const [bookings,  setBookings]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [selected,  setSelected]  = useState(null);
-  const [tab,       setTab]       = useState("new"); // new | active | all
+  const [tab,       setTab]       = useState("new");
   const [sending,   setSending]   = useState(false);
   const [err,       setErr]       = useState("");
   const [offerPrice,   setOfferPrice]   = useState("");
   const [offerMsg,     setOfferMsg]     = useState("");
   const threadRef = useRef(null);
+  const mobile = isMobile();
 
   // ── fetch ──
   const fetchBookings = async () => {
@@ -84,7 +86,6 @@ export default function ArtistBookingDashboard() {
     };
 
     socket.on("new_booking_request", ({ bookingId }) => {
-      // Refresh list so new request appears
       fetchBookings();
     });
 
@@ -148,7 +149,7 @@ export default function ArtistBookingDashboard() {
     finally { setSending(false); }
   };
 
-  // ── accept user's counter → price_agreed ──
+  // ── accept user's counter ──
   const acceptCounter = async (price) => {
     setSending(true); setErr("");
     try {
@@ -182,13 +183,13 @@ export default function ArtistBookingDashboard() {
 
   // ── render ──
   return (
-    <div style={styles.page}>
+    <div style={{...styles.page, flexDirection: mobile ? "column" : "row"}}>
       {/* ── LEFT PANEL ── */}
-      <div style={styles.left}>
+      <div style={{...styles.left, display: mobile && selected ? "none" : "flex", width: mobile ? "100%" : 340}}>
         <div style={styles.leftHeader}>
           <h2 style={styles.pageTitle}>Booking Requests</h2>
           <p style={styles.pageSubtitle}>Manage and respond to booking requests</p>
-          <div style={styles.tabGroup}>
+          <div style={{...styles.tabGroup, flexWrap: "wrap"}}>
             {[
               { key: "new",    label: `New (${newBookings.length})` },
               { key: "active", label: `Active (${activeBookings.length})` },
@@ -205,7 +206,7 @@ export default function ArtistBookingDashboard() {
           </div>
         </div>
 
-        <div style={styles.list}>
+        <div style={{...styles.list, maxHeight: mobile ? "400px" : "auto"}}>
           {loading ? (
             <div style={styles.empty}>Loading…</div>
           ) : list.length === 0 ? (
@@ -227,7 +228,7 @@ export default function ArtistBookingDashboard() {
       </div>
 
       {/* ── RIGHT PANEL ── */}
-      <div style={styles.right}>
+      <div style={{...styles.right, display: mobile && !selected ? "none" : "flex", width: mobile ? "100%" : "auto"}}>
         {!selected ? (
           <div style={styles.placeholder}>
             <div style={{ fontSize: 52 }}>📋</div>
@@ -235,6 +236,15 @@ export default function ArtistBookingDashboard() {
           </div>
         ) : (
           <div style={styles.detail}>
+            {mobile && (
+              <button
+                onClick={() => setSelected(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#1e3a8a", fontWeight: 800, fontSize: 13, padding: "0 0 12px 0", marginBottom: "12px" }}
+              >
+                ← Back
+              </button>
+            )}
+
             {/* Status + cancel */}
             <div style={styles.statusRow}>
               <StatusBadge status={selected.status} />
@@ -245,17 +255,18 @@ export default function ArtistBookingDashboard() {
 
             {/* Progress */}
             {selected.status !== "cancelled" && (
-              <Stepper currentStatus={selected.status} />
+              <Stepper currentStatus={selected.status} mobile={mobile} />
             )}
 
             {/* Booking info */}
-            <BookingInfo booking={selected} />
+            <BookingInfo booking={selected} mobile={mobile} />
 
             {/* Thread */}
             <NegThread
               negotiation={selected.negotiation}
               artistName={artist?.name || "You"}
               threadRef={threadRef}
+              mobile={mobile}
             />
 
             {err && <div style={styles.errorBox}>{err}</div>}
@@ -266,7 +277,7 @@ export default function ArtistBookingDashboard() {
             {selected.status === "pending_approval" && (
               <div style={styles.actionCard}>
                 <div style={styles.actionTitle}>Send a price offer to this user</div>
-                <div style={styles.offerRow}>
+                <div style={{...styles.offerRow, flexDirection: mobile ? "column" : "row"}}>
                   <div style={styles.inputGroup}>
                     <label style={styles.inputLabel}>Your Price (₹)</label>
                     <input
@@ -288,7 +299,7 @@ export default function ArtistBookingDashboard() {
                     />
                   </div>
                 </div>
-                <button onClick={sendOffer} disabled={sending} style={styles.offerBtn}>
+                <button onClick={sendOffer} disabled={sending} style={{...styles.offerBtn, width: "100%"}}>
                   {sending ? "Sending…" : "Send Price Offer →"}
                 </button>
               </div>
@@ -306,7 +317,7 @@ export default function ArtistBookingDashboard() {
                       <button
                         onClick={() => acceptCounter(lastUserOffer.price)}
                         disabled={sending}
-                        style={styles.acceptBtn}
+                        style={{...styles.acceptBtn, flex: 1}}
                       >
                         {sending ? "…" : `✓ Accept ₹${fmt(lastUserOffer.price)}`}
                       </button>
@@ -319,7 +330,7 @@ export default function ArtistBookingDashboard() {
                   <div style={styles.actionTitle}>Update your offer</div>
                 )}
 
-                <div style={styles.offerRow}>
+                <div style={{...styles.offerRow, flexDirection: mobile ? "column" : "row"}}>
                   <div style={styles.inputGroup}>
                     <label style={styles.inputLabel}>New Price (₹)</label>
                     <input
@@ -340,7 +351,7 @@ export default function ArtistBookingDashboard() {
                     />
                   </div>
                 </div>
-                <button onClick={sendOffer} disabled={sending} style={styles.offerBtn}>
+                <button onClick={sendOffer} disabled={sending} style={{...styles.offerBtn, width: "100%"}}>
                   {sending ? "Sending…" : "Send New Offer →"}
                 </button>
               </div>
@@ -422,15 +433,15 @@ function StatusBadge({ status }) {
   );
 }
 
-function Stepper({ currentStatus }) {
+function Stepper({ currentStatus, mobile }) {
   const ci = stepIndex(currentStatus);
   return (
-    <div style={styles.stepper}>
+    <div style={{...styles.stepper, overflowX: mobile ? "auto" : "visible", flexWrap: mobile ? "nowrap" : "wrap"}}>
       {STEPS.map((step, i) => {
         const done   = i < ci;
         const active = i === ci;
         return (
-          <div key={step.key} style={styles.stepItem}>
+          <div key={step.key} style={{...styles.stepItem, flex: mobile ? "0 0 auto" : 1}}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <div style={{
                 ...styles.stepCircle,
@@ -448,7 +459,7 @@ function Stepper({ currentStatus }) {
               </div>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={{ ...styles.stepLine, background: done ? "#1e3a8a" : "#e2e8f0" }} />
+              <div style={{ ...styles.stepLine, background: done ? "#1e3a8a" : "#e2e8f0", display: mobile ? "none" : "block" }} />
             )}
           </div>
         );
@@ -457,7 +468,7 @@ function Stepper({ currentStatus }) {
   );
 }
 
-function BookingInfo({ booking }) {
+function BookingInfo({ booking, mobile }) {
   const rows = [
     ["User",      booking.userName],
     ["Email",     booking.userEmail],
@@ -475,7 +486,7 @@ function BookingInfo({ booking }) {
   return (
     <div style={styles.infoCard}>
       {rows.map(([label, value]) => (
-        <div key={label} style={styles.infoRow}>
+        <div key={label} style={{...styles.infoRow, flexDirection: mobile ? "column" : "row", gap: mobile ? 4 : 0}}>
           <span style={styles.infoLabel}>{label}</span>
           <span style={styles.infoValue}>{value}</span>
         </div>
@@ -484,12 +495,12 @@ function BookingInfo({ booking }) {
   );
 }
 
-function NegThread({ negotiation, artistName, threadRef }) {
+function NegThread({ negotiation, artistName, threadRef, mobile }) {
   if (!negotiation?.length) return null;
   return (
     <div style={styles.thread}>
       <div style={styles.threadTitle}>Price Discussion</div>
-      <div ref={threadRef} style={styles.threadScroll}>
+      <div ref={threadRef} style={{...styles.threadScroll, maxHeight: mobile ? "200px" : "220px"}}>
         {negotiation.map((msg, i) => {
           const isArtist = msg.from === "artist";
           return (
@@ -499,6 +510,7 @@ function NegThread({ negotiation, artistName, threadRef }) {
               </span>
               <div style={{
                 ...styles.bubble,
+                maxWidth: mobile ? "90%" : "80%",
                 background:   isArtist ? "#1e3a8a" : "#f1f5f9",
                 color:        isArtist ? "#fff" : "#1e293b",
                 borderRadius: isArtist ? "16px 4px 16px 16px" : "4px 16px 16px 16px",
@@ -549,8 +561,8 @@ const styles = {
   dot:         { width:6, height:6, borderRadius:"50%", flexShrink:0 },
   right:       { flex:1, overflowY:"auto", background:"#f8fafc" },
   placeholder: { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100%", color:"#94a3b8" },
-  detail:      { maxWidth:680, margin:"0 auto", padding:"24px 20px", display:"flex", flexDirection:"column", gap:16 },
-  statusRow:   { display:"flex", justifyContent:"space-between", alignItems:"center" },
+  detail:      { maxWidth:680, margin:"0 auto", padding:"24px 20px", display:"flex", flexDirection:"column", gap:16, width: "100%" },
+  statusRow:   { display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap: "wrap", gap: 8 },
   cancelBtn:   { padding:"5px 14px", borderRadius:8, border:"1px solid #fecaca", background:"#fff", color:"#dc2626", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif" },
   stepper:     { display:"flex", alignItems:"flex-start", background:"#fff", borderRadius:14, padding:"16px 12px", border:"1px solid #e2e8f0", overflowX:"auto" },
   stepItem:    { display:"flex", alignItems:"center", flex:1 },
@@ -563,14 +575,14 @@ const styles = {
   infoValue:   { color:"#0f172a", fontWeight:700 },
   thread:      { background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"14px 16px" },
   threadTitle: { fontSize:11, fontWeight:800, color:"#475569", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 },
-  threadScroll:{ display:"flex", flexDirection:"column", gap:8, maxHeight:220, overflowY:"auto" },
-  bubble:      { maxWidth:"80%", padding:"9px 14px", fontSize:13, lineHeight:1.5 },
+  threadScroll:{ display:"flex", flexDirection:"column", gap:8, overflowY:"auto" },
+  bubble:      { padding:"9px 14px", fontSize:13, lineHeight:1.5 },
   actionCard:  { background:"#fff", border:"1.5px solid #1e3a8a", borderRadius:14, padding:"18px 18px", display:"flex", flexDirection:"column", gap:12 },
   actionTitle: { fontSize:15, fontWeight:700, color:"#0f172a" },
   actionRow:   { display:"flex", gap:8 },
-  acceptBtn:   { flex:1, padding:"11px 0", borderRadius:10, border:"none", background:"#15803d", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif" },
+  acceptBtn:   { padding:"11px 0", borderRadius:10, border:"none", background:"#15803d", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"'Nunito',sans-serif" },
   divider:     { display:"flex", alignItems:"center", gap:8, color:"#94a3b8", fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" },
-  offerRow:    { display:"flex", gap:8, flexWrap:"wrap" },
+  offerRow:    { display:"flex", gap:8 },
   inputGroup:  { display:"flex", flexDirection:"column", gap:4, flex:1, minWidth:120 },
   inputLabel:  { fontSize:11, fontWeight:700, color:"#64748b" },
   priceInput:  { padding:"9px 12px", borderRadius:8, border:"1.5px solid #e2e8f0", fontSize:13, fontFamily:"'Nunito',sans-serif", outline:"none" },

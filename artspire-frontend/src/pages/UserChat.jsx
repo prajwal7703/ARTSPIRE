@@ -5,6 +5,7 @@ import socket from "../socket";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+const isMobile = () => window.innerWidth < 768;
 
 const getCurrentUser = () => {
   try { return JSON.parse(localStorage.getItem("user")) || null; }
@@ -25,6 +26,7 @@ export default function UserChat() {
   const [loading,       setLoading]       = useState(true);
   const [sending,       setSending]       = useState(false);
   const bottomRef = useRef(null);
+  const mobile = isMobile();
 
   // ── load conversations ────────────────────────────────────────────────────
   const fetchConversations = async () => {
@@ -32,8 +34,6 @@ export default function UserChat() {
     try {
       const r = await axios.get(`${API}/api/chat/conversations/${userId}`);
       const data = Array.isArray(r.data) ? r.data : [];
-      // Only keep conversations where we actually have an artist name
-      // (filters out any ghost entries with no name)
       setConversations(data.filter(c => c.artistName));
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -42,30 +42,23 @@ export default function UserChat() {
   useEffect(() => {
     if (!userId) return;
     fetchConversations();
-
-    // Join the user's personal socket room so incoming messages arrive
     socket.emit("join_user_room", userId);
-
     return () => {};
   }, [userId]);
 
   // ── real-time incoming messages ───────────────────────────────────────────
-  // Keep this in its own effect so `selected` is always fresh
   useEffect(() => {
     const handler = (msg) => {
-      // Update conversation list preview
       setConversations(prev => prev.map(c =>
         c.artistId === msg.senderId
           ? {
               ...c,
               lastMessage: msg.message,
               lastTime:    msg.createdAt,
-              // Only mark unread if this conversation isn't currently open
               unread: selected?.artistId === msg.senderId ? 0 : (c.unread || 0) + 1,
             }
           : c
       ));
-      // Append to open chat window
       if (selected && msg.senderId === selected.artistId) {
         setMessages(prev => [...prev, msg]);
       }
@@ -83,7 +76,6 @@ export default function UserChat() {
   // ── open a conversation ───────────────────────────────────────────────────
   const openConv = async (conv) => {
     setSelected(conv);
-    // Clear unread badge
     setConversations(prev =>
       prev.map(c => c.artistId === conv.artistId ? { ...c, unread: 0 } : c)
     );
@@ -100,7 +92,6 @@ export default function UserChat() {
     setSending(true);
     setText("");
 
-    // Optimistic UI
     const optimistic = {
       _tempId:    Date.now(),
       senderId:   userId,
@@ -119,12 +110,10 @@ export default function UserChat() {
         senderRole: "user",
       });
 
-      // Replace optimistic with real saved message
       setMessages(prev =>
         prev.map(m => m._tempId === optimistic._tempId ? (data.message || optimistic) : m)
       );
 
-      // Also emit via socket so the artist's dashboard updates instantly
       socket.emit("send_message", {
         senderId:   userId,
         receiverId: selected.artistId,
@@ -133,7 +122,6 @@ export default function UserChat() {
         createdAt:  new Date().toISOString(),
       });
 
-      // Update conversation list
       setConversations(prev =>
         prev.map(c =>
           c.artistId === selected.artistId
@@ -143,7 +131,6 @@ export default function UserChat() {
       );
     } catch (e) {
       console.error(e);
-      // Roll back optimistic message
       setMessages(prev => prev.filter(m => m._tempId !== optimistic._tempId));
       setText(msgText);
     } finally {
@@ -151,12 +138,16 @@ export default function UserChat() {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
+
   // ── render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", height: "100vh", fontFamily: "'Nunito',sans-serif", background: "#f8fafc", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100vh", fontFamily: "'Nunito',sans-serif", background: "#f8fafc", overflow: "hidden", flexDirection: mobile ? "column" : "row" }}>
 
       {/* ── Sidebar: conversation list ── */}
-      <div style={{ width: 300, borderRight: "1px solid #e2e8f0", background: "#fff", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <div style={{ width: mobile ? "100%" : 300, borderRight: mobile ? "none" : "1px solid #e2e8f0", borderBottom: mobile ? "1px solid #e2e8f0" : "none", background: "#fff", display: selected && mobile ? "none" : "flex", flexDirection: "column", flexShrink: 0, height: mobile ? "auto" : "100%" }}>
 
         {/* Header */}
         <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
@@ -170,7 +161,7 @@ export default function UserChat() {
         </div>
 
         {/* List */}
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div style={{ flex: 1, overflowY: "auto", maxHeight: mobile ? "400px" : "auto" }}>
           {loading ? (
             <div style={{ ...f, padding: 40, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading…</div>
           ) : conversations.length === 0 ? (
@@ -230,15 +221,23 @@ export default function UserChat() {
 
       {/* ── Chat window ── */}
       {!selected ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#94a3b8", gap: 10 }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#94a3b8", gap: 10, background: "#f8fafc" }}>
           <div style={{ fontSize: 48 }}>💬</div>
           <div style={{ ...f, fontSize: 14 }}>Select a conversation to start chatting</div>
         </div>
       ) : (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f8fafc" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "#f8fafc", width: mobile ? "100%" : "auto" }}>
 
           {/* Chat header */}
           <div style={{ padding: "14px 16px", borderBottom: "1px solid #e2e8f0", background: "#fff", display: "flex", alignItems: "center", gap: 12 }}>
+            {mobile && (
+              <button
+                onClick={() => setSelected(null)}
+                style={{ ...f, background: "none", border: "none", cursor: "pointer", color: "#1e3a8a", fontWeight: 800, fontSize: 13, padding: 0 }}
+              >
+                ← Back
+              </button>
+            )}
             <div style={{
               width: 38, height: 38, borderRadius: "50%", background: "#1e3a8a", color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -266,16 +265,17 @@ export default function UserChat() {
                 return (
                   <div key={msg._id || msg._tempId || i} style={{ display: "flex", justifyContent: isMe ? "flex-end" : "flex-start" }}>
                     <div style={{
-                      maxWidth:     "72%",
+                      maxWidth:     mobile ? "85%" : "72%",
                       padding:      "9px 13px",
                       borderRadius: isMe ? "16px 3px 16px 16px" : "3px 16px 16px 16px",
                       background:   isMe ? "#1e3a8a" : "#fff",
                       border:       isMe ? "none" : "1px solid #e2e8f0",
                       color:        isMe ? "#fff" : "#1e293b",
-                      fontSize:     13,
+                      fontSize:     mobile ? "13px" : "13px",
                       lineHeight:   1.55,
                       fontFamily:   "'Nunito',sans-serif",
                       opacity:      msg._tempId ? 0.7 : 1,
+                      wordBreak:    "break-word",
                     }}>
                       {msg.message}
                     </div>
@@ -287,18 +287,18 @@ export default function UserChat() {
           </div>
 
           {/* Input bar */}
-          <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8 }}>
+          <div style={{ padding: "12px 16px", borderTop: "1px solid #e2e8f0", background: "#fff", display: "flex", gap: 8, flexWrap: mobile ? "wrap" : "nowrap" }}>
             <input
               value={text}
               onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              onKeyDown={handleKeyDown}
               placeholder="Type a message…"
-              style={{ ...f, flex: 1, border: "1px solid #e2e8f0", borderRadius: 24, padding: "9px 16px", fontSize: 13, outline: "none", background: "#f8fafc" }}
+              style={{ ...f, flex: 1, border: "1px solid #e2e8f0", borderRadius: 24, padding: "9px 16px", fontSize: 13, outline: "none", background: "#f8fafc", minWidth: mobile ? "100%" : 0 }}
             />
             <button
               onClick={sendMessage}
               disabled={sending || !text.trim()}
-              style={{ ...f, background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 24, padding: "9px 20px", fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: (sending || !text.trim()) ? 0.5 : 1 }}
+              style={{ ...f, background: "#1e3a8a", color: "#fff", border: "none", borderRadius: 24, padding: "9px 20px", fontWeight: 800, fontSize: 13, cursor: "pointer", opacity: (sending || !text.trim()) ? 0.5 : 1, flexShrink: 0 }}
             >
               {sending ? "…" : "Send"}
             </button>

@@ -5,6 +5,7 @@ import socket from "../socket";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const API = import.meta.env.VITE_API_URL;
+const isMobile = () => window.innerWidth < 768;
 
 const formatTime = (d) => {
   if (!d) return "";
@@ -88,7 +89,7 @@ const Ticks = ({ status }) => {
 
 // ─── Create Group Modal ──────────────────────────────────────────────────────
 const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
-  const [step, setStep] = useState(1); // 1=type, 2=details, 3=members
+  const [step, setStep] = useState(1);
   const [groupType, setGroupType]     = useState("band");
   const [name, setName]               = useState("");
   const [description, setDescription] = useState("");
@@ -125,7 +126,6 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
       onClose();
     } catch (err) {
       console.log(err);
-      // Optimistic fallback — create locally if backend not ready
       const fakeGroup = {
         _id: Date.now().toString(),
         name: name.trim(),
@@ -146,9 +146,11 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
     setCreating(false);
   };
 
+  const mobile = isMobile();
+
   return (
-    <div style={modal.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={modal.box}>
+    <div style={{...modal.overlay, zIndex: 1000}} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={{...modal.box, maxWidth: mobile ? "95%" : "440px"}}>
         {/* Header */}
         <div style={modal.header}>
           <div>
@@ -171,9 +173,9 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
 
         {/* Step 1 — Type */}
         {step === 1 && (
-          <div style={{ padding: "0 20px 20px", overflowY: "auto", maxHeight: "400px" }}>
+          <div style={{ padding: "0 20px 20px", overflowY: "auto", maxHeight: mobile ? "50vh" : "400px" }}>
             <div style={modal.label}>What kind of group?</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "1fr 1fr", gap: "8px", marginTop: "10px" }}>
               {BAND_TYPES.map(bt => (
                 <button
                   key={bt.value}
@@ -201,7 +203,7 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
 
         {/* Step 2 — Details */}
         {step === 2 && (
-          <div style={{ padding: "0 20px 20px" }}>
+          <div style={{ padding: "0 20px 20px", overflowY: "auto", maxHeight: mobile ? "50vh" : "auto" }}>
             <div style={modal.label}>Group name</div>
             <input
               value={name}
@@ -257,14 +259,14 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
 
         {/* Step 3 — Members */}
         {step === 3 && (
-          <div style={{ padding: "0 20px 20px" }}>
-            <div style={modal.label}>Add nearby artists</div>
+          <div style={{ padding: "0 20px 20px", overflowY: "auto", maxHeight: mobile ? "50vh" : "auto" }}>
+            <div style={modal.label}>Add nearby artists by name</div>
             <div style={{ position: "relative", marginTop: "8px" }}>
               <span style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", fontSize: "13px", opacity: 0.4 }}>🔍</span>
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search artists..."
+                placeholder="Search by name..."
                 style={{ ...modal.input, paddingLeft: "32px", marginTop: 0 }}
               />
             </div>
@@ -296,12 +298,13 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
                   onClick={() => toggleMember(u)}
                   style={{
                     display: "flex", alignItems: "center", gap: "10px",
-                    padding: "8px 10px", borderRadius: "10px", cursor: "pointer",
+                    padding: "10px", borderRadius: "10px", cursor: "pointer",
                     background: selected.find(s => s.id === u.id)
                       ? "rgba(99,102,241,0.12)"
                       : "transparent",
                     transition: "background 0.15s",
                     marginBottom: "2px",
+                    border: selected.find(s => s.id === u.id) ? "1px solid rgba(99,102,241,0.3)" : "1px solid transparent",
                   }}
                 >
                   <Avatar name={u.name} image={u.image} size={36} color={color} />
@@ -327,9 +330,9 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
         )}
 
         {/* Footer */}
-        <div style={{ padding: "0 20px 20px", display: "flex", gap: "8px" }}>
+        <div style={{ padding: "0 20px 20px", display: "flex", gap: "8px", flexDirection: mobile ? "column" : "row" }}>
           {step > 1 && (
-            <button onClick={() => setStep(s => s - 1)} style={modal.backBtn}>
+            <button onClick={() => setStep(s => s - 1)} style={{ ...modal.backBtn, flex: mobile ? 1 : "auto" }}>
               ← Back
             </button>
           )}
@@ -337,7 +340,7 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
             <button
               onClick={() => setStep(s => s + 1)}
               disabled={step === 2 && !name.trim()}
-              style={{ ...modal.nextBtn, opacity: step === 2 && !name.trim() ? 0.4 : 1 }}
+              style={{ ...modal.nextBtn, opacity: step === 2 && !name.trim() ? 0.4 : 1, flex: 1 }}
             >
               Next →
             </button>
@@ -345,7 +348,7 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
             <button
               onClick={handleCreate}
               disabled={creating || selected.length === 0}
-              style={{ ...modal.nextBtn, opacity: creating || selected.length === 0 ? 0.4 : 1 }}
+              style={{ ...modal.nextBtn, opacity: creating || selected.length === 0 ? 0.4 : 1, flex: 1 }}
             >
               {creating ? "Creating..." : `Create Group (${selected.length + 1} members)`}
             </button>
@@ -359,20 +362,27 @@ const CreateGroupModal = ({ currentUser, nearbyUsers, onClose, onCreate }) => {
 // ─── Group Info Panel ────────────────────────────────────────────────────────
 const GroupInfoPanel = ({ group, currentUser, onClose, onLeave }) => {
   const typeInfo = BAND_TYPES.find(b => b.value === group.type);
+  const mobile = isMobile();
+
   return (
     <div style={{
-      width: "280px", borderLeft: "1px solid rgba(255,255,255,0.06)",
-      background: "#0d1117", display: "flex", flexDirection: "column",
-      overflow: "hidden",
+      ...s.infoPanel,
+      width: mobile ? "100%" : "280px",
+      position: mobile ? "fixed" : "relative",
+      height: mobile ? "100vh" : "auto",
+      bottom: 0,
+      right: 0,
+      zIndex: 100,
+      borderLeft: mobile ? "none" : "1px solid rgba(255,255,255,0.06)",
     }}>
-      <div style={{ padding: "16px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={s.infoPanelHeader}>
         <span style={{ fontWeight: 700, fontSize: "14px", color: "#f1f5f9", fontFamily: "'Outfit', sans-serif" }}>Group Info</span>
         <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "18px" }}>✕</button>
       </div>
 
       <div style={{ overflowY: "auto", flex: 1 }}>
         {/* Group identity */}
-        <div style={{ padding: "24px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={s.infoPanelIdentity}>
           <div style={{
             width: "72px", height: "72px", borderRadius: "20px",
             background: `linear-gradient(135deg, ${group.color || "#6366f1"}33, ${group.color || "#6366f1"}55)`,
@@ -455,7 +465,7 @@ export default function GroupChat() {
   const [recordingTime, setRecordingTime]   = useState(false);
   const [searchGroups, setSearchGroups]     = useState("");
   const [replyTo, setReplyTo]               = useState(null);
-  const [reactions, setReactions]           = useState({}); // msgId -> [emoji]
+  const [reactions, setReactions]           = useState({});
 
   const messagesEndRef    = useRef(null);
   const fileInputRef      = useRef(null);
@@ -474,7 +484,6 @@ export default function GroupChat() {
       socket.emit("join_room", user._id);
 
       try {
-        // Load all users as potential nearby members
         const usersRes = await axios.get(`${API}/api/users`);
         const all = usersRes.data;
         const mapped = all
@@ -485,11 +494,9 @@ export default function GroupChat() {
           }));
         setNearbyUsers(mapped);
 
-        // Load groups
         const groupsRes = await axios.get(`${API}/api/groups/user/${user._id}`);
         const grps = Array.isArray(groupsRes.data) ? groupsRes.data : [];
         setGroups(grps);
-        // Join all group socket rooms
         grps.forEach(g => socket.emit("join_group", g._id));
       } catch (err) {
         console.log("Init error:", err);
@@ -588,7 +595,6 @@ export default function GroupChat() {
         setMessages(prev => prev.map(m => m._id === tempId ? { ...m, status: "read" } : m));
       }, 1500);
 
-      // Update last message in groups list
       setGroups(prev => prev.map(g =>
         g._id === selectedGroup._id
           ? { ...g, lastMessage: finalMsg.message || "📷 Image", lastMessageAt: finalMsg.createdAt }
@@ -613,14 +619,12 @@ export default function GroupChat() {
     });
   };
 
-  // ── Image upload ──────────────────────────────────────────────────────────
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setImagePreview({ url: URL.createObjectURL(file), file });
   };
 
-  // ── Voice ─────────────────────────────────────────────────────────────────
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -683,13 +687,14 @@ export default function GroupChat() {
   );
   const totalUnread = Object.values(unreadMap).reduce((a, b) => a + b, 0);
 
-  // Group messages by date
   const groupedMessages = messages.reduce((acc, msg) => {
     const day = formatDate(msg.createdAt);
     if (!acc[day]) acc[day] = [];
     acc[day].push(msg);
     return acc;
   }, {});
+
+  const mobile = isMobile();
 
   if (!currentUser) {
     return (
@@ -701,7 +706,7 @@ export default function GroupChat() {
   }
 
   return (
-    <div style={s.page}>
+    <div style={{...s.page, flexDirection: mobile && selectedGroup ? "column" : "row"}}>
       <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       <style>{`
         @keyframes msgIn { from { opacity:0; transform:translateY(8px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }
@@ -715,6 +720,9 @@ export default function GroupChat() {
         .msg-row:hover .msg-actions { opacity: 1; }
         .icon-btn:hover { background: rgba(255,255,255,0.1) !important; }
         .reaction-btn:hover { transform: scale(1.2); }
+        @media (max-width: 768px) {
+          ::-webkit-scrollbar { width: 3px; }
+        }
       `}</style>
 
       {showCreate && (
@@ -727,7 +735,7 @@ export default function GroupChat() {
       )}
 
       {/* ── SIDEBAR ── */}
-      <div style={s.sidebar}>
+      <div style={{...s.sidebar, display: mobile && selectedGroup ? "none" : "flex"}}>
         <div style={s.sidebarTop}>
           <button
             className="icon-btn"
@@ -845,10 +853,22 @@ export default function GroupChat() {
 
       {/* ── CHAT AREA ── */}
       {selectedGroup ? (
-        <div style={s.chatArea}>
+        <div style={{...s.chatArea, width: mobile ? "100%" : "auto", flex: mobile ? 1 : 1}}>
           {/* Header */}
           <div style={s.chatHeader}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+              {mobile && (
+                <button
+                  className="icon-btn"
+                  onClick={() => { setSelectedGroup(null); setShowInfo(false); }}
+                  style={{...s.headerIconBtn, background: "rgba(99,102,241,0.1)", color: "#3b82f6"}}
+                  title="Back to groups"
+                >
+                  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+              )}
               <GroupAvatar group={selectedGroup} size={38} />
               <div>
                 <div style={{ fontWeight: 700, fontSize: "15px", color: "#1e293b", fontFamily: "'Outfit', sans-serif" }}>
@@ -875,7 +895,7 @@ export default function GroupChat() {
           </div>
 
           {/* Messages */}
-          <div style={s.messagesArea}>
+          <div style={{...s.messagesArea, maxHeight: mobile ? "calc(100vh - 160px)" : "auto"}}>
             {/* Group banner */}
             <div style={s.groupBanner}>
               <div style={{
@@ -938,7 +958,7 @@ export default function GroupChat() {
                       {!isMine && (
                         <Avatar name={msg.senderName} image={msg.senderImage} size={28} color={selectedGroup.color} />
                       )}
-                      <div style={{ maxWidth: "62%", display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
+                      <div style={{ maxWidth: mobile ? "75%" : "62%", display: "flex", flexDirection: "column", alignItems: isMine ? "flex-end" : "flex-start" }}>
                         {!isMine && (
                           <div style={{ fontSize: "11px", color: selectedGroup.color || "#6366f1", fontWeight: 600, marginBottom: "3px", fontFamily: "'Outfit', sans-serif" }}>
                             {msg.senderName}
@@ -974,6 +994,7 @@ export default function GroupChat() {
                             borderBottomRightRadius: isMine ? "4px" : "18px",
                             borderBottomLeftRadius: isMine ? "18px" : "4px",
                             boxShadow: isMine ? "0 2px 8px rgba(0,0,0,0.2)" : "0 1px 4px rgba(0,0,0,0.08)",
+                            fontSize: mobile ? "13px" : "14px",
                           }}>
                             {msg.message && <div>{msg.message}</div>}
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "4px", marginTop: "4px" }}>
@@ -1054,8 +1075,8 @@ export default function GroupChat() {
           )}
 
           {/* Input */}
-          <div style={s.inputArea}>
-            <button className="icon-btn" style={s.inputIconBtn} onClick={() => fileInputRef.current.click()} title="Attach image">
+          <div style={{...s.inputArea, flexWrap: mobile ? "wrap" : "nowrap", gap: mobile ? "2px" : "4px"}}>
+            <button className="icon-btn" style={{...s.inputIconBtn, flexShrink: mobile ? 0 : 1}} onClick={() => fileInputRef.current.click()} title="Attach image">
               <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
                 <polyline points="21 15 16 10 5 21"/>
@@ -1063,7 +1084,7 @@ export default function GroupChat() {
             </button>
             <input ref={fileInputRef} type="file" accept="image/*,video/*" style={{ display: "none" }} onChange={handleImageSelect} />
 
-            <div style={s.inputWrap}>
+            <div style={{...s.inputWrap, flex: mobile ? "1 1 100%" : 1}}>
               {isRecording ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
                   <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ef4444", animation: "pulse 1s ease infinite" }} />
@@ -1085,7 +1106,7 @@ export default function GroupChat() {
 
             <button
               className="icon-btn"
-              style={{ ...s.inputIconBtn, color: isRecording ? "#ef4444" : "currentColor" }}
+              style={{ ...s.inputIconBtn, color: isRecording ? "#ef4444" : "currentColor", flexShrink: mobile ? 0 : 1 }}
               onClick={isRecording ? stopRecording : startRecording}
               title={isRecording ? "Stop recording" : "Voice message"}
             >
@@ -1103,6 +1124,7 @@ export default function GroupChat() {
                 ...s.sendBtn,
                 background: selectedGroup.color || "#1e293b",
                 opacity: (text.trim() || imagePreview) && !sending ? 1 : 0.4,
+                flexShrink: mobile ? 0 : 1,
               }}
             >
               <svg width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -1173,11 +1195,14 @@ const s = {
   inputIconBtn: { background: "none", border: "none", width: "34px", height: "34px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#94a3b8", transition: "background 0.2s", flexShrink: 0 },
   sendBtn: { border: "none", width: "36px", height: "36px", borderRadius: "11px", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#fff", transition: "opacity 0.2s", flexShrink: 0 },
   emptyState: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#f8fafc", padding: "20px" },
+  infoPanel: { display: "flex", flexDirection: "column", overflow: "hidden" },
+  infoPanelHeader: { padding: "16px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0d1117" },
+  infoPanelIdentity: { padding: "24px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", borderBottom: "1px solid rgba(255,255,255,0.06)" },
 };
 
 const modal = {
-  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
-  box: { background: "#0f172a", borderRadius: "20px", width: "100%", maxWidth: "440px", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.5)", overflow: "hidden" },
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" },
+  box: { background: "#0f172a", borderRadius: "20px", width: "100%", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 60px rgba(0,0,0,0.5)", overflow: "hidden" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 20px 10px" },
   title: { fontWeight: 700, fontSize: "18px", color: "#f1f5f9", fontFamily: "'Outfit', sans-serif" },
   sub: { fontSize: "12px", color: "#475569", marginTop: "2px" },
