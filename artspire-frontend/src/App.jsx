@@ -1,4 +1,4 @@
-// artspire-frontend/src/App.jsx
+﻿// artspire-frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getToken, getArtist } from "./utils/auth";
 
@@ -16,6 +16,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import DiscoverPage from "./pages/DiscoverPage";
 import UserDashboard from "./pages/UserDashboard";
+import BookingPage from "./pages/BookingPage";
 import UserChat from "./pages/UserChat";
 
 // ── Guards ────────────────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ function App() {
           path="/my-bookings"
           element={
             <RequireAuth>
-              <UserDashboard />
+              <BookingPage />
             </RequireAuth>
           }
         />

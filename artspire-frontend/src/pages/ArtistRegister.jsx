@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { saveAuth } from "../utils/auth";
@@ -68,6 +68,8 @@ const CATEGORIES = ["Singer","Dancer","Painter","Photographer","Musician","Digit
 
 export default function ArtistRegister() {
   const navigate = useNavigate();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  useEffect(() => { const fn = () => setIsMobile(window.innerWidth < 768); window.addEventListener("resize", fn); return () => window.removeEventListener("resize", fn); }, []);
   const [step, setStep] = useState(0); // 0=account, 1=profile, 2=bio
   const [notif, setNotif] = useState(null);
   let notifTimer = null;
@@ -137,7 +139,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
         <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
         {/* LEFT PANEL */}
-        <div style={s.left}>
+        {!isMobile && <div style={s.left}>
           <div style={s.leftOverlay} />
           <img src="/artlogin.jpg" alt="art" style={s.leftImg} />
           <div style={s.leftContent}>
@@ -154,8 +156,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
               ))}
             </div>
           </div>
-        </div>
-
+        </div>}
         {/* RIGHT PANEL */}
         <div style={s.right}>
           <div style={s.formCard}>
@@ -323,3 +324,5 @@ const s = {
   primaryBtn: { background:"linear-gradient(90deg,#4f46e5,#7c3aed)", color:"#fff", border:"none", padding:"14px", borderRadius:"50px", fontFamily:"'Nunito', sans-serif", fontWeight:800, fontSize:"15px", cursor:"pointer", width:"100%", letterSpacing:"0.3px" },
   secondaryBtn: { background:"#f1f5f9", color:"#64748b", border:"none", padding:"14px 20px", borderRadius:"50px", fontFamily:"'Nunito', sans-serif", fontWeight:800, fontSize:"14px", cursor:"pointer", flexShrink:0 },
 };
+
+
