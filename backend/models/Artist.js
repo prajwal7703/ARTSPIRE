@@ -1,35 +1,81 @@
+// models/Artist.js
+
 const mongoose = require("mongoose");
 
 const artistSchema = new mongoose.Schema(
   {
-    name:          { type: String, required: true },
-    email:         { type: String, required: true, unique: true },
-    password:      { type: String, required: true },
-    role:          { type: String, default: "artist" },
-    bio:           { type: String, default: "" },
-    city:          { type: String, default: "" },
-    instagram:     { type: String, default: "" },
-     categories:   user.categories   || [], 
-    experience:    { type: String, default: "" },
-    profileImage:  { type: String, default: "" },
-    rating:        { type: Number, default: "" },
-    skills:        { type: [String], default: [] },
-    works:         { type: [String], default: [] },
-    profileViews:  { type: Number, default: 0 },
-    price:         { type: Number, default: 0 },   // ✅ added — artist's base price for booking
-    passwordResetToken: { type: String, default: null },
-    reviews: [
-      {
-        userId:    { type: String },
-        userName:  { type: String },
-        rating:    { type: Number, required: true },
-        comment:   { type: String, default: "" },
-        eventType: { type: String, default: "" },
-        createdAt: { type: Date, default: Date.now },
-      },
-    ],
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/.+\@.+\..+/, "Please provide a valid email"],
+    },
+    password: {
+      type: String,
+      minlength: 6,
+      default: null,
+    },
+    role: {
+      type: String,
+      enum: ["user", "artist"],
+      default: "artist",
+    },
+    categories: {
+      type: [String],
+      default: [],
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    instagram: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    profileImage: {
+      type: String,
+      default: null,
+    },
+    experience: {
+      type: Number,
+      default: 0,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    rating: {
+      type: Number,
+      default: 5,
+      min: 0,
+      max: 5,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Artist", artistSchema); // → "artists" collection
+module.exports = mongoose.model("Artist", artistSchema);
