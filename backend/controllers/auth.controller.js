@@ -25,7 +25,7 @@ function safeUser(user) {
     name:         user.name,
     email:        user.email,
     role:         user.role,
-    category:     user.category     || null,
+    categories:   user.categories   || [],
     city:         user.city         || null,
     instagram:    user.instagram    || null,
     bio:          user.bio          || null,
@@ -39,10 +39,19 @@ function safeUser(user) {
 // ── REGISTER ──────────────────────────────────────────────────────────────────
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role, category, city, instagram, bio } = req.body;
+    const { name, email, password, role, categories, city, instagram, bio } = req.body;
 
     if (!name?.trim() || !email?.trim() || !password) {
       return res.status(400).json({ message: "Name, email and password are required" });
+    }
+
+    // Validate categories for artists
+    if (role === "artist") {
+      if (!categories || !Array.isArray(categories) || categories.length === 0) {
+        return res.status(400).json({ 
+          message: "Please select at least one category for your artist profile" 
+        });
+      }
     }
 
     const existingUser = await User.findOne({ email });
@@ -55,21 +64,29 @@ exports.register = async (req, res) => {
     const user = new User({
       name, email,
       password: hashedPassword,
-      role:      role      || "user",
-      category:  category  || "",
-      city:      city      || "",
-      instagram: instagram || "",
-      bio:       bio       || "",
+      role:       role       || "user",
+      categories: (role === "artist" && categories) ? categories : [],
+      city:       city       || "",
+      instagram:  instagram  || "",
+      bio:        bio        || "",
     });
 
     await user.save();
     const token = signToken(user);
 
-    res.json({ success: true, message: "Registered successfully", token, user: safeUser(user) });
+    res.json({ 
+      success: true, 
+      message: "Registered successfully", 
+      token, 
+      user: safeUser(user) 
+    });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
+    console.error("Registration error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: err.message || "Server error" 
+    });
   }
 };
 
@@ -99,7 +116,7 @@ exports.login = async (req, res) => {
     const token = signToken(user);
     const safe  = safeUser(user);
 
-    // ✅ Return both user AND artist keys so frontend works regardless of role
+    // Return both user AND artist keys so frontend works regardless of role
     if (user.role === "artist") {
       return res.json({ success: true, token, user: safe, artist: safe });
     }
@@ -126,6 +143,7 @@ exports.googleLogin = async (req, res) => {
         name, email,
         password:     null,
         role:         role || "user",
+        categories:   [],
         profileImage: photo || "",
       });
       await user.save();
@@ -192,5 +210,45 @@ exports.resetPassword = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// ── UPDATE CATEGORIES (Optional: Allow users to update their categories later) ──
+exports.updateCategories = async (req, res) => {
+  try {
+    const { userId, categories } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    if (!categories || !Array.isArray(categories) || categories.length === 0) {
+      return res.status(400).json({ 
+        message: "Please select at least one category" 
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { categories },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ 
+      success: true, 
+      message: "Categories updated successfully", 
+      user: safeUser(user) 
+    });
+
+  } catch (err) {
+    console.error("Update categories error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: err.message || "Server error" 
+    });
   }
 };

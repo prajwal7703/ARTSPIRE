@@ -1,37 +1,81 @@
+// models/User.js
+
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema({
-  name:         { type: String, required: true },
-  email:        { type: String, required: true, unique: true },
-  // ✅ select: false so password never leaks in .find() — use .select("+password") when needed
-  password:     { type: String, select: false },
-  role:         { type: String, enum: ["user", "artist"], default: "user" },
-  category:     { type: String },
-  bio:          { type: String },
-  city:         { type: String },
-  instagram:    { type: String },
-  experience:   { type: String },
-  profileImage: { type: String },
-  coverImage:   { type: String },
-  phone:        { type: String },
-  skills:       [{ type: String }],
-  interests:    [{ type: String }],   // ✅ added — used by Register.jsx
-  facebook:     { type: String },
-  youtube:      { type: String },
-  rating:       { type: Number, default: 5 },
-  portfolio:    [{ type: String }],
-  profileViews: { type: Number, default: 0 },
- price:        { type: Number, default: 0 },   // ✅ added — artist's base price for booking
-  reviews: [
-    {
-      userId:    { type: String },
-      userName:  { type: String },
-      rating:    { type: Number, required: true },
-      comment:   { type: String, default: "" },
-      review:    { type: String, default: "" },
-      eventType: { type: String, default: "" },
-      createdAt: { type: Date, default: Date.now },
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
     },
-  ],
-}, { timestamps: true });
-module.exports = mongoose.model("user", userSchema);
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/.+\@.+\..+/, "Please provide a valid email"],
+    },
+    password: {
+      type: String,
+      minlength: 6,
+      default: null,
+    },
+    role: {
+      type: String,
+      enum: ["user", "artist"],
+      default: "user",
+    },
+    categories: {
+      type: [String],
+      default: [],
+    },
+    city: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    instagram: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    bio: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
+    },
+    profileImage: {
+      type: String,
+      default: null,
+    },
+    experience: {
+      type: Number,
+      default: 0,
+    },
+    phone: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    rating: {
+      type: Number,
+      default: 5,
+      min: 0,
+      max: 5,
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("User", userSchema);

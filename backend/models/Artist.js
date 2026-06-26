@@ -9,7 +9,7 @@ const artistSchema = new mongoose.Schema(
     bio:           { type: String, default: "" },
     city:          { type: String, default: "" },
     instagram:     { type: String, default: "" },
-    category:      { type: String, default: "" },
+     categories:   user.categories   || [], 
     experience:    { type: String, default: "" },
     profileImage:  { type: String, default: "" },
     rating:        { type: Number, default: "" },
