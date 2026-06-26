@@ -64,7 +64,7 @@ function StepDots({ step, total }) {
   );
 }
 
-const CATEGORIES = ["Singer","Dancer","Painter","Photographer","Musician","Digital Artist","Actor","Comedian"];
+const CATEGORIES = ["Singer","Dancer","Painter","Photographer","Musician","Digital Artist","Actor","Comedian","Tatoo Artist","Model","Fasion designer","Craft Artist","Mehandi Artist"];
 
 export default function ArtistRegister() {
   const navigate = useNavigate();
