@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import CreatePostModal from "../components/CreatePostModal";
 import { getCurrentAccount, isArtist, getToken } from "../utils/auth";
+import Navbar from "../Navbar";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 const fmt = (n) => Number(n).toLocaleString("en-IN");
@@ -64,8 +65,10 @@ export default function Feed() {
 
   return (
     <div style={styles.page}>
+      <Navbar />
+
       <div style={styles.header}>
-        <h1 style={styles.title}>Portfolio Feed</h1>
+        <h1 style={styles.title}>Portfolio <span style={{ color: "#f97316" }}>Feed</span></h1>
         <div style={styles.tabs}>
           <button style={{ ...styles.tabBtn, ...(tab === "feed" ? styles.tabActive : {}) }} onClick={() => setTab("feed")}>
             Feed
@@ -84,6 +87,9 @@ export default function Feed() {
           <div style={styles.empty}>
             <div style={{ fontSize: 40 }}>🖼️</div>
             <div>No {tab === "reels" ? "reels" : "posts"} yet.</div>
+            <div style={{ fontSize: 13, opacity: 0.6, marginTop: 6 }}>
+              {actor?.role === "artist" ? "Be the first to share your work." : "Check back soon — artists are just getting started."}
+            </div>
           </div>
         )}
 
@@ -156,8 +162,8 @@ function PostCard({ post, actor, onUpdate }) {
       <div style={styles.postHead}>
         {post.artistAvatar
           ? <img src={post.artistAvatar} alt="" style={styles.avatar} />
-          : <div style={styles.avatarFallback}>{post.artistName?.[0]?.toUpperCase()}</div>}
-        <strong style={{ fontSize: 14 }}>{post.artistName}</strong>
+          : <div style={styles.avatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>}
+        <strong style={{ fontSize: 14 }}>{post.artistName || "Unknown artist"}</strong>
       </div>
 
       <div style={styles.mediaBox}>
@@ -235,32 +241,32 @@ function ReelCard({ post, actor, onUpdate }) {
   );
 }
 
-/* ── styles (kept consistent with ArtistBookingDashboard.jsx) ─────────────── */
+/* ── styles (matches ArtSpire's dark navy + orange brand from Home.jsx) ───── */
 const styles = {
-  page:        { fontFamily: "'Nunito','Inter',sans-serif", background: "#f8fafc", minHeight: "100vh", paddingBottom: 40 },
-  header:      { display: "flex", alignItems: "center", gap: 16, padding: "20px", flexWrap: "wrap", maxWidth: 520, margin: "0 auto" },
-  title:       { fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0, flex: 1 },
+  page:        { fontFamily: "'Nunito','Inter',sans-serif", background: "#081120", minHeight: "100vh", paddingBottom: 40, color: "#fff" },
+  header:      { display: "flex", alignItems: "center", gap: 16, padding: "130px 20px 20px", flexWrap: "wrap", maxWidth: 520, margin: "0 auto" },
+  title:       { fontSize: 24, fontWeight: 900, color: "#fff", margin: 0, flex: 1 },
   tabs:        { display: "flex", gap: 6 },
-  tabBtn:      { padding: "6px 14px", borderRadius: 20, border: "1px solid #e2e8f0", background: "#fff", fontSize: 12, fontWeight: 700, color: "#64748b", cursor: "pointer" },
-  tabActive:   { background: "#1e3a8a", color: "#fff", border: "1px solid #1e3a8a" },
-  newPostBtn:  { padding: "7px 14px", borderRadius: 8, border: "none", background: "#1e3a8a", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" },
+  tabBtn:      { padding: "6px 14px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", fontSize: 12, fontWeight: 700, color: "#cbd5e1", cursor: "pointer" },
+  tabActive:   { background: "#f97316", color: "#fff", border: "1px solid #f97316" },
+  newPostBtn:  { padding: "7px 14px", borderRadius: 8, border: "none", background: "#f97316", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" },
   feedCol:     { maxWidth: 470, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16, padding: "0 12px" },
   empty:       { textAlign: "center", color: "#94a3b8", padding: "60px 0", fontWeight: 600 },
-  post:        { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 14, overflow: "hidden" },
+  post:        { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, overflow: "hidden" },
   postHead:    { display: "flex", alignItems: "center", gap: 10, padding: "10px 14px" },
   avatar:      { width: 32, height: 32, borderRadius: "50%", objectFit: "cover" },
-  avatarFallback: { width: 32, height: 32, borderRadius: "50%", background: "#1e3a8a", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 },
-  mediaBox:    { width: "100%", aspectRatio: "4/5", background: "#f1f5f9" },
+  avatarFallback: { width: 32, height: 32, borderRadius: "50%", background: "#f97316", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 },
+  mediaBox:    { width: "100%", aspectRatio: "4/5", background: "rgba(255,255,255,0.04)" },
   media:       { width: "100%", height: "100%", objectFit: "cover", display: "block" },
   actionsRow:  { display: "flex", gap: 16, padding: "10px 14px 0" },
-  iconBtn:     { background: "none", border: "none", fontSize: 14, fontWeight: 700, color: "#0f172a", cursor: "pointer" },
-  caption:     { padding: "8px 14px 0", fontSize: 13.5, lineHeight: 1.5, color: "#0f172a" },
+  iconBtn:     { background: "none", border: "none", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer" },
+  caption:     { padding: "8px 14px 0", fontSize: 13.5, lineHeight: 1.5, color: "#e2e8f0" },
   viewComments:{ display: "block", padding: "4px 14px 0", color: "#94a3b8", fontSize: 13, background: "none", border: "none", cursor: "pointer", textAlign: "left" },
-  comment:     { padding: "2px 14px 0", fontSize: 13.5, color: "#0f172a" },
-  commentForm: { display: "flex", gap: 8, alignItems: "center", padding: "10px 14px 14px", borderTop: "1px solid #f1f5f9", marginTop: 8 },
-  commentInput:{ flex: 1, border: "none", outline: "none", fontSize: 13.5, background: "transparent" },
-  postBtn:     { border: "none", background: "none", color: "#1e3a8a", fontWeight: 700, fontSize: 13, cursor: "pointer" },
-  loadMoreBtn: { padding: "10px 0", borderRadius: 10, border: "1px solid #e2e8f0", background: "#fff", fontWeight: 700, color: "#1e3a8a", cursor: "pointer" },
+  comment:     { padding: "2px 14px 0", fontSize: 13.5, color: "#e2e8f0" },
+  commentForm: { display: "flex", gap: 8, alignItems: "center", padding: "10px 14px 14px", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 8 },
+  commentInput:{ flex: 1, border: "none", outline: "none", fontSize: 13.5, background: "transparent", color: "#fff" },
+  postBtn:     { border: "none", background: "none", color: "#f97316", fontWeight: 700, fontSize: 13, cursor: "pointer" },
+  loadMoreBtn: { padding: "10px 0", borderRadius: 10, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", fontWeight: 700, color: "#f97316", cursor: "pointer" },
   reel:        { position: "relative", background: "#000", borderRadius: 14, overflow: "hidden", aspectRatio: "9/16" },
   reelVideo:   { width: "100%", height: "100%", objectFit: "cover" },
   reelOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: 14, background: "linear-gradient(transparent, rgba(0,0,0,.6))" },
