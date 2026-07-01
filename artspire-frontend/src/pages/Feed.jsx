@@ -1,7 +1,4 @@
 // artspire-frontend/src/pages/Feed.jsx
-// A NEW public page: anyone can browse, only logged-in artists/users can like & comment.
-// Add to App.jsx:  <Route path="/feed" element={<Feed />} />
-// Link it from your main navbar (e.g. next to "Browse Artists").
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
@@ -12,7 +9,6 @@ import Navbar from "../Navbar";
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 const fmt = (n) => Number(n).toLocaleString("en-IN");
 
-// pulls from your real auth.js instead of reading localStorage directly
 const getActor = () => {
   const account = getCurrentAccount();
   if (!account?._id) return null;
@@ -26,12 +22,13 @@ const getActor = () => {
 
 export default function Feed() {
   const actor = getActor();
-  const [tab, setTab] = useState("feed"); // "feed" | "reels"
+  const [tab, setTab] = useState("feed");
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+  const [viewersModalPostId, setViewersModalPostId] = useState(null);
 
   const loadPage = useCallback(async (pageNum) => {
     setLoading(true);
@@ -94,7 +91,15 @@ export default function Feed() {
         )}
 
         {tab === "feed"
-          ? list.map((p) => <PostCard key={p._id} post={p} actor={actor} onUpdate={(patch) => updateOne(setPosts, p._id, patch)} />)
+          ? list.map((p) => (
+              <PostCard
+                key={p._id}
+                post={p}
+                actor={actor}
+                onUpdate={(patch) => updateOne(setPosts, p._id, patch)}
+                onShowViewers={() => setViewersModalPostId(p._id)}
+              />
+            ))
           : list.map((p) => <ReelCard key={p._id} post={p} actor={actor} onUpdate={(patch) => updateOne(setPosts, p._id, patch)} />)
         }
 
@@ -108,6 +113,14 @@ export default function Feed() {
       {createOpen && actor && (
         <CreatePostModal actor={actor} onClose={() => setCreateOpen(false)} onCreated={onCreated} apiBase={API} />
       )}
+
+      {viewersModalPostId && (
+        <ViewersModal
+          postId={viewersModalPostId}
+          artistId={actor?.id}
+          onClose={() => setViewersModalPostId(null)}
+        />
+      )}
     </div>
   );
 }
@@ -116,24 +129,107 @@ function updateOne(setPosts, id, patch) {
   setPosts((prev) => prev.map((p) => (p._id === id ? { ...p, ...patch } : p)));
 }
 
+/* ── Viewers modal (artist-only, shows who saw a post) ─────────────────── */
+function ViewersModal({ postId, artistId, onClose }) {
+  const [views, setViews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    axios
+      .get(`${API}/api/posts/${postId}/views`, { params: { artistId } })
+      .then(({ data }) => setViews(Array.isArray(data?.views) ? data.views : []))
+      .catch(() => setError("Couldn't load viewers."))
+      .finally(() => setLoading(false));
+  }, [postId, artistId]);
+
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <strong>Seen by</strong>
+          <button style={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        <div style={styles.modalBody}>
+          {loading && <div style={{ color: "#94a3b8", padding: "20px 0", textAlign: "center" }}>Loading…</div>}
+          {error && <div style={{ color: "#f87171", padding: "20px 0", textAlign: "center" }}>{error}</div>}
+          {!loading && !error && views.length === 0 && (
+            <div style={{ color: "#94a3b8", padding: "20px 0", textAlign: "center" }}>No views yet.</div>
+          )}
+          {views
+            .slice()
+            .sort((a, b) => new Date(b.viewedAt) - new Date(a.viewedAt))
+            .map((v, i) => (
+              <div key={v.userId + i} style={styles.viewerRow}>
+                <div style={styles.viewerAvatar}>{v.userName?.[0]?.toUpperCase() || "?"}</div>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>{v.userName || "Unknown"}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8" }}>{v.userRole === "artist" ? "Artist" : "User"}</div>
+                </div>
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Feed post card ─────────────────────────────────────────────────────── */
-function PostCard({ post, actor, onUpdate }) {
+function PostCard({ post, actor, onUpdate, onShowViewers }) {
   const [commentText, setCommentText] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
+  const cardRef = useRef(null);
+  const hasFiredView = useRef(false);
+
   const likes = post.likes || [];
   const comments = post.comments || [];
+  const views = post.views || [];
   const liked = actor ? likes.includes(actor.id) : false;
+  const isOwner = actor?.role === "artist" && String(post.artistId) === String(actor.id);
+
+  // Fire a view once, when the card is at least 50% visible for a moment
+  useEffect(() => {
+    if (!actor || hasFiredView.current) return;
+    const el = cardRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !hasFiredView.current) {
+            hasFiredView.current = true;
+            axios
+              .post(`${API}/api/posts/${post._id}/view`, {
+                userId: actor.id,
+                userName: actor.name,
+                userRole: actor.role,
+              })
+              .then(({ data }) => {
+                if (typeof data?.viewCount === "number") {
+                  onUpdate({ views: Array.from({ length: data.viewCount }) }); // just for count display
+                }
+              })
+              .catch(() => {});
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [actor, post._id, onUpdate]);
 
   const toggleLike = async () => {
     if (!actor) return alert("Log in to like posts.");
-    // optimistic update
     const nextLikes = liked ? likes.filter((id) => id !== actor.id) : [...likes, actor.id];
     onUpdate({ likes: nextLikes });
     try {
       await axios.post(`${API}/api/posts/${post._id}/like`, { actorId: actor.id });
     } catch {
-      onUpdate({ likes }); // revert on failure
+      onUpdate({ likes });
     }
   };
 
@@ -158,7 +254,7 @@ function PostCard({ post, actor, onUpdate }) {
   const visibleComments = expanded ? comments : comments.slice(-2);
 
   return (
-    <article style={styles.post}>
+    <article ref={cardRef} style={styles.post}>
       <div style={styles.postHead}>
         {post.artistAvatar
           ? <img src={post.artistAvatar} alt="" style={styles.avatar} />
@@ -179,6 +275,12 @@ function PostCard({ post, actor, onUpdate }) {
         <button style={styles.iconBtn} onClick={() => setExpanded((v) => !v)}>
           💬 {fmt(comments.length)}
         </button>
+        <span style={styles.viewCount}>👁 {fmt(views.length)}</span>
+        {isOwner && (
+          <button style={styles.seenByBtn} onClick={onShowViewers}>
+            Seen by {fmt(views.length)}
+          </button>
+        )}
       </div>
 
       {post.caption && (
@@ -241,7 +343,7 @@ function ReelCard({ post, actor, onUpdate }) {
   );
 }
 
-/* ── styles (matches ArtSpire's dark navy + orange brand from Home.jsx) ───── */
+/* ── styles ────────────────────────────────────────────────────────────── */
 const styles = {
   page:        { fontFamily: "'Nunito','Inter',sans-serif", background: "#081120", minHeight: "100vh", paddingBottom: 40, color: "#fff" },
   header:      { display: "flex", alignItems: "center", gap: 16, padding: "130px 20px 20px", flexWrap: "wrap", maxWidth: 520, margin: "0 auto" },
@@ -258,8 +360,10 @@ const styles = {
   avatarFallback: { width: 32, height: 32, borderRadius: "50%", background: "#f97316", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 },
   mediaBox:    { width: "100%", aspectRatio: "4/5", background: "rgba(255,255,255,0.04)" },
   media:       { width: "100%", height: "100%", objectFit: "cover", display: "block" },
-  actionsRow:  { display: "flex", gap: 16, padding: "10px 14px 0" },
+  actionsRow:  { display: "flex", gap: 16, alignItems: "center", padding: "10px 14px 0", flexWrap: "wrap" },
   iconBtn:     { background: "none", border: "none", fontSize: 14, fontWeight: 700, color: "#fff", cursor: "pointer" },
+  viewCount:   { fontSize: 12.5, color: "#94a3b8", fontWeight: 600 },
+  seenByBtn:   { marginLeft: "auto", background: "none", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 20, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, color: "#f97316", cursor: "pointer" },
   caption:     { padding: "8px 14px 0", fontSize: 13.5, lineHeight: 1.5, color: "#e2e8f0" },
   viewComments:{ display: "block", padding: "4px 14px 0", color: "#94a3b8", fontSize: 13, background: "none", border: "none", cursor: "pointer", textAlign: "left" },
   comment:     { padding: "2px 14px 0", fontSize: 13.5, color: "#e2e8f0" },
@@ -271,4 +375,11 @@ const styles = {
   reelVideo:   { width: "100%", height: "100%", objectFit: "cover" },
   reelOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: 14, background: "linear-gradient(transparent, rgba(0,0,0,.6))" },
   reelLikeBtn: { background: "rgba(255,255,255,.15)", border: "none", borderRadius: 10, padding: "6px 10px", cursor: "pointer", color: "#fff" },
+  modalOverlay:{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 },
+  modalBox:    { background: "#0f1a2e", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, width: "100%", maxWidth: 360, maxHeight: "70vh", display: "flex", flexDirection: "column" },
+  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" },
+  modalClose:  { background: "none", border: "none", color: "#94a3b8", fontSize: 16, cursor: "pointer" },
+  modalBody:   { overflowY: "auto", padding: "8px 16px 16px" },
+  viewerRow:   { display: "flex", alignItems: "center", gap: 10, padding: "8px 0" },
+  viewerAvatar:{ width: 30, height: 30, borderRadius: "50%", background: "#f97316", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 },
 };
