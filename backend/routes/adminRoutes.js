@@ -20,8 +20,18 @@ function checkAdmin(req, res, next) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────
 // POST /api/admin/login
+// Accepts { password } (legacy — used by the standalone /admin login screen)
+// or { email, password } (used when logging in via the normal User Login
+// page with the designated admin email — see UserLogin.jsx). When an email
+// is supplied it must match ADMIN_EMAIL; the password must always match
+// process.env.ADMIN_PASSWORD.
 router.post("/login", (req, res) => {
-  if (req.body.password === process.env.ADMIN_PASSWORD) {
+  const { email, password } = req.body;
+
+  const passwordOk = password === process.env.ADMIN_PASSWORD;
+  const emailOk = !email || email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  if (passwordOk && emailOk) {
     return res.json({ success: true, email: ADMIN_EMAIL });
   }
   res.status(401).json({ success: false, message: "Wrong password" });

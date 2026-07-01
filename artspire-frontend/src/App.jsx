@@ -19,6 +19,7 @@ import UserDashboard from "./pages/UserDashboard";
 import BookingPage from "./pages/BookingPage";
 import UserChat from "./pages/UserChat";
 import Feed from "./pages/Feed";
+import AdminDashboard from "./pages/AdminDashboard";
 
 // ── Guards ────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,11 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/feed" element={<Feed />} />
+
+        {/* Admin — gated by its own password check inside AdminDashboard,
+            reachable either directly or via UserLogin redirecting here
+            when the admin email is used to sign in. */}
+        <Route path="/admin" element={<AdminDashboard />} />
 
         {/* User Login/Register */}
         <Route

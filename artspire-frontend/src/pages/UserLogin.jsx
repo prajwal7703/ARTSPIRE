@@ -7,6 +7,9 @@ import { saveAuth } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
+// Must match ADMIN_EMAIL in backend/routes/adminRoutes.js
+const ADMIN_EMAIL = "artistsconnect.arts@gmail.com";
+
 const NOTIF_THEMES = {
   loading: { bg:"#dbeafe",color:"#1e3a5f",border:"#93c5fd" },
   success: { bg:"#dcfce7",color:"#14532d",border:"#86efac" },
@@ -50,6 +53,26 @@ export default function UserLogin() {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
+  // If the email being used to sign in is the designated admin email,
+  // verify the password against the admin endpoint and, on success,
+  // store the admin session and route to /admin instead of the normal
+  // post-login destination. Returns true if it handled navigation.
+  const tryAdminRedirect = async (email, password) => {
+    if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return false;
+    try {
+      const adminRes = await axios.post(`${API}/api/admin/login`, { email, password });
+      if (adminRes.data?.success) {
+        localStorage.setItem("admin_password", password);
+        showNotif("success", "Welcome back, Admin!");
+        setTimeout(() => navigate("/admin"), 900);
+        return true;
+      }
+    } catch {
+      // Admin password didn't match — fall through to normal user login handling.
+    }
+    return false;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
@@ -58,8 +81,11 @@ export default function UserLogin() {
     showNotif("loading","Signing you in...",false);
     try {
       const res = await axios.post(`${API}/api/auth/login`, formData);
-      // ✅ FIXED: saveAuth handles which key to use based on role
       saveAuth(res.data.token, res.data.user);
+
+      const wentToAdmin = await tryAdminRedirect(formData.email, formData.password);
+      if (wentToAdmin) return;
+
       showNotif("success", `Welcome back, ${res.data.user.name}!`);
       if (res.data.user?.role === "artist") {
         setTimeout(() => navigate("/artist-dashboard"), 1200);
