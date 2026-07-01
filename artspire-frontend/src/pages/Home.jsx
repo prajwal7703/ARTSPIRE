@@ -20,7 +20,7 @@ export default function Home() {
       try {
         const [artRes, postRes] = await Promise.all([
           axios.get(`${API}/api/artists/only-artists`),
-          axios.get(`${API}/api/posts`),
+          axios.get(`${API}/api/posts/feed`),
         ]);
         const artists = Array.isArray(artRes.data)  ? artRes.data  : [];
         const posts   = Array.isArray(postRes.data) ? postRes.data : [];

@@ -33,7 +33,7 @@ export default function CreatePostModal({ actor, onClose, onCreated, apiBase }) 
       form.append("artistAvatar", actor.avatar || "");
       form.append("caption", caption);
 
-      const { data } = await axios.post(`${apiBase}/api/posts`, form, {
+      const { data } = await axios.post(`${apiBase}/api/post`, form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       onCreated(data);

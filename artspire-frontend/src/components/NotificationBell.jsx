@@ -1,14 +1,14 @@
-﻿import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 const TYPE_CONFIG = {
-  booking: { icon:"📅", color:"#dbeafe", text:"#1e3a8a" },
-  like:    { icon:"❤️", color:"#ffe4e6", text:"#9f1239" },
-  message: { icon:"💬", color:"#dcfce7", text:"#14532d" },
-  default: { icon:"🔔", color:"#fef3c7", text:"#92400e" },
+  booking: { icon:"??", color:"#dbeafe", text:"#1e3a8a" },
+  like:    { icon:"??", color:"#ffe4e6", text:"#9f1239" },
+  message: { icon:"??", color:"#dcfce7", text:"#14532d" },
+  default: { icon:"??", color:"#fef3c7", text:"#92400e" },
 };
 
 export default function NotificationBell({ userId }) {
@@ -132,7 +132,7 @@ export default function NotificationBell({ userId }) {
           <div style={{ maxHeight:360, overflowY:"auto" }}>
             {notifs.length === 0 ? (
               <div style={{ padding:"40px 20px", textAlign:"center", color:"#94a3b8", fontSize:14 }}>
-                <div style={{ fontSize:36, marginBottom:8 }}>🔔</div>
+                <div style={{ fontSize:36, marginBottom:8 }}>??</div>
                 No notifications yet
               </div>
             ) : notifs.map(n => {

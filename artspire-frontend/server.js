@@ -29,7 +29,7 @@ app.use("/api/auth",          authRoutes);
 app.use("/api/chat",          chatRoutes);
 app.use("/api/artists",       artistRoutes);
 app.use("/api/upload",        uploadRoutes);
-app.use("/api/posts",         postRoutes);
+app.use("/api/post",         postRoutes);
 app.use("/api/notifications", notificationRoutes);
 
 app.get("/", (req, res) => res.send("ArtSpire Backend Running"));

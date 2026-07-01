@@ -1,18 +1,18 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { saveAuth } from "../utils/auth";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-// ── Notification (copied from Login) ─────────────────────────────────────────
+// -- Notification (copied from Login) -----------------------------------------
 const NOTIF_THEMES = {
   loading:  { bg: "#dbeafe", color: "#1e3a5f", border: "#93c5fd" },
   success:  { bg: "#dcfce7", color: "#14532d", border: "#86efac" },
   error:    { bg: "#fee2e2", color: "#7f1d1d", border: "#fca5a5" },
   artist:   { bg: "#fef3c7", color: "#78350f", border: "#fcd34d" },
 };
-const NOTIF_ICONS = { loading: "⏳", success: "✅", error: "❌", artist: "🎨" };
+const NOTIF_ICONS = { loading: "?", success: "?", error: "?", artist: "??" };
 
 function NotifBar({ notif, onClose }) {
   if (!notif) return null;
@@ -41,13 +41,13 @@ function NotifBar({ notif, onClose }) {
       )}
       <span style={{ flex:1 }}>{notif.message}</span>
       {notif.type !== "loading" && (
-        <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:"18px", color:theme.color, opacity:0.6, padding:0, lineHeight:1 }}>✕</button>
+        <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", fontSize:"18px", color:theme.color, opacity:0.6, padding:0, lineHeight:1 }}>?</button>
       )}
     </div>
   );
 }
 
-// ── Step indicator ────────────────────────────────────────────────────────────
+// -- Step indicator ------------------------------------------------------------
 function StepDots({ step, total }) {
   return (
     <div style={{ display:"flex", gap:"8px", justifyContent:"center", marginBottom:"28px" }}>
@@ -89,7 +89,7 @@ export default function ArtistRegister() {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  // ── Validation per step ───────────────────────────────────────────────────
+  // -- Validation per step ---------------------------------------------------
   const validateStep = () => {
     if (step === 0) {
       if (!formData.name.trim()) { showNotif("error", "Please enter your full name."); return false; }
@@ -107,7 +107,7 @@ export default function ArtistRegister() {
   const nextStep = () => { if (validateStep()) setStep((s) => s + 1); };
   const prevStep = () => setStep((s) => s - 1);
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // -- Submit ----------------------------------------------------------------
   const handleSubmit = async () => {
     if (!validateStep()) return;
     showNotif("loading", "Creating your artist profile...", false);
@@ -125,7 +125,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
       if (res.data.token && res.data.user) {
         saveAuth(res.data.token, res.data.user);
       }
-      showNotif("artist", `Welcome to ArtSpire, ${res.data.user?.name}! 🎨`);
+      showNotif("artist", `Welcome to ArtSpire, ${res.data.user?.name}! ??`);
       setTimeout(() => navigate("/artist-dashboard"), 1400);
     } catch (err) {
       showNotif("error", err.response?.data?.message || "Registration failed. Email may already be used.");
@@ -149,7 +149,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
               {["Account Details","Your Profile","About You"].map((label, i) => (
                 <div key={i} style={{ ...s.leftStep, ...(i === step ? s.leftStepActive : i < step ? s.leftStepDone : {}) }}>
                   <div style={{ ...s.leftStepNum, ...(i === step ? s.leftStepNumActive : i < step ? s.leftStepNumDone : {}) }}>
-                    {i < step ? "✓" : i + 1}
+                    {i < step ? "?" : i + 1}
                   </div>
                   <span>{label}</span>
                 </div>
@@ -169,7 +169,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
 
             <StepDots step={step} total={3} />
 
-            {/* ── STEP 0: Account ── */}
+            {/* -- STEP 0: Account -- */}
             {step === 0 && (
               <div style={s.stepWrap}>
                 <div style={s.stepTitle}>Create Account</div>
@@ -180,11 +180,11 @@ const res = await axios.post(`${API}/api/auth/register`, {
                   <Field label="Password" name="password" type="password" placeholder="Min. 6 characters" value={formData.password} onChange={handleChange} />
                   <Field label="Confirm Password" name="confirmPassword" type="password" placeholder="Repeat password" value={formData.confirmPassword} onChange={handleChange} />
                 </div>
-                <button style={s.primaryBtn} onClick={nextStep}>Continue →</button>
+                <button style={s.primaryBtn} onClick={nextStep}>Continue ?</button>
               </div>
             )}
 
-            {/* ── STEP 1: Profile ── */}
+            {/* -- STEP 1: Profile -- */}
             {step === 1 && (
               <div style={s.stepWrap}>
                 <div style={s.stepTitle}>Your Profile</div>
@@ -212,13 +212,13 @@ const res = await axios.post(`${API}/api/auth/register`, {
                   <Field label="Instagram Handle (optional)" name="instagram" placeholder="yourhandle (without @)" value={formData.instagram} onChange={handleChange} />
                 </div>
                 <div style={{ display:"flex", gap:"12px" }}>
-                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
-                  <button style={{ ...s.primaryBtn, flex:1 }} onClick={nextStep}>Continue →</button>
+                  <button style={s.secondaryBtn} onClick={prevStep}>? Back</button>
+                  <button style={{ ...s.primaryBtn, flex:1 }} onClick={nextStep}>Continue ?</button>
                 </div>
               </div>
             )}
 
-            {/* ── STEP 2: Bio ── */}
+            {/* -- STEP 2: Bio -- */}
             {step === 2 && (
               <div style={s.stepWrap}>
                 <div style={s.stepTitle}>About You</div>
@@ -228,7 +228,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
                     <label style={s.fieldLabel}>Bio (optional)</label>
                     <textarea
                       name="bio"
-                      placeholder="Tell people about your art, style, and passion…"
+                      placeholder="Tell people about your art, style, and passion�"
                       rows={5}
                       value={formData.bio}
                       onChange={handleChange}
@@ -244,9 +244,9 @@ const res = await axios.post(`${API}/api/auth/register`, {
                   </div>
                 </div>
                 <div style={{ display:"flex", gap:"12px" }}>
-                  <button style={s.secondaryBtn} onClick={prevStep}>← Back</button>
+                  <button style={s.secondaryBtn} onClick={prevStep}>? Back</button>
                   <button style={{ ...s.primaryBtn, flex:1, background:"linear-gradient(90deg,#4f46e5,#7c3aed)" }} onClick={handleSubmit}>
-                    🎨 Join ArtSpire
+                    ?? Join ArtSpire
                   </button>
                 </div>
               </div>
@@ -259,7 +259,7 @@ const res = await axios.post(`${API}/api/auth/register`, {
   );
 }
 
-// ── Reusable field ────────────────────────────────────────────────────────────
+// -- Reusable field ------------------------------------------------------------
 function Field({ label, name, type = "text", placeholder, value, onChange }) {
   return (
     <div style={s.fieldGroup}>
@@ -276,7 +276,7 @@ function Field({ label, name, type = "text", placeholder, value, onChange }) {
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// -- Styles --------------------------------------------------------------------
 const s = {
   page: { minHeight:"100vh", display:"flex", fontFamily:"'Nunito', sans-serif" },
 

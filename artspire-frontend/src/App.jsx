@@ -1,4 +1,4 @@
-﻿// artspire-frontend/src/App.jsx
+// artspire-frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getToken, getArtist } from "./utils/auth";
 
@@ -21,7 +21,7 @@ import UserChat from "./pages/UserChat";
 import Feed from "./pages/Feed";
 import AdminDashboard from "./pages/AdminDashboard";
 
-// ── Guards ────────────────────────────────────────────────────────────────
+// -- Guards ----------------------------------------------------------------
 
 /** Any logged-in user (user or artist) */
 function RequireAuth({ children }) {
@@ -54,7 +54,7 @@ function RedirectIfArtist({ children, to = "/artist-dashboard" }) {
   return children;
 }
 
-// ──────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 function App() {
   return (
@@ -72,7 +72,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/feed" element={<Feed />} />
 
-        {/* Admin — gated by its own password check inside AdminDashboard,
+        {/* Admin � gated by its own password check inside AdminDashboard,
             reachable either directly or via UserLogin redirecting here
             when the admin email is used to sign in. */}
         <Route path="/admin" element={<AdminDashboard />} />

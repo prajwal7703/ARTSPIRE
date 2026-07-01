@@ -350,7 +350,7 @@ export default function ArtistProfile() {
 
   const loadPosts = async () => {
     try {
-      const r = await axios.get(`${API}/api/posts`);
+      const r = await axios.get(`${API}/api/posts/feed`);
       setPosts((Array.isArray(r.data)?r.data:[]).filter(p=>p.artistId===id));
     } catch {}
   };
