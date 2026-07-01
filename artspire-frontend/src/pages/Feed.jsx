@@ -58,6 +58,29 @@ export default function Feed() {
     return () => socket.off("post_approved", onApproved);
   }, []);
 
+  // If the socket drops (e.g. backend cold-starts on Render) and reconnects,
+  // "connect" fires again — both on first load AND every successful
+  // reconnect. Silently re-fetch page 1 so any posts approved while we were
+  // disconnected still show up, without waiting for a manual refresh. Merge
+  // rather than replace so we don't clobber posts loaded via "Load more".
+  useEffect(() => {
+    const onConnect = () => {
+      axios
+        .get(`${API}/api/posts/feed`, { params: { page: 1, limit: 10 } })
+        .then(({ data }) => {
+          const fresh = Array.isArray(data?.posts) ? data.posts : [];
+          setPosts((prev) => {
+            const existingIds = new Set(prev.map((p) => p._id));
+            const missing = fresh.filter((p) => !existingIds.has(p._id));
+            return missing.length ? [...missing, ...prev] : prev;
+          });
+        })
+        .catch(() => {});
+    };
+    socket.on("connect", onConnect);
+    return () => socket.off("connect", onConnect);
+  }, []);
+
   const loadMore = () => {
     const next = page + 1;
     setPage(next);

@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 const ADMIN_PASSWORD = localStorage.getItem("admin_password") || "";
@@ -193,6 +194,7 @@ function Dashboard({ password }) {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [wUpdating, setWUpdating] = useState({});
   const [pUpdating, setPUpdating] = useState({});
+  const [liveFlash, setLiveFlash] = useState(false); // brief highlight when a live event lands
 
   const client = api(password);
 
@@ -221,10 +223,56 @@ function Dashboard({ password }) {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Auto-refresh every 30s
+  // Backup poll every 30s — still useful as a safety net for anything that
+  // isn't wired to a socket event yet (bookings, withdrawals), and as a
+  // fallback in case the socket connection is ever down for an extended time.
   useEffect(() => {
     const iv = setInterval(fetchAll, 30000);
     return () => clearInterval(iv);
+  }, [fetchAll]);
+
+  // ── REAL-TIME: join the admin room and react instantly to post events ──
+  useEffect(() => {
+    const flashLive = () => {
+      setLiveFlash(true);
+      setTimeout(() => setLiveFlash(false), 1200);
+    };
+
+    const joinRoom = () => socket.emit("join_admin_room");
+    joinRoom(); // in case we're already connected when this effect runs
+
+    // A new post was submitted by an artist — show it in the pending queue
+    // immediately instead of waiting for the next poll. Requires the backend
+    // to emit this from the post-creation route (see postRoutes.js).
+    const onNewPendingPost = (post) => {
+      setPendingPosts((prev) => (prev.some(p => p._id === post._id) ? prev : [post, ...prev]));
+      flashLive();
+    };
+
+    // Another admin session approved/rejected a post — remove it from our
+    // pending list too, so two admins never both act on the same post.
+    const onPostReviewed = ({ postId }) => {
+      setPendingPosts((prev) => prev.filter((p) => p._id !== postId));
+      flashLive();
+    };
+
+    // On (re)connect — including the very first connect, and any reconnect
+    // after a Render cold-start drop — re-join the room and do a full
+    // refresh so nothing is missed from the gap.
+    const onConnect = () => {
+      joinRoom();
+      fetchAll();
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("new_pending_post", onNewPendingPost);
+    socket.on("post_reviewed", onPostReviewed);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("new_pending_post", onNewPendingPost);
+      socket.off("post_reviewed", onPostReviewed);
+    };
   }, [fetchAll]);
 
   const updateWithdrawal = async (id, status) => {
@@ -283,7 +331,15 @@ function Dashboard({ password }) {
         position: "sticky", top: 0, height: "100vh",
       }}>
         <div style={{ marginBottom: 28, paddingBottom: 20, borderBottom: "1px solid #334155" }}>
-          <div style={{ fontSize: 20, fontWeight: 900, color: "#f1f5f9", letterSpacing: -0.5 }}>🎨 ArtSpire</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 900, color: "#f1f5f9", letterSpacing: -0.5 }}>🎨 ArtSpire</div>
+            <span title={socket.connected ? "Live" : "Reconnecting…"} style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: socket.connected ? "#22c55e" : "#f59e0b",
+              boxShadow: liveFlash ? "0 0 0 4px rgba(34,197,94,0.35)" : "none",
+              transition: "box-shadow 0.2s",
+            }} />
+          </div>
           <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, marginTop: 2 }}>Admin Console</div>
         </div>
         <nav style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
