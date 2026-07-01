@@ -73,6 +73,33 @@ router.post("/", upload.single("media"), async (req, res) => {
     res.status(500).json({ error: "Failed to create post" });
   }
 });
+
+/* ── CREATE post from an already-uploaded URL (used by profile work-samples uploader) ── */
+router.post("/from-url", async (req, res) => {
+  try {
+    const { artistId, artistName, artistAvatar, mediaUrl, mediaType, caption } = req.body;
+
+    if (!artistId || !artistName || !mediaUrl) {
+      return res.status(400).json({ error: "artistId, artistName and mediaUrl are required" });
+    }
+
+    const post = await Post.create({
+      artistId,
+      artistName,
+      artistAvatar,
+      mediaUrl,
+      mediaType: mediaType === "video" ? "video" : "image",
+      caption: caption || "",
+    });
+
+    req.app.get("io")?.emit("new_post", post);
+    res.status(201).json(post);
+  } catch (err) {
+    console.error("Create post from URL failed:", err);
+    res.status(500).json({ error: "Failed to create post" });
+  }
+});
+
 /* ── ALL POSTS, plain array — used by Home.jsx stats counter ─────────────── */
 router.get("/", async (req, res) => {
   try {
@@ -103,6 +130,7 @@ router.get("/feed", async (req, res) => {
     res.status(500).json({ error: "Failed to load feed" });
   }
 });
+
 /* ── One artist's posts (for their public portfolio) ───────────────────── */
 router.get("/artist/:artistId", async (req, res) => {
   try {
@@ -155,6 +183,46 @@ router.post("/:id/comment", async (req, res) => {
     res.status(201).json(saved);
   } catch (err) {
     res.status(500).json({ error: "Failed to add comment" });
+  }
+});
+
+/* ── RECORD A VIEW (dedupe per user) ──────────────────────────────────────── */
+router.post("/:id/view", async (req, res) => {
+  try {
+    const { userId, userName, userRole } = req.body;
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    const alreadyViewed = post.views.some((v) => String(v.userId) === String(userId));
+    if (!alreadyViewed) {
+      post.views.push({ userId, userName, userRole });
+      await post.save();
+    }
+
+    res.json({ viewCount: post.views.length });
+  } catch (err) {
+    console.error("Record view failed:", err);
+    res.status(500).json({ error: "Failed to record view" });
+  }
+});
+
+/* ── VIEWER LIST (artist-only, for their own posts) ───────────────────────── */
+router.get("/:id/views", async (req, res) => {
+  try {
+    const { artistId } = req.query;
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
+    if (String(post.artistId) !== String(artistId)) {
+      return res.status(403).json({ error: "Not authorized to view this list" });
+    }
+
+    res.json({ views: post.views, viewCount: post.views.length });
+  } catch (err) {
+    console.error("Load views failed:", err);
+    res.status(500).json({ error: "Failed to load views" });
   }
 });
 
