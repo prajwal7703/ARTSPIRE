@@ -18,6 +18,7 @@ import DiscoverPage from "./pages/DiscoverPage";
 import UserDashboard from "./pages/UserDashboard";
 import BookingPage from "./pages/BookingPage";
 import UserChat from "./pages/UserChat";
+import Feed from "./pages/Feed";
 
 // ── Guards ────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ function App() {
         <Route path="/artist-profile/:id" element={<ArtistProfile />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/feed" element={<Feed />} />
 
         {/* User Login/Register */}
         <Route
