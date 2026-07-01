@@ -52,9 +52,27 @@ export default function Feed() {
     loadPage(next);
   };
 
-  const onCreated = (post) => {
+  const onCreated = async (post) => {
     setPosts((prev) => [post, ...prev]);
     setCreateOpen(false);
+
+    // Keep the artist's dashboard Portfolio / Work Samples in sync with
+    // posts created directly from the Feed, so a new Feed post also shows
+    // up under Edit Profile → Portfolio (mirrors the reverse sync that
+    // already happens when a work sample is uploaded from the dashboard).
+    if (actor?.role === "artist" && post?.mediaUrl) {
+      try {
+        const { data } = await axios.get(`${API}/api/artists/${actor.id}`);
+        const works = Array.isArray(data?.works) ? data.works : [];
+        if (!works.includes(post.mediaUrl)) {
+          await axios.put(`${API}/api/artists/${actor.id}`, {
+            works: [post.mediaUrl, ...works],
+          });
+        }
+      } catch (e) {
+        console.error("Failed to sync new post into portfolio:", e);
+      }
+    }
   };
 
   const reels = posts.filter((p) => p.mediaType === "video");
