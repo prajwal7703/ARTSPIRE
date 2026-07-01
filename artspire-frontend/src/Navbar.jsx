@@ -50,6 +50,7 @@ export default function Navbar() {
             <Link to="/artist-register" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Become Artist</Link>
             <Link to="/" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Home</Link>
             <Link to="/artists" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Artists</Link>
+            <Link to="/feed" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>Feed</Link>
             {user && user.role !== "artist" && (
               <Link to="/my-bookings" style={{ color:"#fff", fontWeight:600, fontSize:"16px", textDecoration:"none" }}>My Bookings</Link>
             )}
@@ -105,6 +106,7 @@ export default function Navbar() {
             {[
               { label:"🏠 Home",            to:"/" },
               { label:"🎨 Artists",          to:"/artists" },
+              { label:"📸 Feed",             to:"/feed" },
               { label:"✨ Become Artist",    to:"/artist-register" },
               ...(user && user.role !== "artist" ? [{ label:"📋 My Bookings", to:"/my-bookings" }] : []),
               // ✅ BUG 3 FIX: Messages in mobile menu for regular users
