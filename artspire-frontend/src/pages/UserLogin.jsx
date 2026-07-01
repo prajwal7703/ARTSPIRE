@@ -53,39 +53,39 @@ export default function UserLogin() {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  // If the email being used to sign in is the designated admin email,
-  // verify the password against the admin endpoint and, on success,
-  // store the admin session and route to /admin instead of the normal
-  // post-login destination. Returns true if it handled navigation.
-  const tryAdminRedirect = async (email, password) => {
-    if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return false;
-    try {
-      const adminRes = await axios.post(`${API}/api/admin/login`, { email, password });
-      if (adminRes.data?.success) {
-        localStorage.setItem("admin_password", password);
-        showNotif("success", "Welcome back, Admin!");
-        setTimeout(() => navigate("/admin"), 900);
-        return true;
-      }
-    } catch {
-      // Admin password didn't match — fall through to normal user login handling.
-    }
-    return false;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
       showNotif("error","Please enter your email and password."); return;
     }
     showNotif("loading","Signing you in...",false);
+
+    // Admin email is checked FIRST and handled entirely separately — the
+    // admin account doesn't need to exist in the regular User collection
+    // at all, so it must never touch /api/auth/login.
+    if (formData.email.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      try {
+        const adminRes = await axios.post(`${API}/api/admin/login`, {
+          email: formData.email,
+          password: formData.password,
+        });
+        if (adminRes.data?.success) {
+          localStorage.setItem("admin_password", formData.password);
+          showNotif("success", "Welcome back, Admin!");
+          setTimeout(() => navigate("/admin"), 900);
+        } else {
+          showNotif("error", "Wrong admin password.");
+        }
+      } catch {
+        showNotif("error", "Wrong admin password.");
+      }
+      return;
+    }
+
+    // Normal user login
     try {
       const res = await axios.post(`${API}/api/auth/login`, formData);
       saveAuth(res.data.token, res.data.user);
-
-      const wentToAdmin = await tryAdminRedirect(formData.email, formData.password);
-      if (wentToAdmin) return;
-
       showNotif("success", `Welcome back, ${res.data.user.name}!`);
       if (res.data.user?.role === "artist") {
         setTimeout(() => navigate("/artist-dashboard"), 1200);
