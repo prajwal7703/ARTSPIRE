@@ -195,6 +195,7 @@ function Dashboard({ password }) {
   const [wUpdating, setWUpdating] = useState({});
   const [pUpdating, setPUpdating] = useState({});
   const [liveFlash, setLiveFlash] = useState(false); // brief highlight when a live event lands
+  const [backfilling, setBackfilling] = useState(false);
 
   const client = api(password);
 
@@ -294,6 +295,23 @@ function Dashboard({ password }) {
       alert("Failed to update post status.");
     }
     setPUpdating(prev => ({ ...prev, [id]: false }));
+  };
+
+  // One-time (but safe to re-run) import of old artist profile "work sample"
+  // images into the Feed as approved posts. Existing imports are skipped
+  // automatically by the backend, so re-clicking is harmless.
+  const backfillWorks = async () => {
+    if (!window.confirm("Import all existing artist work-sample images into the public Feed as approved posts? This is safe to run more than once.")) return;
+    setBackfilling(true);
+    try {
+      const { data } = await client.post("/api/admin/posts/backfill-works");
+      alert(`Done! ${data.created} post(s) imported, ${data.skipped} already existed and were skipped.`);
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      alert("Import failed. Check console for details.");
+    }
+    setBackfilling(false);
   };
 
   const logout = () => {
@@ -462,6 +480,25 @@ function Dashboard({ password }) {
                   <div style={{ fontSize: 24, fontWeight: 900, color: "#f1f5f9" }}>Pending Posts</div>
                   <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>{pendingPosts.length} awaiting review</div>
                 </div>
+
+                <button
+                  onClick={backfillWorks}
+                  disabled={backfilling}
+                  style={{
+                    marginBottom: 20,
+                    background: "#334155",
+                    color: "#f1f5f9",
+                    border: "1px solid #475569",
+                    padding: "9px 16px",
+                    borderRadius: 8,
+                    fontSize: 12.5,
+                    fontWeight: 700,
+                    cursor: backfilling ? "default" : "pointer",
+                    opacity: backfilling ? 0.6 : 1,
+                  }}
+                >
+                  {backfilling ? "Importing…" : "⬆ Import old profile works into Feed"}
+                </button>
 
                 {pendingPosts.length === 0 ? (
                   <div style={{ textAlign: "center", padding: "60px 0", color: "#475569", fontSize: 14, fontWeight: 700 }}>
