@@ -21,10 +21,6 @@ function checkAdmin(req, res, next) {
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────
-// POST /api/admin/login
-// Accepts { password } (legacy — standalone /admin login screen)
-// or { email, password } (used when logging in via the normal User Login
-// page with the designated admin email — see UserLogin.jsx).
 router.post("/login", (req, res) => {
   const { email, password } = req.body;
 
@@ -38,7 +34,6 @@ router.post("/login", (req, res) => {
 });
 
 // ── DASHBOARD STATS (the overview numbers) ──────────────────────────────────
-// GET /api/admin/stats
 router.get("/stats", checkAdmin, async (req, res) => {
   try {
     const [totalBookings, totalUsers, totalArtistUsers, pendingWithdrawals, allBookings] = await Promise.all([
@@ -56,7 +51,11 @@ router.get("/stats", checkAdmin, async (req, res) => {
 
     let pendingPostsCount = 0;
     if (Post) {
-      try { pendingPostsCount = await Post.countDocuments({ status: "pending" }); } catch {}
+      try {
+        pendingPostsCount = await Post.countDocuments({ status: "pending" });
+      } catch (postErr) {
+        console.error("Stats: Post.countDocuments failed:", postErr);
+      }
     }
 
     const totalRevenue = allBookings.reduce((sum, b) => sum + (b.amount || 0), 0);
@@ -80,18 +79,17 @@ router.get("/stats", checkAdmin, async (req, res) => {
 });
 
 // ── BOOKINGS ─────────────────────────────────────────────────────────────────
-// GET /api/admin/bookings
 router.get("/bookings", checkAdmin, async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
     res.json(bookings);
   } catch (err) {
+    console.error("Admin bookings error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── WITHDRAWAL / PAYMENT REQUESTS SENT BY ARTISTS ───────────────────────────
-// GET /api/admin/withdrawals
 router.get("/withdrawals", checkAdmin, async (req, res) => {
   try {
     const withdrawals = await Withdrawal.find().sort({ createdAt: -1 });
@@ -104,35 +102,35 @@ router.get("/withdrawals", checkAdmin, async (req, res) => {
 
     res.json(enriched);
   } catch (err) {
+    console.error("Admin withdrawals error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── MARK WITHDRAWAL PAID / REJECTED ─────────────────────────────────────────
-// PUT /api/admin/withdrawals/:id/status
 router.put("/withdrawals/:id/status", checkAdmin, async (req, res) => {
   try {
-    const { status } = req.body; // "paid" | "rejected"
+    const { status } = req.body;
     const w = await Withdrawal.findByIdAndUpdate(req.params.id, { status }, { new: true });
     res.json({ success: true, withdrawal: w });
   } catch (err) {
+    console.error("Admin withdrawal status update error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── ALL USERS ────────────────────────────────────────────────────────────────
-// GET /api/admin/users
 router.get("/users", checkAdmin, async (req, res) => {
   try {
     const users = await User.find({ role: "user" }).select("-password").sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
+    console.error("Admin users error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── ALL ARTISTS (merged from both collections) ──────────────────────────────
-// GET /api/admin/artists
 router.get("/artists", checkAdmin, async (req, res) => {
   try {
     const usersAsArtists = await User.find({ role: "artist" }).select("-password");
@@ -147,47 +145,47 @@ router.get("/artists", checkAdmin, async (req, res) => {
     ];
     res.json(merged);
   } catch (err) {
+    console.error("Admin artists error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── NOTIFICATIONS (payment received, withdrawal requests, etc) ─────────────
-// GET /api/admin/notifications
 router.get("/notifications", checkAdmin, async (req, res) => {
   try {
     const notifs = await Notification.find({ toArtist: "admin" }).sort({ createdAt: -1 }).limit(100);
     res.json(notifs);
   } catch (err) {
+    console.error("Admin notifications error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── USER FEEDBACK / REVIEWS (if a Review model exists) ──────────────────────
-// GET /api/admin/reviews
 router.get("/reviews", checkAdmin, async (req, res) => {
   if (!Review) return res.json([]);
   try {
     const reviews = await Review.find().sort({ createdAt: -1 }).limit(200);
     res.json(reviews);
   } catch (err) {
+    console.error("Admin reviews error:", err);
     res.json([]);
   }
 });
 
 // ── PENDING POSTS (awaiting moderation) ─────────────────────────────────────
-// GET /api/admin/posts/pending
 router.get("/posts/pending", checkAdmin, async (req, res) => {
   if (!Post) return res.json([]);
   try {
     const posts = await Post.find({ status: "pending" }).sort({ createdAt: -1 });
     res.json(posts);
   } catch (err) {
+    console.error("Pending posts error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── ALL POSTS, ANY STATUS (optional history view) ───────────────────────────
-// GET /api/admin/posts?status=approved|rejected|pending
 router.get("/posts", checkAdmin, async (req, res) => {
   if (!Post) return res.json([]);
   try {
@@ -196,12 +194,12 @@ router.get("/posts", checkAdmin, async (req, res) => {
     const posts = await Post.find(filter).sort({ createdAt: -1 }).limit(300);
     res.json(posts);
   } catch (err) {
+    console.error("Admin posts error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });
 
 // ── APPROVE / REJECT A POST ─────────────────────────────────────────────────
-// PUT /api/admin/posts/:id/status   body: { status: "approved"|"rejected", reason? }
 router.put("/posts/:id/status", checkAdmin, async (req, res) => {
   if (!Post) return res.status(500).json({ message: "Post model not available" });
   try {
@@ -221,8 +219,6 @@ router.put("/posts/:id/status", checkAdmin, async (req, res) => {
     );
     if (!post) return res.status(404).json({ message: "Post not found" });
 
-    // On approval, sync the artwork into the artist's public portfolio
-    // (works array) if it isn't already there.
     if (status === "approved" && Artist) {
       try {
         const artist = await Artist.findById(post.artistId);
@@ -238,19 +234,15 @@ router.put("/posts/:id/status", checkAdmin, async (req, res) => {
       }
     }
 
-    // Real-time notifications
     const io = req.app.get("io");
     if (io) {
-      // Let other open admin sessions remove this from their pending list
       io.to("admin_room").emit("post_reviewed", { postId: post._id, status });
-      // Let the artist's dashboard/Feed react immediately
       io.to(`artist_${post.artistId}`).emit("post_status_updated", {
         postId: post._id,
         status,
         mediaUrl: post.mediaUrl,
         rejectionReason: post.rejectionReason,
       });
-      // Broadcast newly-approved posts to everyone currently viewing the Feed
       if (status === "approved") {
         io.emit("post_approved", post);
       }
