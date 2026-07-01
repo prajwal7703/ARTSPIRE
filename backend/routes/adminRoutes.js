@@ -8,6 +8,8 @@ let Artist = null;
 try { Artist = require("../models/Artist"); } catch {}
 let Review = null;
 try { Review = require("../models/Review"); } catch {}
+let Post = null;
+try { Post = require("../models/Post"); } catch {}
 
 const ADMIN_EMAIL = "artistsconnect.arts@gmail.com";
 
@@ -20,11 +22,9 @@ function checkAdmin(req, res, next) {
 
 // ── LOGIN ─────────────────────────────────────────────────────────────────
 // POST /api/admin/login
-// Accepts { password } (legacy — used by the standalone /admin login screen)
+// Accepts { password } (legacy — standalone /admin login screen)
 // or { email, password } (used when logging in via the normal User Login
-// page with the designated admin email — see UserLogin.jsx). When an email
-// is supplied it must match ADMIN_EMAIL; the password must always match
-// process.env.ADMIN_PASSWORD.
+// page with the designated admin email — see UserLogin.jsx).
 router.post("/login", (req, res) => {
   const { email, password } = req.body;
 
@@ -54,6 +54,11 @@ router.get("/stats", checkAdmin, async (req, res) => {
       try { artistDocCount = await Artist.countDocuments(); } catch {}
     }
 
+    let pendingPostsCount = 0;
+    if (Post) {
+      try { pendingPostsCount = await Post.countDocuments({ status: "pending" }); } catch {}
+    }
+
     const totalRevenue = allBookings.reduce((sum, b) => sum + (b.amount || 0), 0);
     const totalCommission = allBookings.reduce((sum, b) => sum + (b.commissionAmount || 0), 0);
     const totalArtistEarnings = allBookings.reduce((sum, b) => sum + (b.artistAmount || 0), 0);
@@ -66,6 +71,7 @@ router.get("/stats", checkAdmin, async (req, res) => {
       totalRevenue,
       totalCommission,
       totalArtistEarnings,
+      pendingPosts: pendingPostsCount,
     });
   } catch (err) {
     console.error("Admin stats error:", err);
@@ -165,6 +171,95 @@ router.get("/reviews", checkAdmin, async (req, res) => {
     res.json(reviews);
   } catch (err) {
     res.json([]);
+  }
+});
+
+// ── PENDING POSTS (awaiting moderation) ─────────────────────────────────────
+// GET /api/admin/posts/pending
+router.get("/posts/pending", checkAdmin, async (req, res) => {
+  if (!Post) return res.json([]);
+  try {
+    const posts = await Post.find({ status: "pending" }).sort({ createdAt: -1 });
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ── ALL POSTS, ANY STATUS (optional history view) ───────────────────────────
+// GET /api/admin/posts?status=approved|rejected|pending
+router.get("/posts", checkAdmin, async (req, res) => {
+  if (!Post) return res.json([]);
+  try {
+    const filter = {};
+    if (req.query.status) filter.status = req.query.status;
+    const posts = await Post.find(filter).sort({ createdAt: -1 }).limit(300);
+    res.json(posts);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ── APPROVE / REJECT A POST ─────────────────────────────────────────────────
+// PUT /api/admin/posts/:id/status   body: { status: "approved"|"rejected", reason? }
+router.put("/posts/:id/status", checkAdmin, async (req, res) => {
+  if (!Post) return res.status(500).json({ message: "Post model not available" });
+  try {
+    const { status, reason } = req.body;
+    if (!["approved", "rejected"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const post = await Post.findByIdAndUpdate(
+      req.params.id,
+      {
+        status,
+        rejectionReason: status === "rejected" ? (reason || "") : "",
+        reviewedAt: new Date(),
+      },
+      { new: true }
+    );
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    // On approval, sync the artwork into the artist's public portfolio
+    // (works array) if it isn't already there.
+    if (status === "approved" && Artist) {
+      try {
+        const artist = await Artist.findById(post.artistId);
+        if (artist) {
+          const works = Array.isArray(artist.works) ? artist.works : [];
+          if (!works.includes(post.mediaUrl)) {
+            artist.works = [post.mediaUrl, ...works];
+            await artist.save();
+          }
+        }
+      } catch (e) {
+        console.error("Failed to sync approved post into artist works:", e);
+      }
+    }
+
+    // Real-time notifications
+    const io = req.app.get("io");
+    if (io) {
+      // Let other open admin sessions remove this from their pending list
+      io.to("admin_room").emit("post_reviewed", { postId: post._id, status });
+      // Let the artist's dashboard/Feed react immediately
+      io.to(`artist_${post.artistId}`).emit("post_status_updated", {
+        postId: post._id,
+        status,
+        mediaUrl: post.mediaUrl,
+        rejectionReason: post.rejectionReason,
+      });
+      // Broadcast newly-approved posts to everyone currently viewing the Feed
+      if (status === "approved") {
+        io.emit("post_approved", post);
+      }
+    }
+
+    res.json({ success: true, post });
+  } catch (err) {
+    console.error("Post status update error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 

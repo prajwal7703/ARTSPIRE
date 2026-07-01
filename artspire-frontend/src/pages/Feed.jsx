@@ -5,6 +5,7 @@ import axios from "axios";
 import CreatePostModal from "../components/CreatePostModal";
 import { getCurrentAccount, isArtist, getToken } from "../utils/auth";
 import Navbar from "../Navbar";
+import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 const fmt = (n) => Number(n).toLocaleString("en-IN");
@@ -29,6 +30,7 @@ export default function Feed() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [viewersModalPostId, setViewersModalPostId] = useState(null);
+  const [banner, setBanner] = useState(null); // e.g. "Submitted for review"
 
   const loadPage = useCallback(async (pageNum) => {
     setLoading(true);
@@ -46,33 +48,30 @@ export default function Feed() {
 
   useEffect(() => { loadPage(1); }, [loadPage]);
 
+  // Live-append newly approved posts from anyone, so the feed updates in
+  // real time the moment admin approves something — no refresh needed.
+  useEffect(() => {
+    const onApproved = (post) => {
+      setPosts((prev) => (prev.some(p => p._id === post._id) ? prev : [post, ...prev]));
+    };
+    socket.on("post_approved", onApproved);
+    return () => socket.off("post_approved", onApproved);
+  }, []);
+
   const loadMore = () => {
     const next = page + 1;
     setPage(next);
     loadPage(next);
   };
 
-  const onCreated = async (post) => {
-    setPosts((prev) => [post, ...prev]);
+  // A post the artist just created is PENDING — it isn't visible in the
+  // public feed yet, so we don't add it to the list. It'll appear live
+  // (for everyone, via the "post_approved" socket event above) once an
+  // admin approves it.
+  const onCreated = () => {
     setCreateOpen(false);
-
-    // Keep the artist's dashboard Portfolio / Work Samples in sync with
-    // posts created directly from the Feed, so a new Feed post also shows
-    // up under Edit Profile → Portfolio (mirrors the reverse sync that
-    // already happens when a work sample is uploaded from the dashboard).
-    if (actor?.role === "artist" && post?.mediaUrl) {
-      try {
-        const { data } = await axios.get(`${API}/api/artists/${actor.id}`);
-        const works = Array.isArray(data?.works) ? data.works : [];
-        if (!works.includes(post.mediaUrl)) {
-          await axios.put(`${API}/api/artists/${actor.id}`, {
-            works: [post.mediaUrl, ...works],
-          });
-        }
-      } catch (e) {
-        console.error("Failed to sync new post into portfolio:", e);
-      }
-    }
+    setBanner("Your post was submitted and is awaiting admin review. It'll appear in the Feed once approved.");
+    setTimeout(() => setBanner(null), 6000);
   };
 
   const reels = posts.filter((p) => p.mediaType === "video");
@@ -96,6 +95,12 @@ export default function Feed() {
           <button style={styles.newPostBtn} onClick={() => setCreateOpen(true)}>+ New Post</button>
         )}
       </div>
+
+      {banner && (
+        <div style={styles.banner}>
+          ⏳ {banner}
+        </div>
+      )}
 
       <div style={styles.feedCol}>
         {list.length === 0 && !loading && (
@@ -370,6 +375,7 @@ const styles = {
   tabBtn:      { padding: "6px 14px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", fontSize: 12, fontWeight: 700, color: "#cbd5e1", cursor: "pointer" },
   tabActive:   { background: "#f97316", color: "#fff", border: "1px solid #f97316" },
   newPostBtn:  { padding: "7px 14px", borderRadius: 8, border: "none", background: "#f97316", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" },
+  banner:      { maxWidth: 470, margin: "0 auto 14px", padding: "0 12px" },
   feedCol:     { maxWidth: 470, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16, padding: "0 12px" },
   empty:       { textAlign: "center", color: "#94a3b8", padding: "60px 0", fontWeight: 600 },
   post:        { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, overflow: "hidden" },

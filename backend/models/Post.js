@@ -34,6 +34,19 @@ const postSchema = new mongoose.Schema(
 
     caption: { type: String, default: "", maxlength: 2200 },
 
+    // ── Moderation ─────────────────────────────────────────────────────────
+    // pending  → awaiting admin review, NOT visible in the public feed
+    // approved → visible in the public feed
+    // rejected → never shown publicly; artist sees "Not approved"
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+      index: true,
+    },
+    rejectionReason: { type: String, default: "" },
+    reviewedAt: { type: Date },
+
     likes: [{ type: String }],
     comments: [commentSchema],
     views: [viewSchema],
@@ -42,5 +55,6 @@ const postSchema = new mongoose.Schema(
 );
 
 postSchema.index({ createdAt: -1 });
+postSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Post", postSchema);
