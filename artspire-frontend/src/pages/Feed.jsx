@@ -36,8 +36,9 @@ export default function Feed() {
     setLoading(true);
     try {
       const { data } = await axios.get(`${API}/api/posts/feed`, { params: { page: pageNum, limit: 10 } });
-      setPosts((prev) => (pageNum === 1 ? data.posts : [...prev, ...data.posts]));
-      setHasMore(data.hasMore);
+      const newPosts = Array.isArray(data?.posts) ? data.posts : [];
+      setPosts((prev) => (pageNum === 1 ? newPosts : [...prev, ...newPosts]));
+      setHasMore(!!data?.hasMore);
     } catch (e) {
       console.error("Failed to load feed:", e);
     } finally {
@@ -114,17 +115,19 @@ function PostCard({ post, actor, onUpdate }) {
   const [commentText, setCommentText] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
-  const liked = actor ? post.likes.includes(actor.id) : false;
+  const likes = post.likes || [];
+  const comments = post.comments || [];
+  const liked = actor ? likes.includes(actor.id) : false;
 
   const toggleLike = async () => {
     if (!actor) return alert("Log in to like posts.");
     // optimistic update
-    const nextLikes = liked ? post.likes.filter((id) => id !== actor.id) : [...post.likes, actor.id];
+    const nextLikes = liked ? likes.filter((id) => id !== actor.id) : [...likes, actor.id];
     onUpdate({ likes: nextLikes });
     try {
       await axios.post(`${API}/api/posts/${post._id}/like`, { actorId: actor.id });
     } catch {
-      onUpdate({ likes: post.likes }); // revert on failure
+      onUpdate({ likes }); // revert on failure
     }
   };
 
@@ -137,7 +140,7 @@ function PostCard({ post, actor, onUpdate }) {
       const { data } = await axios.post(`${API}/api/posts/${post._id}/comment`, {
         userId: actor.id, userName: actor.name, userRole: actor.role, text: commentText.trim(),
       });
-      onUpdate({ comments: [...post.comments, data] });
+      onUpdate({ comments: [...comments, data] });
       setCommentText("");
     } catch {
       alert("Couldn't post comment, try again.");
@@ -146,7 +149,7 @@ function PostCard({ post, actor, onUpdate }) {
     }
   };
 
-  const visibleComments = expanded ? post.comments : post.comments.slice(-2);
+  const visibleComments = expanded ? comments : comments.slice(-2);
 
   return (
     <article style={styles.post}>
@@ -165,10 +168,10 @@ function PostCard({ post, actor, onUpdate }) {
 
       <div style={styles.actionsRow}>
         <button style={styles.iconBtn} onClick={toggleLike}>
-          {liked ? "❤️" : "🤍"} {fmt(post.likes.length)}
+          {liked ? "❤️" : "🤍"} {fmt(likes.length)}
         </button>
         <button style={styles.iconBtn} onClick={() => setExpanded((v) => !v)}>
-          💬 {fmt(post.comments.length)}
+          💬 {fmt(comments.length)}
         </button>
       </div>
 
@@ -176,9 +179,9 @@ function PostCard({ post, actor, onUpdate }) {
         <div style={styles.caption}><strong>{post.artistName}</strong> {post.caption}</div>
       )}
 
-      {post.comments.length > 2 && !expanded && (
+      {comments.length > 2 && !expanded && (
         <button style={styles.viewComments} onClick={() => setExpanded(true)}>
-          View all {post.comments.length} comments
+          View all {comments.length} comments
         </button>
       )}
       {visibleComments.map((c, i) => (
@@ -202,16 +205,17 @@ function PostCard({ post, actor, onUpdate }) {
 /* ── Reel card (vertical video) ─────────────────────────────────────────── */
 function ReelCard({ post, actor, onUpdate }) {
   const videoRef = useRef(null);
-  const liked = actor ? post.likes.includes(actor.id) : false;
+  const likes = post.likes || [];
+  const liked = actor ? likes.includes(actor.id) : false;
 
   const toggleLike = async () => {
     if (!actor) return alert("Log in to like reels.");
-    const nextLikes = liked ? post.likes.filter((id) => id !== actor.id) : [...post.likes, actor.id];
+    const nextLikes = liked ? likes.filter((id) => id !== actor.id) : [...likes, actor.id];
     onUpdate({ likes: nextLikes });
     try {
       await axios.post(`${API}/api/posts/${post._id}/like`, { actorId: actor.id });
     } catch {
-      onUpdate({ likes: post.likes });
+      onUpdate({ likes });
     }
   };
 
@@ -224,7 +228,7 @@ function ReelCard({ post, actor, onUpdate }) {
           <div style={{ color: "#fff", fontSize: 13, marginTop: 2 }}>{post.caption}</div>
         </div>
         <button style={styles.reelLikeBtn} onClick={toggleLike}>
-          {liked ? "❤️" : "🤍"}<br /><span style={{ fontSize: 11 }}>{fmt(post.likes.length)}</span>
+          {liked ? "❤️" : "🤍"}<br /><span style={{ fontSize: 11 }}>{fmt(likes.length)}</span>
         </button>
       </div>
     </div>
