@@ -188,27 +188,31 @@ function Dashboard({ password }) {
   const [users, setUsers] = useState([]);
   const [artists, setArtists] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
+  const [pendingPosts, setPendingPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [wUpdating, setWUpdating] = useState({});
+  const [pUpdating, setPUpdating] = useState({});
 
   const client = api(password);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [sRes, bRes, uRes, aRes, wRes] = await Promise.all([
+      const [sRes, bRes, uRes, aRes, wRes, pRes] = await Promise.all([
         client.get("/api/admin/stats"),
         client.get("/api/admin/bookings"),
         client.get("/api/admin/users"),
         client.get("/api/admin/artists"),
         client.get("/api/admin/withdrawals"),
+        client.get("/api/admin/posts/pending"),
       ]);
       setStats(sRes.data);
       setBookings(Array.isArray(bRes.data) ? bRes.data : []);
       setUsers(Array.isArray(uRes.data) ? uRes.data : []);
       setArtists(Array.isArray(aRes.data) ? aRes.data : []);
       setWithdrawals(Array.isArray(wRes.data) ? wRes.data : []);
+      setPendingPosts(Array.isArray(pRes.data) ? pRes.data : []);
       setLastRefresh(new Date());
     } catch (e) {
       console.error("Admin fetch error:", e);
@@ -232,6 +236,18 @@ function Dashboard({ password }) {
     setWUpdating(prev => ({ ...prev, [id]: false }));
   };
 
+  const reviewPost = async (id, status) => {
+    setPUpdating(prev => ({ ...prev, [id]: true }));
+    try {
+      await client.put(`/api/admin/posts/${id}/status`, { status });
+      setPendingPosts(prev => prev.filter(p => p._id !== id));
+    } catch (e) {
+      console.error(e);
+      alert("Failed to update post status.");
+    }
+    setPUpdating(prev => ({ ...prev, [id]: false }));
+  };
+
   const logout = () => {
     localStorage.removeItem("admin_password");
     window.location.reload();
@@ -239,6 +255,7 @@ function Dashboard({ password }) {
 
   const TABS = [
     { id: "overview",    label: "Overview",    icon: "📊" },
+    { id: "posts",       label: "Posts",       icon: "🖼️" },
     { id: "bookings",    label: "Bookings",    icon: "📋" },
     { id: "users",       label: "Users",       icon: "👤" },
     { id: "artists",     label: "Artists",     icon: "🎨" },
@@ -288,6 +305,9 @@ function Dashboard({ password }) {
               {t.id === "bookings" && pendingCount > 0 && (
                 <span style={{ marginLeft: "auto", background: "#f59e0b", color: "#fff", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 20 }}>{pendingCount}</span>
               )}
+              {t.id === "posts" && pendingPosts.length > 0 && (
+                <span style={{ marginLeft: "auto", background: "#ef4444", color: "#fff", fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 20 }}>{pendingPosts.length}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -335,6 +355,7 @@ function Dashboard({ password }) {
                   <StatCard label="Revenue"         value={`₹${fmt(totalRevenue)}`}                    icon="₹"  color="#fbbf24" sub="from confirmed bookings" />
                   <StatCard label="Pending Pay"     value={pendingWithdrawals.length}                   icon="💸" color="#f87171" sub="withdrawal requests" />
                   <StatCard label="New Requests"    value={pendingCount}                                icon="🔔" color="#f59e0b" sub="awaiting approval" />
+                  <StatCard label="Pending Posts"   value={pendingPosts.length}                          icon="🖼️" color="#ef4444" sub="awaiting moderation" />
                 </div>
 
                 {/* Recent bookings */}
@@ -373,6 +394,62 @@ function Dashboard({ password }) {
                       ]}
                       rows={pendingWithdrawals}
                     />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ══ POSTS (moderation queue) ══ */}
+            {tab === "posts" && (
+              <div>
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: "#f1f5f9" }}>Pending Posts</div>
+                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>{pendingPosts.length} awaiting review</div>
+                </div>
+
+                {pendingPosts.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "60px 0", color: "#475569", fontSize: 14, fontWeight: 700 }}>
+                    No pending posts. You're all caught up 🎉
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 18 }}>
+                    {pendingPosts.map(p => (
+                      <div key={p._id} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 14, overflow: "hidden" }}>
+                        <div style={{ width: "100%", aspectRatio: "4/5", background: "#0f172a" }}>
+                          {p.mediaType === "video" ? (
+                            <video src={p.mediaUrl} controls style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          ) : (
+                            <img src={p.mediaUrl} alt={p.caption} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          )}
+                        </div>
+                        <div style={{ padding: "12px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            {p.artistAvatar ? (
+                              <img src={p.artistAvatar} alt="" style={{ width: 26, height: 26, borderRadius: "50%", objectFit: "cover" }} />
+                            ) : (
+                              <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#334155", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#94a3b8" }}>
+                                {p.artistName?.[0]?.toUpperCase() || "?"}
+                              </div>
+                            )}
+                            <span style={{ fontWeight: 700, color: "#f1f5f9", fontSize: 13 }}>{p.artistName || "Unknown artist"}</span>
+                          </div>
+                          {p.caption && <div style={{ fontSize: 12.5, color: "#94a3b8", marginBottom: 10, lineHeight: 1.4 }}>{p.caption}</div>}
+                          <div style={{ fontSize: 10.5, color: "#475569", marginBottom: 12 }}>Submitted {fmtDate(p.createdAt)}</div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button
+                              onClick={() => reviewPost(p._id, "approved")}
+                              disabled={pUpdating[p._id]}
+                              style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "8px 0", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: pUpdating[p._id] ? 0.6 : 1 }}
+                            >{pUpdating[p._id] ? "…" : "✓ Approve"}</button>
+                            <button
+                              onClick={() => reviewPost(p._id, "rejected")}
+                              disabled={pUpdating[p._id]}
+                              style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "8px 0", borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: pUpdating[p._id] ? 0.6 : 1 }}
+                            >{pUpdating[p._id] ? "…" : "✕ Reject"}</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
