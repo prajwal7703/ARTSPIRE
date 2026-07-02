@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import BookingModal from "../components/BookingModal";
+import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
@@ -20,6 +21,10 @@ const ICONS = {
   Photographer:"📷", Actor:"🎭", Comedian:"😂", default:"✨",
 };
 const TAPES = ["#f9ca24","#f0932b","#6ab04c","#e84393","#30336b","#eb4d4b"];
+
+// Statuses that count as an active/confirmed engagement — the Chat button
+// only replaces the Book button once the artist has actually confirmed.
+const CONFIRMED_STATUSES = ["confirmed"];
 
 function getId(obj) {
   if (!obj) return undefined;
@@ -187,128 +192,6 @@ function Lightbox({ post, onClose }) {
   );
 }
 
-/* ── RATING SECTION ──────────────────────────────────────────────────────── */
-// BUG 2 FIX: accepts `reviews` and `avgRating` as props so parent controls the state reactively
-function RatingSection({ artist, currentUser, artistId, reviews, avgRating, onReviewSubmitted }) {
-  const [rating,    setRating]    = useState(0);
-  const [hover,     setHover]     = useState(0);
-  const [review,    setReview]    = useState("");
-  const [submitted, setSubmitted] = useState(false);
-  const [loading,   setLoading]   = useState(false);
-
-  const submit = async () => {
-    if (!rating || !currentUser) return;
-    setLoading(true);
-    try {
-      await axios.post(`${API}/api/artists/${artistId}/reviews`, {
-        userId: getId(currentUser), userName: currentUser.name, rating, review: review.trim(),
-      });
-      setSubmitted(true);
-      setReview("");
-      // BUG 2 FIX: tell parent to re-fetch both artist data and reviews
-      if (onReviewSubmitted) onReviewSubmitted();
-    } catch {}
-    setLoading(false);
-  };
-
-  return (
-    <div style={{
-      background:"#fffde7",
-      borderRadius:4,
-      padding:20,
-      boxShadow:"4px 4px 12px rgba(0,0,0,0.12), -1px -1px 0 rgba(0,0,0,0.05)",
-      position:"relative",
-      fontFamily:"'Nunito',sans-serif",
-    }}>
-      {/* Tape */}
-      <div style={{
-        position:"absolute", top:-10, left:"50%", transform:"translateX(-50%)",
-        width:50, height:20, background:"rgba(249,202,36,0.7)",
-        borderRadius:2, boxShadow:"0 1px 3px rgba(0,0,0,0.1)",
-      }}/>
-
-      <div style={{ fontFamily:"'Caveat',cursive", fontSize:22, fontWeight:700, color:"#333", marginBottom:14, textAlign:"center" }}>
-        ★ Rate {artist.name?.split(" ")[0]}
-      </div>
-
-      {/* Average display — BUG 2 FIX: uses live avgRating from parent */}
-      <div style={{ textAlign:"center", marginBottom:16 }}>
-        <span style={{ fontFamily:"'Caveat',cursive", fontSize:52, fontWeight:700, color:"#f59e0b", lineHeight:1 }}>{avgRating}</span>
-        <div style={{ display:"flex", justifyContent:"center", gap:4, margin:"6px 0 2px" }}>
-          {Array.from({length:5}).map((_,i)=>(
-            <span key={i} style={{ fontSize:20, color:i<Math.round(avgRating)?"#f59e0b":"#e0e0e0" }}>★</span>
-          ))}
-        </div>
-        <div style={{ color:"#888", fontSize:12, fontWeight:700 }}>{reviews.length} review{reviews.length!==1?"s":""}</div>
-      </div>
-
-      {currentUser && !submitted && (
-        <>
-          <div style={{ display:"flex", justifyContent:"center", gap:6, marginBottom:10 }}>
-            {Array.from({length:5}).map((_,i)=>(
-              <span key={i}
-                onMouseEnter={()=>setHover(i+1)} onMouseLeave={()=>setHover(0)}
-                onClick={()=>setRating(i+1)}
-                style={{
-                  fontSize:30, cursor:"pointer",
-                  color:i<(hover||rating)?"#f59e0b":"#e0e0e0",
-                  transform:i<(hover||rating)?"scale(1.2)":"scale(1)",
-                  transition:"all 0.12s", display:"inline-block",
-                }}
-              >★</span>
-            ))}
-          </div>
-          <textarea value={review} onChange={e=>setReview(e.target.value)}
-            placeholder="Write something nice… ✍️" rows={2}
-            style={{
-              width:"100%", padding:"10px 12px", borderRadius:8,
-              border:"1.5px dashed #e0e0e0", background:"rgba(255,255,255,0.8)",
-              fontFamily:"'Caveat',cursive", fontSize:15, resize:"none",
-              outline:"none", marginBottom:10, boxSizing:"border-box", color:"#333",
-            }}
-          />
-          <button onClick={submit} disabled={!rating||loading} style={{
-            width:"100%", padding:10, borderRadius:8, border:"none",
-            background: rating?"linear-gradient(135deg,#f59e0b,#f97316)":"#e0e0e0",
-            color:rating?"#fff":"#aaa", fontFamily:"'Nunito',sans-serif",
-            fontWeight:900, fontSize:14, cursor:rating?"pointer":"default",
-          }}>
-            {loading?"Submitting…":"Submit Review ✨"}
-          </button>
-        </>
-      )}
-      {submitted && (
-        <div style={{ textAlign:"center", background:"#f0fdf4", borderRadius:8, padding:"10px 16px", color:"#16a34a", fontWeight:800, fontSize:13, marginTop:8 }}>
-          ✅ Thanks for your review!
-        </div>
-      )}
-      {!currentUser && (
-        <div style={{ textAlign:"center", color:"#aaa", fontSize:12, fontWeight:700, marginTop:8 }}>
-          Login to rate this artist
-        </div>
-      )}
-
-      {/* Reviews list */}
-      {reviews.length > 0 && (
-        <div style={{ marginTop:16, display:"flex", flexDirection:"column", gap:8 }}>
-          {reviews.slice(0,3).map((r,i)=>(
-            <div key={i} style={{
-              background:"rgba(255,255,255,0.7)", borderRadius:8,
-              padding:"10px 12px", border:"1px solid rgba(0,0,0,0.06)",
-            }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                <span style={{ fontWeight:800, fontSize:12, color:"#333" }}>{r.userName||"User"}</span>
-                <span style={{ fontSize:11, color:"#f59e0b" }}>{"★".repeat(r.rating||0)}</span>
-              </div>
-              {r.review && <div style={{ fontSize:12, color:"#666", fontFamily:"'Caveat',cursive" }}>{r.review}</div>}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ── MAIN PROFILE ─────────────────────────────────────────────────────────── */
 export default function ArtistProfile() {
   const { id }   = useParams();
@@ -322,20 +205,22 @@ export default function ArtistProfile() {
   const [showBooking, setShowBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
 
-  // BUG 2 FIX: reviews + avgRating lifted to parent so RatingSection can update them reactively
-  const [reviews,    setReviews]    = useState([]);
-  const [avgRating,  setAvgRating]  = useState("5.0");
+  // Live booking status between the logged-in user and this artist — drives
+  // whether the nav shows "Book" or "Chat".
+  const [bookingStatus, setBookingStatus] = useState(null);
 
   let loggedArtist = null, loggedUser = null;
   try { loggedArtist = JSON.parse(localStorage.getItem("artist")||"null"); } catch {}
   try { loggedUser   = JSON.parse(localStorage.getItem("user")  ||"null"); } catch {}
   const currentUser = loggedUser || loggedArtist;
   const isOwner = loggedArtist && getId(loggedArtist) === id;
+  const myId = getId(currentUser);
+
+  const hasConfirmedBooking = CONFIRMED_STATUSES.includes(bookingStatus);
 
   useEffect(() => {
     loadArtist();
     loadPosts();
-    loadReviews();
     if (!isOwner) axios.post(`${API}/api/users/${id}/view`).catch(()=>{});
   }, [id]);
 
@@ -355,34 +240,45 @@ export default function ArtistProfile() {
     } catch {}
   };
 
-  // BUG 2 FIX: centralized review loader — recalculates avgRating from fresh data
-  const loadReviews = async () => {
+  // Finds the most recent booking this user has with this artist, so we
+  // know whether to show "Book" or "Chat" in the nav.
+  const checkBookingStatus = async () => {
+    if (!myId || isOwner) return;
     try {
-      const res = await axios.get(`${API}/api/artists/${id}/reviews`);
-      const data = Array.isArray(res.data) ? res.data : [];
-      setReviews(data);
-      if (data.length > 0) {
-        const avg = (data.reduce((s, r) => s + (r.rating || 0), 0) / data.length).toFixed(1);
-        setAvgRating(avg);
-      } else {
-        // fall back to artist.rating once artist is loaded (handled below in effect)
-        setAvgRating(null); // null = "use artist.rating"
-      }
-    } catch {}
-  };
-
-  // BUG 2 FIX: when artist loads and no reviews yet, seed avgRating from artist.rating
-  useEffect(() => {
-    if (artist && avgRating === null) {
-      setAvgRating((artist.rating || 5).toFixed(1));
+      const r = await axios.get(`${API}/api/bookings/user/${myId}`);
+      const mine = (Array.isArray(r.data) ? r.data : [])
+        .filter(b => String(b.artistId) === String(id));
+      const latest = mine.sort((a, b) =>
+        new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+      )[0];
+      setBookingStatus(latest?.status || null);
+    } catch (e) {
+      console.error("Failed to check booking status:", e);
     }
-  }, [artist, avgRating]);
-
-  // Called by RatingSection after a successful submit
-  const handleReviewSubmitted = () => {
-    loadReviews();
-    loadArtist();
   };
+
+  useEffect(() => { checkBookingStatus(); }, [myId, id]);
+
+  // Live updates: poll while on the page, and also listen for the same
+  // socket event the artist dashboard emits on confirmation, in case the
+  // backend broadcasts it to the user too.
+  useEffect(() => {
+    if (!myId || isOwner) return;
+    const iv = setInterval(checkBookingStatus, 8000);
+
+    const onConfirmed = ({ bookingId, artistId: confirmedArtistId }) => {
+      if (!confirmedArtistId || String(confirmedArtistId) === String(id)) {
+        checkBookingStatus();
+      }
+    };
+    socket.emit("join_user_room", myId);
+    socket.on("booking_confirmed", onConfirmed);
+
+    return () => {
+      clearInterval(iv);
+      socket.off("booking_confirmed", onConfirmed);
+    };
+  }, [myId, id, isOwner]);
 
   if (!artist) return (
     <div style={{ background:"#eef2f7", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
@@ -395,17 +291,15 @@ export default function ArtistProfile() {
   const accentBg    = CAT_BG[artist.category]     || CAT_BG.default;
   const icon        = ICONS[artist.category]       || ICONS.default;
   const initials    = artist.name ? artist.name.split(" ").map(n=>n[0]).join("").toUpperCase().slice(0,2) : "A";
-  const stars       = Math.round(Math.min(5, parseFloat(avgRating) || artist.rating || 5));
 
-  // BUG 1 FIX: check both image fields — artist.image (backend field) and artist.profileImage (legacy field)
   const profileImageSrc = artist.image || artist.profileImage || null;
-
 
   // Merge dashboard-uploaded work samples (artist.works) with posts collection
   const works = [
     ...(artist.works || []).map((url, i) => ({ _id: `work-${i}`, media: url, type: "image", title: "Untitled" })),
     ...posts,
   ];
+
   return (
     <div style={{
       minHeight:"100vh",
@@ -462,20 +356,7 @@ export default function ArtistProfile() {
           <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:18, color:"#1a1a2e", lineHeight:1 }}>{artist.name}</div>
           <div style={{ fontSize:10, color:"#9e9e9e", fontWeight:700 }}>{icon} {artist.category}{artist.city?` · ${artist.city}`:""}</div>
         </div>
-        <button onClick={()=>setShowChat(true)} style={{
-          background:"linear-gradient(135deg,#3d5afe,#7c4dff)",
-          border:"none", color:"#fff", padding:"8px 14px", borderRadius:20,
-          fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:11,
-          cursor:"pointer", whiteSpace:"nowrap",
-        }}>💬 Chat</button>
-        {!isOwner && (
-          <button onClick={()=>setShowBooking(true)} style={{
-            background:accentColor, border:"none", color:"#fff",
-            padding:"8px 14px", borderRadius:20,
-            fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:11,
-            cursor:"pointer", whiteSpace:"nowrap",
-          }}>📅 Book</button>
-        )}
+
         {isOwner && (
           <button onClick={()=>navigate("/artist-dashboard?tab=profile")} style={{
             background:"#f0f2ff", border:"1px solid #e8eaf6", color:"#3d5afe",
@@ -483,12 +364,30 @@ export default function ArtistProfile() {
             fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:11, cursor:"pointer",
           }}>🛠 Edit</button>
         )}
+
+        {/* Non-owner: show Chat once booking is confirmed, otherwise Book */}
+        {!isOwner && hasConfirmedBooking && (
+          <button onClick={()=>setShowChat(true)} style={{
+            background:"linear-gradient(135deg,#3d5afe,#7c4dff)",
+            border:"none", color:"#fff", padding:"8px 14px", borderRadius:20,
+            fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:11,
+            cursor:"pointer", whiteSpace:"nowrap",
+          }}>💬 Chat</button>
+        )}
+        {!isOwner && !hasConfirmedBooking && (
+          <button onClick={()=>setShowBooking(true)} style={{
+            background:accentColor, border:"none", color:"#fff",
+            padding:"8px 14px", borderRadius:20,
+            fontFamily:"'Nunito',sans-serif", fontWeight:800, fontSize:11,
+            cursor:"pointer", whiteSpace:"nowrap",
+          }}>📅 Book</button>
+        )}
       </div>
 
       {/* ── PAGE CONTENT ── */}
       <div style={{ maxWidth:800, margin:"0 auto", padding:"28px 20px 80px", position:"relative", zIndex:1 }}>
 
-        {/* ══ SECTION 1: HERO ══ */}
+        {/* ══ SECTION 1: HERO — name + bio ══ */}
         <div style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:20, marginBottom:28, animation:"fadeUp 0.4s ease" }}>
 
           {/* Left: name + bio */}
@@ -550,28 +449,9 @@ export default function ArtistProfile() {
                 A passionate {artist.category?.toLowerCase() || "artist"} sharing creativity with the world.
               </p>
             )}
-
-            {/* Stats row */}
-            <div style={{ display:"flex", gap:12, marginTop:16, flexWrap:"wrap" }}>
-              {[
-                // BUG 2 FIX: use live avgRating here too
-                { v: avgRating || (artist.rating||5).toFixed(1), l:"Rating", emoji:"⭐" },
-{ v:works.length,                                  l:"Works",  emoji:"🎨" },                { v:artist.profileViews||0,                        l:"Views",  emoji:"👁" },
-              ].map(({v,l,emoji})=>(
-                <div key={l} style={{
-                  background:"#fff", borderRadius:12, padding:"10px 16px",
-                  boxShadow:"3px 3px 0 rgba(0,0,0,0.08)",
-                  border:`1.5px solid rgba(0,0,0,0.06)`, textAlign:"center", minWidth:64,
-                }}>
-                  <div style={{ fontSize:16, marginBottom:2 }}>{emoji}</div>
-                  <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:20, color:accentColor }}>{v}</div>
-                  <div style={{ fontSize:9, color:"#aaa", fontWeight:800, textTransform:"uppercase", letterSpacing:0.5 }}>{l}</div>
-                </div>
-              ))}
-            </div>
           </div>
 
-          {/* Right: polaroid photo — BUG 1 FIX: uses profileImageSrc which checks both fields */}
+          {/* Right: polaroid photo */}
           <div style={{
             flexShrink:0, width:"clamp(130px,30vw,180px)",
             background:"#fff",
@@ -593,7 +473,6 @@ export default function ArtistProfile() {
               display:"flex", alignItems:"center", justifyContent:"center",
               borderRadius:2,
             }}>
-              {/* BUG 1 FIX: profileImageSrc checks artist.image || artist.profileImage */}
               {profileImageSrc && !imgError ? (
                 <img src={profileImageSrc} alt={artist.name}
                   onError={()=>setImgError(true)}
@@ -624,124 +503,18 @@ export default function ArtistProfile() {
           </div>
         </div>
 
-        {/* ══ SECTION 2: INTERESTS + CONTACT ══ */}
-        <div style={{
-          display:"grid", gridTemplateColumns:"1fr 1fr",
-          gap:20, marginBottom:28,
-          animation:"fadeUp 0.4s ease 0.1s both",
-        }}>
-
-          {/* INTERESTS */}
+        {bookingDone && (
           <div style={{
-            background:"#fff", borderRadius:4, padding:"18px 18px 22px",
-            boxShadow:"3px 3px 10px rgba(0,0,0,0.1)", position:"relative",
-            clipPath:"polygon(0 0,100% 0,100% 88%,97% 92%,93% 89%,89% 93%,85% 89%,81% 93%,77% 89%,73% 93%,69% 89%,65% 93%,61% 89%,57% 93%,53% 89%,49% 93%,45% 89%,41% 93%,37% 89%,33% 93%,29% 89%,25% 93%,21% 89%,17% 93%,13% 89%,9% 93%,5% 89%,1% 93%,0 89%)",
-            paddingBottom:32,
+            marginBottom:24, background:"#f0fdf4", border:"1px solid #bbf7d0",
+            borderRadius:12, padding:"12px 16px", color:"#16a34a", fontWeight:800,
+            fontSize:13, textAlign:"center",
           }}>
-            <div style={{
-              position:"absolute", top:-10, left:"50%", transform:"translateX(-50%)",
-              width:48, height:20, background:"rgba(249,202,36,0.65)", borderRadius:2,
-            }}/>
-            {[0,1,2].map(i=>(
-              <div key={i} style={{
-                position:"absolute", left:0, right:0, top:`${38+i*22}px`,
-                height:1, background:"rgba(200,80,80,0.12)", pointerEvents:"none",
-              }}/>
-            ))}
-            <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:20, color:"#1a1a2e", marginBottom:10 }}>
-              🎯 INTERESTS
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-              {[
-                artist.category || "Art",
-                artist.city,
-                "Creativity",
-                "Performing",
-                "Collaboration",
-              ].filter(Boolean).map((item, i) => (
-                <div key={i} style={{ fontFamily:"'Caveat',cursive", fontSize:16, color:"#444", display:"flex", alignItems:"center", gap:6 }}>
-                  <span style={{ color:accentColor }}>•</span> {item}
-                </div>
-              ))}
-            </div>
+            ✅ Booking request sent! You'll get a chat option here once {artist.name?.split(" ")[0]} confirms.
           </div>
+        )}
 
-          {/* CONTACT */}
-          <div style={{
-            background:"#e8f5e9", borderRadius:4, padding:"18px 18px 22px",
-            boxShadow:"4px 4px 12px rgba(0,0,0,0.12), -1px -1px 0 rgba(0,0,0,0.04)",
-            position:"relative",
-          }}>
-            <div style={{
-              position:"absolute", top:-10, left:"50%", transform:"translateX(-50%)",
-              width:48, height:20, background:"rgba(100,200,100,0.65)", borderRadius:2,
-            }}/>
-            <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:20, color:"#1a1a2e", marginBottom:12 }}>
-              📬 CONTACT
-            </div>
-
-            {artist.price && (
-              <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ color:accentColor }}>💰</span> From ₹{Number(artist.price).toLocaleString("en-IN")}
-              </div>
-            )}
-
-            {/* BUG 2 FIX: live star display using avgRating */}
-            <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-              <span style={{ color:"#f59e0b" }}>{"★".repeat(stars)}{"☆".repeat(5-stars)}</span>
-              <span style={{ color:"#666" }}>{avgRating || (artist.rating||5).toFixed(1)}/5</span>
-            </div>
-
-            {artist.city && (
-              <div style={{ fontFamily:"'Caveat',cursive", fontSize:15, color:"#444", marginBottom:10, display:"flex", alignItems:"center", gap:6 }}>
-                <span>📍</span> {artist.city}
-              </div>
-            )}
-
-            <button onClick={()=>setShowChat(true)} style={{
-              width:"100%", padding:"11px 14px", borderRadius:10,
-              border:"none", background:"linear-gradient(135deg,#3d5afe,#7c4dff)",
-              color:"#fff", fontFamily:"'Nunito',sans-serif", fontWeight:900,
-              fontSize:13, cursor:"pointer", marginBottom:8,
-              boxShadow:"0 4px 12px rgba(61,90,254,0.3)",
-            }}>
-              💬 Send Message
-            </button>
-
-            {!isOwner && (
-              <button onClick={()=>setShowBooking(true)} style={{
-                width:"100%", padding:"11px 14px", borderRadius:10,
-                border:`2px solid ${accentColor}`, background:"transparent",
-                color:accentColor, fontFamily:"'Nunito',sans-serif", fontWeight:900,
-                fontSize:13, cursor:"pointer",
-              }}>
-                📅 Book Now
-              </button>
-            )}
-
-            {bookingDone && (
-              <div style={{ marginTop:8, background:"#f0fdf4", border:"1px solid #bbf7d0", borderRadius:8, padding:"8px 12px", color:"#16a34a", fontWeight:800, fontSize:12 }}>
-                ✅ Booking sent!
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ══ SECTION 3: RATINGS ══ */}
-        <div style={{ marginBottom:28, animation:"fadeUp 0.4s ease 0.15s both" }}>
-          {/* BUG 2 FIX: pass reviews + avgRating as props; onReviewSubmitted re-fetches both */}
-          <RatingSection
-            artist={artist}
-            currentUser={currentUser}
-            artistId={id}
-            reviews={reviews}
-            avgRating={avgRating || (artist.rating||5).toFixed(1)}
-            onReviewSubmitted={handleReviewSubmitted}
-          />
-        </div>
-
-        {/* ══ SECTION 4: WORKS ══ */}
-        <div style={{ animation:"fadeUp 0.4s ease 0.2s both" }}>
+        {/* ══ SECTION 2: WORKS ══ */}
+        <div style={{ animation:"fadeUp 0.4s ease 0.1s both" }}>
           <div style={{ textAlign:"center", marginBottom:20 }}>
             <div style={{ fontFamily:"'Caveat',cursive", fontWeight:700, fontSize:"clamp(24px,6vw,36px)", color:"#1a1a2e", letterSpacing:1 }}>
               MY WORKS
@@ -823,7 +596,7 @@ export default function ArtistProfile() {
         </div>
 
         {/* Bottom sticker */}
-        <div style={{ textAlign:"right", marginTop:28, animation:"fadeUp 0.4s ease 0.25s both" }}>
+        <div style={{ textAlign:"right", marginTop:28, animation:"fadeUp 0.4s ease 0.15s both" }}>
           <div style={{
             display:"inline-block",
             background:accentColor, color:"#fff",
@@ -847,7 +620,7 @@ export default function ArtistProfile() {
         <BookingModal
           artist={artist} currentUser={currentUser}
           onClose={()=>setShowBooking(false)}
-          onSuccess={()=>{ setShowBooking(false); setBookingDone(true); }}
+          onSuccess={()=>{ setShowBooking(false); setBookingDone(true); checkBookingStatus(); }}
         />
       )}
       {lightbox && <Lightbox post={lightbox} onClose={()=>setLightbox(null)}/>}
