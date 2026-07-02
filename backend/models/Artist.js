@@ -70,6 +70,15 @@ const artistSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // ── FIX: previously undeclared. Without this, Mongoose's strict mode
+    // silently dropped `artist.works = [...]` on .save() in the admin
+    // approve route (adminRoutes.js -> PUT /posts/:id/status), so approved
+    // work samples never actually persisted into the artist's portfolio,
+    // even though the same post correctly reached the public Feed.
+    works: {
+      type: [String],
+      default: [],
+    },
     createdAt: {
       type: Date,
       default: Date.now,
