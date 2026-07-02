@@ -9,7 +9,38 @@ try { Artist = require("../models/Artist"); } catch {}
 
 const getIo = (req) => req.app.get("io");
 
-// ── CREATE POST (direct file upload — used by UploadPost.jsx / CreatePostModal) ─
+// ── CREATE POST (bare root — called by EditProfileTab.jsx when an artist
+// submits a new work sample, and by CreatePostModal.jsx for Feed posts) ─────
+// POST /api/posts
+// multipart/form-data: artistId, artistName, artistAvatar, caption, media (file)
+router.post("/", upload.single("media"), async (req, res) => {
+  try {
+    const { artistId, artistName, artistAvatar, caption } = req.body;
+    if (!artistId) return res.status(400).json({ message: "artistId is required" });
+    if (!req.file) return res.status(400).json({ message: "No media file uploaded" });
+
+    const mediaType = req.file.mimetype?.startsWith("video") ? "video" : "image";
+
+    const post = await Post.create({
+      artistId,
+      artistName: artistName || "Unknown artist",
+      artistAvatar: artistAvatar || "",
+      mediaUrl: req.file.path,
+      mediaType,
+      caption: caption || "",
+      status: "pending",
+    });
+
+    getIo(req)?.to("admin_room").emit("new_pending_post", post);
+
+    res.status(201).json(post);
+  } catch (err) {
+    console.error("Create post error:", err);
+    res.status(500).json({ message: "Failed to create post" });
+  }
+});
+
+// ── CREATE POST (direct file upload — used by UploadPost.jsx) ──────────────
 // POST /api/posts/create
 // multipart/form-data: artistId, title (caption), media (file), type ("image"|"video")
 router.post("/create", upload.single("media"), async (req, res) => {
