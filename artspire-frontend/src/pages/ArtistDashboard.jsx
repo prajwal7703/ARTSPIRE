@@ -795,6 +795,12 @@ function ChatTab({ artistId }) {
 }
 
 // ─── EDIT PROFILE TAB ─────────────────────────────────────────────────────────
+// ─── EDIT PROFILE TAB (updated) ───────────────────────────────────────────────
+// Work samples now go through the same moderation pipeline as the Feed:
+// uploading a work sample creates a PENDING Post (visible to admin for
+// approval) instead of writing directly into the artist's public `works`
+// array. Only on admin approval does it get synced into `works` (this sync
+// already happens server-side in adminRoutes.js's PUT /posts/:id/status).
 function EditProfileTab({ artistId }) {
   const [form,         setForm]         = useState(null);
   const [loading,      setLoading]      = useState(true);
@@ -803,6 +809,8 @@ function EditProfileTab({ artistId }) {
   const [imageFile,    setImageFile]    = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [uploadingWorks, setUploadingWorks] = useState(false);
+  const [myPosts,       setMyPosts]       = useState([]); // any status — pending/approved/rejected
+  const [loadingPosts,  setLoadingPosts]  = useState(true);
 
   const fileRef = useRef(null);
 
@@ -816,6 +824,32 @@ function EditProfileTab({ artistId }) {
       .finally(()=>setLoading(false));
   },[artistId]);
 
+  const fetchMyPosts = () => {
+    setLoadingPosts(true);
+    axios.get(`${API}/api/posts/mine/${artistId}`)
+      .then(r => setMyPosts(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setMyPosts([]))
+      .finally(() => setLoadingPosts(false));
+  };
+  useEffect(() => { if (artistId) fetchMyPosts(); }, [artistId]);
+
+  // Live-update when admin approves/rejects while this tab is open
+  useEffect(() => {
+    const onStatusUpdate = ({ postId, status, rejectionReason }) => {
+      setMyPosts(prev => prev.map(p => p._id === postId ? { ...p, status, rejectionReason } : p));
+      if (status === "approved") {
+        // Approved work syncs into `works` server-side — refresh the profile
+        // so the newly-approved image shows in the portfolio grid too.
+        axios.get(`${API}/api/artists/${artistId}`)
+          .then(r => setForm(f => ({ ...f, works: r.data.works || [] })))
+          .catch(() => {});
+      }
+    };
+    socket.emit("join_artist_room", artistId);
+    socket.on("post_status_updated", onStatusUpdate);
+    return () => socket.off("post_status_updated", onStatusUpdate);
+  }, [artistId]);
+
   const set = (k,v) => setForm(f=>({ ...f, [k]:v }));
 
   const onImageChange = (e) => {
@@ -825,41 +859,43 @@ function EditProfileTab({ artistId }) {
     setImagePreview(URL.createObjectURL(file));
   };
 
+  // Submits each selected file as a PENDING Post for admin review, instead
+  // of writing directly into the profile's `works` array.
   const onWorkFilesChange = async (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
     setUploadingWorks(true);
     setMsg({ type:"", text:"" });
     try {
-      const uploadedUrls = [];
+      let successCount = 0;
       for (const file of files) {
         const fd = new FormData();
-        fd.append("image", file);
-        const r = await axios.post(`${API}/api/artists/upload`, fd, {
+        fd.append("media", file);
+        fd.append("artistId", artistId);
+        fd.append("artistName", form.name || "");
+        fd.append("artistAvatar", form.image || form.profileImage || "");
+        fd.append("caption", "");
+        await axios.post(`${API}/api/posts`, fd, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        if (r.data?.url) uploadedUrls.push(r.data.url);
+        successCount++;
       }
-      if (uploadedUrls.length) {
-        const updatedWorks = [...(form.works || []), ...uploadedUrls];
-        setForm(f => ({ ...f, works: updatedWorks }));
-        try {
-          await axios.put(`${API}/api/artists/${artistId}`, { works: updatedWorks });
-          setMsg({ type:"ok", text:"Work samples uploaded and saved!" });
-        } catch (persistErr) {
-          console.error("Auto-save of works failed:", persistErr);
-          setMsg({ type:"error", text:"Uploaded, but failed to auto-save — click Save Changes to confirm." });
-        }
+      if (successCount) {
+        setMsg({ type:"ok", text:`${successCount} work sample(s) submitted for admin review. They'll appear in your portfolio once approved.` });
+        fetchMyPosts();
       }
     } catch (err) {
       console.error(err);
-      setMsg({ type:"error", text:"Failed to upload one or more files." });
+      setMsg({ type:"error", text:"Failed to submit one or more files for review." });
     } finally {
       setUploadingWorks(false);
       e.target.value = "";
     }
   };
 
+  // Removing an already-approved work still edits the live `works` array
+  // directly — that's fine, since it's just taking something down, not
+  // putting something new up without review.
   const removeWork = async (urlToRemove) => {
     const updatedWorks = (form.works || []).filter(u => u !== urlToRemove);
     setForm(f => ({ ...f, works: updatedWorks }));
@@ -874,9 +910,13 @@ function EditProfileTab({ artistId }) {
   const save = async () => {
     setSaving(true); setMsg({ type:"", text:"" });
     try {
+      // `works` is managed exclusively through the Post approval flow now —
+      // never send it from this generic save, so a stale local copy can't
+      // accidentally overwrite the server's approved list.
+      const { works, ...formWithoutWorks } = form;
       if (imageFile) {
         const fd = new FormData();
-        Object.entries(form).forEach(([k,v]) => {
+        Object.entries(formWithoutWorks).forEach(([k,v]) => {
           if (v === null || v === undefined) return;
           if (Array.isArray(v)) {
             fd.append(k, JSON.stringify(v));
@@ -889,7 +929,7 @@ function EditProfileTab({ artistId }) {
           headers: { "Content-Type": "multipart/form-data" },
         });
       } else {
-        await axios.put(`${API}/api/artists/${artistId}`, form);
+        await axios.put(`${API}/api/artists/${artistId}`, formWithoutWorks);
       }
       setMsg({ type:"ok", text:"Profile saved successfully!" });
       setImageFile(null);
@@ -913,6 +953,9 @@ function EditProfileTab({ artistId }) {
       }
     </div>
   );
+
+  const pendingPosts  = myPosts.filter(p => p.status === "pending");
+  const rejectedPosts = myPosts.filter(p => p.status === "rejected");
 
   return (
     <div style={{ padding:"28px 28px 40px", maxWidth:800, display:"flex", flexDirection:"column", gap:16 }}>
@@ -968,22 +1011,55 @@ function EditProfileTab({ artistId }) {
       {/* Portfolio / Work Samples */}
       <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:16, padding:"16px 18px" }}>
         <div style={st({ fontSize:11, fontWeight:800, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:14 })}>Portfolio / Work Samples</div>
+
         {(form.works || []).length > 0 && (
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))", gap:10, marginBottom:14 }}>
-            {(form.works || []).map((url, i) => (
-              <div key={url + i} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
-                <img src={url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-                <button
-                  onClick={() => removeWork(url)}
-                  title="Remove"
-                  style={st({ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", cursor:"pointer", fontSize:12, lineHeight:1 })}
-                >✕</button>
-              </div>
-            ))}
-          </div>
+          <>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#16a34a", textTransform:"uppercase", letterSpacing:0.8, marginBottom:8 })}>Live on your profile</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))", gap:10, marginBottom:14 }}>
+              {(form.works || []).map((url, i) => (
+                <div key={url + i} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
+                  <img src={url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  <button
+                    onClick={() => removeWork(url)}
+                    title="Remove"
+                    style={st({ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", cursor:"pointer", fontSize:12, lineHeight:1 })}
+                  >✕</button>
+                </div>
+              ))}
+            </div>
+          </>
         )}
+
+        {!loadingPosts && pendingPosts.length > 0 && (
+          <>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#ca8a04", textTransform:"uppercase", letterSpacing:0.8, marginBottom:8 })}>Awaiting admin review</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))", gap:10, marginBottom:14 }}>
+              {pendingPosts.map(p => (
+                <div key={p._id} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"2px solid #fde68a", opacity:0.75 }}>
+                  <img src={p.mediaUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  <span style={{ position:"absolute", bottom:4, left:4, right:4, background:"rgba(0,0,0,0.65)", color:"#fef9c3", fontSize:9, fontWeight:800, padding:"3px 6px", borderRadius:6, textAlign:"center" }}>Pending</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!loadingPosts && rejectedPosts.length > 0 && (
+          <>
+            <div style={st({ fontSize:10, fontWeight:800, color:"#dc2626", textTransform:"uppercase", letterSpacing:0.8, marginBottom:8 })}>Not approved</div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))", gap:10, marginBottom:14 }}>
+              {rejectedPosts.map(p => (
+                <div key={p._id} title={p.rejectionReason || "Not approved"} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"2px solid #fca5a5", opacity:0.6 }}>
+                  <img src={p.mediaUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  <span style={{ position:"absolute", bottom:4, left:4, right:4, background:"rgba(0,0,0,0.65)", color:"#fecaca", fontSize:9, fontWeight:800, padding:"3px 6px", borderRadius:6, textAlign:"center" }}>Rejected</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
         <label style={st({ display:"inline-block", background: uploadingWorks ? "#f1f5f9" : "#eff6ff", border:"1px solid #bfdbfe", color:"#1e40af", padding:"8px 16px", borderRadius:10, fontWeight:700, fontSize:13, cursor: uploadingWorks ? "not-allowed" : "pointer" })}>
-          {uploadingWorks ? "Uploading…" : "+ Add Work Samples"}
+          {uploadingWorks ? "Submitting…" : "+ Add Work Samples"}
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -994,7 +1070,7 @@ function EditProfileTab({ artistId }) {
           />
         </label>
         <div style={st({ fontSize:11, color:"#94a3b8", marginTop:6 })}>
-          Upload images of your past work. JPG, PNG or WebP. Uploads save automatically.
+          Upload images of your past work. Each one is reviewed by an admin before it appears on your public profile and the Feed.
         </div>
       </div>
 
