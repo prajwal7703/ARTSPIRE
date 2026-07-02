@@ -1,73 +1,238 @@
 // artspire-frontend/src/pages/Home.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { FeedGrid } from "./Feed";
+import { getCurrentAccount, isArtist } from "../utils/auth";
 import BottomNav from "../BottomNav";
+import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+const fmt = (n) => Number(n).toLocaleString("en-IN");
+
+// Looping hero video — served from public/artbg.mp4, same as your old homepage.
+const HERO_VIDEO_URL = "/artbg.mp4";
+
+const TABS = ["For You", "Following", "Near You"];
+
+const getActor = () => {
+  const account = getCurrentAccount();
+  if (!account?._id) return null;
+  return {
+    id: account._id,
+    name: account.name,
+    avatar: account.avatar || account.image,
+    role: isArtist() ? "artist" : "user",
+  };
+};
 
 export default function Home() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
-  const [strip, setStrip] = useState([]);
+  const actor = getActor();
 
-  // Small inspiration strip up top — first few live posts, tap one to jump into the feed.
-  useEffect(() => {
-    axios
-      .get(`${API}/api/posts/feed`, { params: { page: 1, limit: 3 } })
-      .then(({ data }) => setStrip(Array.isArray(data?.posts) ? data.posts : []))
-      .catch(() => {});
+  const [activeTab, setActiveTab] = useState("For You");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const [posts, setPosts] = useState([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  const loadPage = useCallback(async (pageNum) => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/api/posts/feed`, { params: { page: pageNum, limit: 20 } });
+      const newPosts = Array.isArray(data?.posts) ? data.posts : [];
+      setPosts((prev) => (pageNum === 1 ? newPosts : [...prev, ...newPosts]));
+      setHasMore(!!data?.hasMore);
+    } catch (e) {
+      console.error("Failed to load feed:", e);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => { loadPage(1); }, [loadPage]);
+
+  // Live-append newly approved posts the moment admin approves something.
+  useEffect(() => {
+    const onApproved = (post) => {
+      setPosts((prev) => (prev.some((p) => p._id === post._id) ? prev : [post, ...prev]));
+    };
+    socket.on("post_approved", onApproved);
+    return () => socket.off("post_approved", onApproved);
+  }, []);
+
+  // Live-remove posts an artist deletes.
+  useEffect(() => {
+    const onDeleted = ({ postId }) => {
+      setPosts((prev) => prev.filter((p) => p._id !== postId));
+    };
+    socket.on("post_deleted", onDeleted);
+    return () => socket.off("post_deleted", onDeleted);
+  }, []);
+
+  // Re-sync page 1 on reconnect (e.g. backend cold-start), merging so
+  // "Load more" results aren't lost.
+  useEffect(() => {
+    const onConnect = () => {
+      axios
+        .get(`${API}/api/posts/feed`, { params: { page: 1, limit: 20 } })
+        .then(({ data }) => {
+          const fresh = Array.isArray(data?.posts) ? data.posts : [];
+          setPosts((prev) => {
+            const existingIds = new Set(prev.map((p) => p._id));
+            const missing = fresh.filter((p) => !existingIds.has(p._id));
+            return missing.length ? [...missing, ...prev] : prev;
+          });
+        })
+        .catch(() => {});
+    };
+    socket.on("connect", onConnect);
+    return () => socket.off("connect", onConnect);
+  }, []);
+
+  const loadMore = () => {
+    const next = page + 1;
+    setPage(next);
+    loadPage(next);
+  };
+
+  const updatePost = (id, patch) => {
+    setPosts((prev) => prev.map((p) => (p._id === id ? { ...p, ...patch } : p)));
+  };
+
+  const q = query.trim().toLowerCase();
+  const visiblePosts = q
+    ? posts.filter(
+        (p) =>
+          (p.caption || "").toLowerCase().includes(q) ||
+          (p.artistName || "").toLowerCase().includes(q)
+      )
+    : posts;
 
   return (
     <div style={styles.page}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,600&display=swap');
-        .insp-title { font-family: 'Playfair Display', Georgia, serif; }
-        .insp-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        .insp-search:focus { outline: 2px solid #f97316; }
-      `}</style>
+      <GlobalStyles />
 
-      {/* ══ Cream header card ══ */}
-      <div style={styles.headerCard}>
-        <h1 className="insp-title" style={styles.headline}>Creative Inspiration</h1>
+      {/* ══ Top bar ══ */}
+      <div style={styles.topBar}>
+        <div style={styles.brand}>
+          <span style={styles.brandMark}>A</span>
+          <span style={styles.brandName}>ArtSpire</span>
+        </div>
+        <button
+          style={styles.searchIconBtn}
+          onClick={() => setSearchOpen((v) => !v)}
+          aria-label="Search"
+        >
+          <SearchIcon size={18} stroke="#1a1a1a" />
+        </button>
+      </div>
 
-        <div style={styles.searchWrap}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-          </svg>
+      {searchOpen && (
+        <div style={styles.searchBarWrap}>
+          <SearchIcon size={16} stroke="#6b7280" />
           <input
-            className="insp-search"
+            autoFocus
             style={styles.searchInput}
             placeholder="Search artistic works…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+      )}
 
-        {strip.length > 0 && (
-          <div className="insp-strip" style={{ marginTop: 16 }}>
-            {strip.map((p) => (
-              <button key={p._id} style={styles.stripTile} onClick={() => navigate("/feed")}>
-                {p.mediaType === "video" ? (
-                  <video src={p.mediaUrl} style={styles.stripMedia} muted />
-                ) : (
-                  <img src={p.mediaUrl} alt={p.caption || "inspiration"} style={styles.stripMedia} />
-                )}
-              </button>
-            ))}
-          </div>
+      {/* ══ Tabs ══ */}
+      <div style={styles.tabsRow}>
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            style={{ ...styles.tabBtn, ...(activeTab === tab ? styles.tabBtnActive : {}) }}
+            onClick={() => setActiveTab(tab)}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ Hero banner ══ */}
+      <div style={styles.hero}>
+        {HERO_VIDEO_URL ? (
+          <video
+            style={styles.heroMedia}
+            src={HERO_VIDEO_URL}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        ) : (
+          <div style={styles.heroFallbackBg} className="hero-fallback-bg" />
         )}
-
-        <button style={styles.matchBtn} onClick={() => navigate("/artists")}>
-          Find Matches
-        </button>
+        <div style={styles.heroOverlay} />
+        <div style={styles.heroContent}>
+          <h1 style={styles.heroTitle}>
+            Discover
+            <br />
+            <span style={{ color: "#f97316" }}>Creative Artists</span>
+            <br />
+            Near You
+          </h1>
+          <div style={styles.heroBtnRow}>
+            <button style={styles.heroBtnPrimary} onClick={() => navigate("/artists")}>
+              Explore Artists
+            </button>
+            <button style={styles.heroBtnSecondary} onClick={() => navigate("/artist-register")}>
+              Join As Artist
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ══ Live feed grid ══ */}
       <div style={styles.feedCol}>
-        <FeedGrid searchQuery={query} emptyHint="New work from artists will show up here as soon as it's approved." />
+        {activeTab !== "For You" ? (
+          <div style={styles.comingSoon}>
+            <div style={{ fontSize: 34 }}>✨</div>
+            <div style={{ fontWeight: 800, marginTop: 6 }}>{activeTab} is coming soon</div>
+            <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4 }}>
+              For now, check out what's trending in For You.
+            </div>
+          </div>
+        ) : (
+          <>
+            {visiblePosts.length === 0 && !loading && (
+              <div style={styles.comingSoon}>
+                <div style={{ fontSize: 34 }}>🖼️</div>
+                <div style={{ fontWeight: 800, marginTop: 6 }}>
+                  {q ? "No matches found." : "No posts yet."}
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4 }}>
+                  {q ? "Try a different search term." : "New work from artists will show up here as soon as it's approved."}
+                </div>
+              </div>
+            )}
+
+            <div className="discover-grid">
+              {visiblePosts.map((p) => (
+                <DiscoverCard
+                  key={p._id}
+                  post={p}
+                  actor={actor}
+                  onUpdate={(patch) => updatePost(p._id, patch)}
+                  onOpen={() => navigate("/feed")}
+                />
+              ))}
+            </div>
+
+            {!q && hasMore && (
+              <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
+                {loading ? "Loading…" : "Load more"}
+              </button>
+            )}
+          </>
+        )}
       </div>
 
       <div style={{ height: 96 }} />
@@ -76,42 +241,212 @@ export default function Home() {
   );
 }
 
+/* ── save (like) toggle, reuses the existing like endpoint ──────────────── */
+function useSaveToggle(post, actor, onUpdate) {
+  const saves = post.likes || [];
+  const saved = actor ? saves.includes(actor.id) : false;
+  const toggleSave = async (e) => {
+    e?.stopPropagation();
+    if (!actor) return alert("Log in to save posts.");
+    const next = saved ? saves.filter((id) => id !== actor.id) : [...saves, actor.id];
+    onUpdate({ likes: next });
+    try {
+      await axios.post(`${API}/api/posts/${post._id}/like`, { actorId: actor.id });
+    } catch {
+      onUpdate({ likes: saves });
+    }
+  };
+  return { saved, toggleSave };
+}
+
+/* ── card matching the mockup: avatar/name/Save strip, media, share/more ── */
+function DiscoverCard({ post, actor, onUpdate, onOpen }) {
+  const { saved, toggleSave } = useSaveToggle(post, actor, onUpdate);
+
+  const handleShare = (e) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/feed`;
+    if (navigator.share) {
+      navigator.share({ title: post.artistName || "ArtSpire", url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url);
+    }
+  };
+
+  return (
+    <div className="discover-card" onClick={onOpen}>
+      <div style={styles.cardTopRow}>
+        <div style={styles.cardArtist}>
+          {post.artistAvatar ? (
+            <img src={post.artistAvatar} alt="" style={styles.cardAvatar} />
+          ) : (
+            <div style={styles.cardAvatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>
+          )}
+          <span style={styles.cardArtistName}>{post.artistName || "Unknown artist"}</span>
+        </div>
+        <button
+          style={{ ...styles.saveBtn, ...(saved ? styles.saveBtnActive : {}) }}
+          onClick={toggleSave}
+        >
+          <BookmarkIcon size={11} filled={saved} />
+          {saved ? "Saved" : "Save"}
+        </button>
+      </div>
+
+      <div style={styles.cardMediaWrap}>
+        {post.mediaType === "video" ? (
+          <video src={post.mediaUrl} style={styles.cardMedia} muted loop playsInline autoPlay />
+        ) : (
+          <img src={post.mediaUrl} alt={post.caption || "artwork"} style={styles.cardMedia} />
+        )}
+      </div>
+
+      <div style={styles.cardBottomRow}>
+        <button style={styles.cardActionBtn} onClick={handleShare}>
+          <ShareIcon size={13} /> Share
+        </button>
+        <button style={styles.cardActionBtn} onClick={(e) => { e.stopPropagation(); onOpen(); }}>
+          <DotsIcon size={13} /> More
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── icons ────────────────────────────────────────────────────────────── */
+function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round">
+      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+    </svg>
+  );
+}
+function BookmarkIcon({ size = 12, filled }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "#f97316" : "none"} stroke={filled ? "#f97316" : "#1a1a1a"} strokeWidth="2" strokeLinejoin="round">
+      <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" />
+    </svg>
+  );
+}
+function ShareIcon({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#4b5563" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+      <path d="M16 6l-4-4-4 4" /><path d="M12 2v14" />
+    </svg>
+  );
+}
+function DotsIcon({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#4b5563">
+      <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
+    </svg>
+  );
+}
+
+/* ── global CSS: masonry grid + fallback gradient animation ─────────────── */
+function GlobalStyles() {
+  return (
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,600&display=swap');
+
+      .discover-grid {
+        column-count: 2;
+        column-gap: 12px;
+        width: 100%;
+      }
+      @media (min-width: 560px) { .discover-grid { column-count: 3; } }
+      @media (min-width: 860px) { .discover-grid { column-count: 4; } }
+      @media (min-width: 1180px) { .discover-grid { column-count: 5; } }
+
+      .discover-card {
+        break-inside: avoid;
+        margin-bottom: 12px;
+        background: #ffffff;
+        border-radius: 16px;
+        overflow: hidden;
+        cursor: pointer;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      }
+
+      .hero-fallback-bg {
+        background: linear-gradient(120deg, #7c2d12, #ea580c, #831843, #1e1b4b);
+        background-size: 300% 300%;
+        animation: heroGradient 12s ease infinite;
+      }
+      @keyframes heroGradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .hero-fallback-bg { animation: none; }
+      }
+    `}</style>
+  );
+}
+
 const styles = {
   page: { fontFamily: "'Nunito','Inter',sans-serif", background: "#081120", minHeight: "100vh", color: "#fff" },
-  headerCard: {
-    background: "#F5F1E8",
-    color: "#1a1a1a",
-    padding: "28px 20px 22px",
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+
+  topBar: {
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "16px 18px 4px", background: "#fff",
   },
-  headline: { margin: 0, fontSize: 30, fontStyle: "italic", fontWeight: 600, letterSpacing: 0.5, textAlign: "center" },
-  searchWrap: {
-    marginTop: 18,
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    background: "#fff",
-    border: "1px solid rgba(0,0,0,0.08)",
-    borderRadius: 999,
-    padding: "12px 16px",
+  brand: { display: "flex", alignItems: "center", gap: 8 },
+  brandMark: {
+    width: 26, height: 26, borderRadius: 8, background: "linear-gradient(135deg,#f97316,#ec4899)",
+    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14,
   },
-  searchInput: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 15, color: "#1a1a1a" },
-  stripTile: { border: "none", padding: 0, borderRadius: 14, overflow: "hidden", cursor: "pointer", aspectRatio: "1", background: "#e5e0d5" },
-  stripMedia: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
-  matchBtn: {
-    display: "block",
-    margin: "18px auto 0",
-    padding: "10px 26px",
-    borderRadius: 999,
-    border: "1px solid rgba(0,0,0,0.15)",
-    background: "transparent",
-    color: "#1a1a1a",
-    fontWeight: 700,
-    fontSize: 12,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    cursor: "pointer",
+  brandName: { fontFamily: "'Playfair Display', Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 19, color: "#1a1a1a" },
+  searchIconBtn: { background: "none", border: "none", cursor: "pointer", padding: 6 },
+
+  searchBarWrap: {
+    display: "flex", alignItems: "center", gap: 8, background: "#fff",
+    padding: "0 18px 12px",
   },
-  feedCol: { maxWidth: 1400, margin: "0 auto", padding: "20px 12px 0" },
+  searchInput: {
+    flex: 1, border: "1px solid rgba(0,0,0,0.1)", outline: "none", borderRadius: 999,
+    padding: "9px 14px", fontSize: 14, color: "#1a1a1a", background: "#f5f1e8",
+  },
+
+  tabsRow: { display: "flex", gap: 22, padding: "6px 18px 14px", background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.06)" },
+  tabBtn: { background: "none", border: "none", padding: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#9ca3af", cursor: "pointer", borderBottom: "2px solid transparent" },
+  tabBtnActive: { color: "#1a1a1a", borderBottom: "2px solid #1a1a1a" },
+
+  hero: {
+    position: "relative", margin: "14px 14px 0", borderRadius: 20, overflow: "hidden",
+    minHeight: 190, display: "flex", alignItems: "flex-end",
+  },
+  heroMedia: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" },
+  heroFallbackBg: { position: "absolute", inset: 0 },
+  heroOverlay: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15))" },
+  heroContent: { position: "relative", padding: "18px 18px 20px", width: "100%" },
+  heroTitle: { margin: 0, fontSize: 26, fontWeight: 900, lineHeight: 1.15, color: "#fff" },
+  heroBtnRow: { display: "flex", gap: 10, marginTop: 14 },
+  heroBtnPrimary: { background: "#f97316", color: "#fff", border: "none", borderRadius: 999, padding: "9px 18px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" },
+  heroBtnSecondary: { background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.5)", borderRadius: 999, padding: "9px 18px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" },
+
+  feedCol: { maxWidth: 1400, margin: "0 auto", padding: "18px 12px 0" },
+  comingSoon: { textAlign: "center", color: "#94a3b8", padding: "50px 20px", fontWeight: 600 },
+
+  cardTopRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 8px 6px", gap: 6 },
+  cardArtist: { display: "flex", alignItems: "center", gap: 6, minWidth: 0 },
+  cardAvatar: { width: 20, height: 20, borderRadius: "50%", objectFit: "cover" },
+  cardAvatarFallback: { width: 20, height: 20, borderRadius: "50%", background: "#f97316", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 },
+  cardArtistName: { fontSize: 11.5, fontWeight: 700, color: "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  saveBtn: {
+    display: "flex", alignItems: "center", gap: 4, background: "#fff7ed", border: "1px solid #fed7aa",
+    borderRadius: 999, padding: "3px 9px", fontSize: 10.5, fontWeight: 800, color: "#ea580c", cursor: "pointer", flexShrink: 0,
+  },
+  saveBtnActive: { background: "#f97316", border: "1px solid #f97316", color: "#fff" },
+
+  cardMediaWrap: { width: "100%", background: "#e5e0d5" },
+  cardMedia: { width: "100%", display: "block", objectFit: "cover" },
+
+  cardBottomRow: { display: "flex", gap: 14, padding: "8px 10px 10px" },
+  cardActionBtn: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", fontSize: 11, fontWeight: 700, color: "#4b5563", cursor: "pointer", padding: 0 },
+
+  loadMoreBtn: { display: "block", margin: "6px auto 0", padding: "10px 26px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", fontWeight: 700, color: "#f97316", cursor: "pointer" },
 };

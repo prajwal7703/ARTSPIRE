@@ -45,12 +45,12 @@ export default function BottomNav() {
         </NavIcon>
 
         <NavIcon
-          active={isActive("/explore")}
-          onClick={() => navigate("/explore")}
-          label="Explore"
+          active={isActive("/search") || isActive("/explore")}
+          onClick={() => navigate("/search")}
+          label="Search"
         >
-          <circle cx="12" cy="12" r="9" />
-          <path d="m14.5 9.5-2 5-5 2 2-5z" />
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
         </NavIcon>
 
         {/* Center "Add Post" button, raised like Instagram */}
