@@ -25,7 +25,12 @@ const getActor = () => {
   };
 };
 
-export default function Feed() {
+/* ═══════════════════════════════════════════════════════════════════════
+   FeedGrid — reusable masonry grid of posts. Used standalone on the Home
+   page (with a search box + custom empty hint) and embedded in the full
+   Feed page below.
+   ═══════════════════════════════════════════════════════════════════════ */
+export function FeedGrid({ searchQuery = "", emptyHint = "" }) {
   const actor = getActor();
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(1);
@@ -101,46 +106,51 @@ export default function Feed() {
     setPosts((prev) => prev.map((p) => (p._id === id ? { ...p, ...patch } : p)));
   };
 
-  const openPost = posts.find((p) => p._id === openPostId) || null;
+  const q = searchQuery.trim().toLowerCase();
+  const visiblePosts = q
+    ? posts.filter((p) =>
+        (p.caption || "").toLowerCase().includes(q) ||
+        (p.artistName || "").toLowerCase().includes(q)
+      )
+    : posts;
+
+  const openPost = visiblePosts.find((p) => p._id === openPostId) || null;
 
   return (
-    <div style={styles.page}>
+    <div>
       <MasonryStyles />
-      <Navbar />
 
-      <div style={styles.header}>
-        <h1 style={styles.title}>Portfolio <span style={{ color: "#f97316" }}>Feed</span></h1>
-      </div>
-
-      <div style={styles.feedCol}>
-        {posts.length === 0 && !loading && (
-          <div style={styles.empty}>
-            <div style={{ fontSize: 40 }}>🖼️</div>
-            <div>No posts yet.</div>
-            <div style={{ fontSize: 13, opacity: 0.6, marginTop: 6 }}>
-              {actor?.role === "artist" ? "Submit work samples from your Dashboard to have them appear here." : "Check back soon — artists are just getting started."}
-            </div>
+      {visiblePosts.length === 0 && !loading && (
+        <div style={styles.empty}>
+          <div style={{ fontSize: 40 }}>🖼️</div>
+          <div>{q ? "No matches found." : "No posts yet."}</div>
+          <div style={{ fontSize: 13, opacity: 0.6, marginTop: 6 }}>
+            {q
+              ? "Try a different search term."
+              : emptyHint || (actor?.role === "artist"
+                  ? "Submit work samples from your Dashboard to have them appear here."
+                  : "Check back soon — artists are just getting started.")}
           </div>
-        )}
-
-        <div className="pin-grid">
-          {posts.map((p) => (
-            <PinCard
-              key={p._id}
-              post={p}
-              actor={actor}
-              onUpdate={(patch) => updatePost(p._id, patch)}
-              onOpen={() => setOpenPostId(p._id)}
-            />
-          ))}
         </div>
+      )}
 
-        {hasMore && (
-          <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
-            {loading ? "Loading…" : "Load more"}
-          </button>
-        )}
+      <div className="pin-grid">
+        {visiblePosts.map((p) => (
+          <PinCard
+            key={p._id}
+            post={p}
+            actor={actor}
+            onUpdate={(patch) => updatePost(p._id, patch)}
+            onOpen={() => setOpenPostId(p._id)}
+          />
+        ))}
       </div>
+
+      {!q && hasMore && (
+        <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
+          {loading ? "Loading…" : "Load more"}
+        </button>
+      )}
 
       {openPost && (
         <PinModal
@@ -159,6 +169,26 @@ export default function Feed() {
           onClose={() => setViewersModalPostId(null)}
         />
       )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Feed — the standalone /feed page. Wraps FeedGrid with the Navbar and
+   page header.
+   ═══════════════════════════════════════════════════════════════════════ */
+export default function Feed() {
+  return (
+    <div style={styles.page}>
+      <Navbar />
+
+      <div style={styles.header}>
+        <h1 style={styles.title}>Portfolio <span style={{ color: "#f97316" }}>Feed</span></h1>
+      </div>
+
+      <div style={styles.feedCol}>
+        <FeedGrid />
+      </div>
     </div>
   );
 }
