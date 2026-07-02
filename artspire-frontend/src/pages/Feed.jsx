@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import CreatePostModal from "../components/CreatePostModal";
 import { getCurrentAccount, isArtist, getToken } from "../utils/auth";
 import Navbar from "../Navbar";
 import socket from "../socket";
@@ -28,9 +27,7 @@ export default function Feed() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(true);
-  const [createOpen, setCreateOpen] = useState(false);
   const [viewersModalPostId, setViewersModalPostId] = useState(null);
-  const [banner, setBanner] = useState(null); // e.g. "Submitted for review"
 
   const loadPage = useCallback(async (pageNum) => {
     setLoading(true);
@@ -56,6 +53,16 @@ export default function Feed() {
     };
     socket.on("post_approved", onApproved);
     return () => socket.off("post_approved", onApproved);
+  }, []);
+
+  // If an artist deletes one of their own approved posts, remove it live
+  // from everyone's feed too.
+  useEffect(() => {
+    const onDeleted = ({ postId }) => {
+      setPosts((prev) => prev.filter((p) => p._id !== postId));
+    };
+    socket.on("post_deleted", onDeleted);
+    return () => socket.off("post_deleted", onDeleted);
   }, []);
 
   // If the socket drops (e.g. backend cold-starts on Render) and reconnects,
@@ -87,16 +94,6 @@ export default function Feed() {
     loadPage(next);
   };
 
-  // A post the artist just created is PENDING — it isn't visible in the
-  // public feed yet, so we don't add it to the list. It'll appear live
-  // (for everyone, via the "post_approved" socket event above) once an
-  // admin approves it.
-  const onCreated = () => {
-    setCreateOpen(false);
-    setBanner("Your post was submitted and is awaiting admin review. It'll appear in the Feed once approved.");
-    setTimeout(() => setBanner(null), 6000);
-  };
-
   const reels = posts.filter((p) => p.mediaType === "video");
   const list = tab === "reels" ? reels : posts;
 
@@ -114,16 +111,7 @@ export default function Feed() {
             Reels
           </button>
         </div>
-        {actor?.role === "artist" && (
-          <button style={styles.newPostBtn} onClick={() => setCreateOpen(true)}>+ New Post</button>
-        )}
       </div>
-
-      {banner && (
-        <div style={styles.banner}>
-          ⏳ {banner}
-        </div>
-      )}
 
       <div style={styles.feedCol}>
         {list.length === 0 && !loading && (
@@ -131,7 +119,7 @@ export default function Feed() {
             <div style={{ fontSize: 40 }}>🖼️</div>
             <div>No {tab === "reels" ? "reels" : "posts"} yet.</div>
             <div style={{ fontSize: 13, opacity: 0.6, marginTop: 6 }}>
-              {actor?.role === "artist" ? "Be the first to share your work." : "Check back soon — artists are just getting started."}
+              {actor?.role === "artist" ? "Submit work samples from your Dashboard to have them appear here." : "Check back soon — artists are just getting started."}
             </div>
           </div>
         )}
@@ -155,10 +143,6 @@ export default function Feed() {
           </button>
         )}
       </div>
-
-      {createOpen && actor && (
-        <CreatePostModal actor={actor} onClose={() => setCreateOpen(false)} onCreated={onCreated} apiBase={API} />
-      )}
 
       {viewersModalPostId && (
         <ViewersModal
@@ -397,8 +381,6 @@ const styles = {
   tabs:        { display: "flex", gap: 6 },
   tabBtn:      { padding: "6px 14px", borderRadius: 20, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", fontSize: 12, fontWeight: 700, color: "#cbd5e1", cursor: "pointer" },
   tabActive:   { background: "#f97316", color: "#fff", border: "1px solid #f97316" },
-  newPostBtn:  { padding: "7px 14px", borderRadius: 8, border: "none", background: "#f97316", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer" },
-  banner:      { maxWidth: 470, margin: "0 auto 14px", padding: "0 12px" },
   feedCol:     { maxWidth: 470, margin: "0 auto", display: "flex", flexDirection: "column", gap: 16, padding: "0 12px" },
   empty:       { textAlign: "center", color: "#94a3b8", padding: "60px 0", fontWeight: 600 },
   post:        { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14, overflow: "hidden" },

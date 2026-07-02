@@ -106,6 +106,57 @@ router.post("/from-url", async (req, res) => {
   }
 });
 
+// ── DELETE A POST (artist deleting their own — any status) ─────────────────
+// DELETE /api/posts/:id
+// body: { artistId }  — required for an ownership check so one artist can't
+// delete another artist's post by guessing an ID.
+// If the post was approved, also strips its mediaUrl out of Artist.works so
+// it disappears from the public profile immediately, not just the Feed.
+router.delete("/:id", async (req, res) => {
+  try {
+    const { artistId } = req.body;
+    if (!artistId) return res.status(400).json({ message: "artistId is required" });
+
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    if (String(post.artistId) !== String(artistId)) {
+      return res.status(403).json({ message: "Not authorized to delete this post" });
+    }
+
+    const wasApproved = post.status === "approved";
+
+    if (wasApproved && Artist) {
+      try {
+        const artist = await Artist.findById(post.artistId);
+        if (artist && Array.isArray(artist.works)) {
+          artist.works = artist.works.filter((u) => u !== post.mediaUrl);
+          await artist.save();
+        }
+      } catch (e) {
+        console.error("Failed to remove deleted post's mediaUrl from artist works:", e);
+      }
+    }
+
+    await Post.findByIdAndDelete(req.params.id);
+
+    const io = getIo(req);
+    if (io) {
+      // Tell admin sessions to drop it from their pending queue, if it was there
+      io.to("admin_room").emit("post_reviewed", { postId: post._id, status: "deleted" });
+      // Tell everyone on the Feed to remove it live, if it was public
+      if (wasApproved) {
+        io.emit("post_deleted", { postId: post._id });
+      }
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete post error:", err);
+    res.status(500).json({ message: "Failed to delete post" });
+  }
+});
+
 // ── PUBLIC FEED — approved posts only ───────────────────────────────────────
 // GET /api/posts/feed?page=1&limit=10
 router.get("/feed", async (req, res) => {

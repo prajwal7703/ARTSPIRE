@@ -795,12 +795,14 @@ function ChatTab({ artistId }) {
 }
 
 // ─── EDIT PROFILE TAB ─────────────────────────────────────────────────────────
-// ─── EDIT PROFILE TAB (updated) ───────────────────────────────────────────────
 // Work samples now go through the same moderation pipeline as the Feed:
 // uploading a work sample creates a PENDING Post (visible to admin for
 // approval) instead of writing directly into the artist's public `works`
 // array. Only on admin approval does it get synced into `works` (this sync
 // already happens server-side in adminRoutes.js's PUT /posts/:id/status).
+//
+// Delete capability covers all three states — approved (live), pending, and
+// rejected — via a single unified DELETE /api/posts/:id route on the backend.
 function EditProfileTab({ artistId }) {
   const [form,         setForm]         = useState(null);
   const [loading,      setLoading]      = useState(true);
@@ -850,6 +852,42 @@ function EditProfileTab({ artistId }) {
     return () => socket.off("post_status_updated", onStatusUpdate);
   }, [artistId]);
 
+  // Deletes a work sample post regardless of its status (approved / pending
+  // / rejected). Calls the DELETE /api/posts/:id route, which also strips
+  // the mediaUrl out of Artist.works server-side if it was approved — so
+  // this is the single source of truth for removing a work sample, whether
+  // it's live, still awaiting review, or was rejected.
+  const deletePost = async (post) => {
+    if (!window.confirm("Delete this work sample? This can't be undone.")) return;
+    try {
+      await axios.delete(`${API}/api/posts/${post._id}`, {
+        data: { artistId },
+      });
+      setMyPosts(prev => prev.filter(p => p._id !== post._id));
+      if (post.status === "approved") {
+        setForm(f => ({ ...f, works: (f.works || []).filter(u => u !== post.mediaUrl) }));
+      }
+    } catch (err) {
+      console.error("Failed to delete post:", err);
+      setMsg({ type: "error", text: "Failed to delete. Please try again." });
+    }
+  };
+
+  // Matches a "Live" works URL back to its Post document (if one exists) so
+  // the delete button can call the proper DELETE /api/posts/:id route and
+  // clean up the backend record, not just the display list. Falls back to
+  // the old URL-only removeWork() for pre-existing works that predate the
+  // Post system and have no matching Post document (e.g. very old profiles
+  // from before the backfill tool ran).
+  const deleteLiveWork = (url) => {
+    const matchingPost = myPosts.find(p => p.mediaUrl === url && p.status === "approved");
+    if (matchingPost) {
+      deletePost(matchingPost);
+    } else {
+      removeWork(url);
+    }
+  };
+
   const set = (k,v) => setForm(f=>({ ...f, [k]:v }));
 
   const onImageChange = (e) => {
@@ -893,9 +931,8 @@ function EditProfileTab({ artistId }) {
     }
   };
 
-  // Removing an already-approved work still edits the live `works` array
-  // directly — that's fine, since it's just taking something down, not
-  // putting something new up without review.
+  // Legacy URL-only removal — kept as a fallback inside deleteLiveWork()
+  // for works entries with no matching Post document.
   const removeWork = async (urlToRemove) => {
     const updatedWorks = (form.works || []).filter(u => u !== urlToRemove);
     setForm(f => ({ ...f, works: updatedWorks }));
@@ -910,9 +947,9 @@ function EditProfileTab({ artistId }) {
   const save = async () => {
     setSaving(true); setMsg({ type:"", text:"" });
     try {
-      // `works` is managed exclusively through the Post approval flow now —
-      // never send it from this generic save, so a stale local copy can't
-      // accidentally overwrite the server's approved list.
+      // `works` is managed exclusively through the Post approval/delete flow
+      // now — never send it from this generic save, so a stale local copy
+      // can't accidentally overwrite the server's approved list.
       const { works, ...formWithoutWorks } = form;
       if (imageFile) {
         const fd = new FormData();
@@ -1020,8 +1057,8 @@ function EditProfileTab({ artistId }) {
                 <div key={url + i} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"1px solid #e2e8f0" }}>
                   <img src={url} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
                   <button
-                    onClick={() => removeWork(url)}
-                    title="Remove"
+                    onClick={() => deleteLiveWork(url)}
+                    title="Delete"
                     style={st({ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", cursor:"pointer", fontSize:12, lineHeight:1 })}
                   >✕</button>
                 </div>
@@ -1037,6 +1074,11 @@ function EditProfileTab({ artistId }) {
               {pendingPosts.map(p => (
                 <div key={p._id} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"2px solid #fde68a", opacity:0.75 }}>
                   <img src={p.mediaUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  <button
+                    onClick={() => deletePost(p)}
+                    title="Delete"
+                    style={st({ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", cursor:"pointer", fontSize:12, lineHeight:1 })}
+                  >✕</button>
                   <span style={{ position:"absolute", bottom:4, left:4, right:4, background:"rgba(0,0,0,0.65)", color:"#fef9c3", fontSize:9, fontWeight:800, padding:"3px 6px", borderRadius:6, textAlign:"center" }}>Pending</span>
                 </div>
               ))}
@@ -1051,6 +1093,11 @@ function EditProfileTab({ artistId }) {
               {rejectedPosts.map(p => (
                 <div key={p._id} title={p.rejectionReason || "Not approved"} style={{ position:"relative", aspectRatio:"1/1", borderRadius:10, overflow:"hidden", border:"2px solid #fca5a5", opacity:0.6 }}>
                   <img src={p.mediaUrl} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+                  <button
+                    onClick={() => deletePost(p)}
+                    title="Delete"
+                    style={st({ position:"absolute", top:4, right:4, width:22, height:22, borderRadius:"50%", background:"rgba(0,0,0,0.6)", color:"#fff", border:"none", cursor:"pointer", fontSize:12, lineHeight:1 })}
+                  >✕</button>
                   <span style={{ position:"absolute", bottom:4, left:4, right:4, background:"rgba(0,0,0,0.65)", color:"#fecaca", fontSize:9, fontWeight:800, padding:"3px 6px", borderRadius:6, textAlign:"center" }}>Rejected</span>
                 </div>
               ))}
@@ -1094,7 +1141,6 @@ function EditProfileTab({ artistId }) {
 }
 
 // ─── REVIEWS TAB ──────────────────────────────────────────────────────────────
-// ✅ FIXED: Proper error handling, rating display, and fallbacks
 function ReviewsTab({ artistId }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
