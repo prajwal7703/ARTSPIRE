@@ -185,6 +185,56 @@ router.get("/posts/pending", checkAdmin, async (req, res) => {
   }
 });
 
+// ── BACKFILL: import artists' existing "works" images into the Feed ────────
+// POST /api/admin/posts/backfill-works
+// One-time (but safe to re-run) migration for artists who already had work
+// samples on their profile before the Feed/Post moderation system existed.
+// For every artist, for every image URL in their `works` array, create an
+// approved Post if one doesn't already exist for that artist+mediaUrl pair.
+router.post("/posts/backfill-works", checkAdmin, async (req, res) => {
+  if (!Post) return res.status(500).json({ message: "Post model not available" });
+  if (!Artist) return res.status(500).json({ message: "Artist model not available" });
+
+  try {
+    const artists = await Artist.find().select("_id name image profileImage works");
+
+    let created = 0;
+    let skipped = 0;
+
+    for (const artist of artists) {
+      const works = Array.isArray(artist.works) ? artist.works : [];
+      if (!works.length) continue;
+
+      for (const mediaUrl of works) {
+        if (!mediaUrl) continue;
+
+        const exists = await Post.findOne({ artistId: artist._id, mediaUrl });
+        if (exists) {
+          skipped++;
+          continue;
+        }
+
+        await Post.create({
+          artistId: artist._id,
+          artistName: artist.name || "Unknown artist",
+          artistAvatar: artist.image || artist.profileImage || "",
+          mediaUrl,
+          mediaType: "image",
+          caption: "",
+          status: "approved",
+          reviewedAt: new Date(),
+        });
+        created++;
+      }
+    }
+
+    res.json({ success: true, created, skipped });
+  } catch (err) {
+    console.error("Backfill works error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 // ── ALL POSTS, ANY STATUS (optional history view) ───────────────────────────
 router.get("/posts", checkAdmin, async (req, res) => {
   if (!Post) return res.json([]);
