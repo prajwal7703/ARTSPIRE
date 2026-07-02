@@ -197,13 +197,16 @@ router.post("/posts/backfill-works", checkAdmin, async (req, res) => {
   try {
     // Artists live in two places: the User collection (role: "artist") and
     // a separate Artist collection — same pattern as getMergedArtists() in
-    // artistRoutes.js. Check both so we don't silently skip half of them.
-    const usersAsArtists = await User.find({ role: "artist" }).select("_id name image profileImage works");
+    // artistRoutes.js. Use .lean() with NO field restriction: if `works`
+    // isn't declared in the Mongoose schema, a .select("...works") call
+    // silently strips it even though the raw Mongo document has it. .lean()
+    // returns the actual stored document, bypassing schema hydration.
+    const usersAsArtists = await User.find({ role: "artist" }).lean();
 
     let artistDocs = [];
     if (Artist) {
       try {
-        artistDocs = await Artist.find().select("_id name image profileImage works");
+        artistDocs = await Artist.find().lean();
       } catch (e) {
         console.error("Backfill: Artist.find failed:", e.message);
       }
