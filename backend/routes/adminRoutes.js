@@ -218,6 +218,9 @@ router.post("/posts/backfill-works", checkAdmin, async (req, res) => {
       return true;
     });
 
+    console.log(`Backfill: found ${usersAsArtists.length} User-artists, ${artistDocs.length} Artist-docs, ${artists.length} total after dedupe`);
+    console.log("Backfill: works counts per artist:", artists.map(a => ({ id: String(a._id), name: a.name, worksCount: Array.isArray(a.works) ? a.works.length : "not-array", worksType: typeof a.works })));
+
     let created = 0;
     let skipped = 0;
 
@@ -234,20 +237,25 @@ router.post("/posts/backfill-works", checkAdmin, async (req, res) => {
           continue;
         }
 
-        await Post.create({
-          artistId: artist._id,
-          artistName: artist.name || "Unknown artist",
-          artistAvatar: artist.image || artist.profileImage || "",
-          mediaUrl,
-          mediaType: "image",
-          caption: "",
-          status: "approved",
-          reviewedAt: new Date(),
-        });
-        created++;
+        try {
+          await Post.create({
+            artistId: artist._id,
+            artistName: artist.name || "Unknown artist",
+            artistAvatar: artist.image || artist.profileImage || "",
+            mediaUrl,
+            mediaType: "image",
+            caption: "",
+            status: "approved",
+            reviewedAt: new Date(),
+          });
+          created++;
+        } catch (createErr) {
+          console.error(`Backfill: Post.create failed for artist ${artist._id}, url ${mediaUrl}:`, createErr.message);
+        }
       }
     }
 
+    console.log(`Backfill: done. created=${created}, skipped=${skipped}`);
     res.json({ success: true, created, skipped });
   } catch (err) {
     console.error("Backfill works error:", err);
