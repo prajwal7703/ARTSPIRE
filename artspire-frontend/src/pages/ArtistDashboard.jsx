@@ -1378,11 +1378,15 @@ function EarningsTab({ artistId }) {
 }
 
 // ─── MAIN DASHBOARD ───────────────────────────────────────────────────────────
+// Mobile layout: the fixed 220px sidebar is replaced by a slide-in drawer,
+// triggered by a hamburger button in a top bar. Desktop layout is unchanged.
 export default function ArtistDashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab,  setActiveTab]  = useState(searchParams.get("tab") || "bookings");
   const [artistData, setArtistData] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const artist   = getArtist();
   const artistId = artist?._id;
@@ -1394,43 +1398,97 @@ export default function ArtistDashboard() {
       .catch(()=>{});
   },[artistId]);
 
+  // Close the drawer automatically if the screen is resized past the mobile
+  // breakpoint while it's open, so it doesn't get stuck open on desktop.
+  useEffect(() => { if (!isMobile) setDrawerOpen(false); }, [isMobile]);
+
   const displayName = artistData?.name || artist?.name || "Artist";
+  const activeTabMeta = TABS.find(t => t.id === activeTab);
+
+  const selectTab = (id) => {
+    setActiveTab(id);
+    if (isMobile) setDrawerOpen(false);
+  };
+
+  const SidebarContent = () => (
+    <>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28, paddingBottom:20, borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
+        <div style={{ width:42, height:42, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:22, flexShrink:0, overflow:"hidden" }}>
+          {artistData?.image || artistData?.profileImage
+            ? <img src={artistData.image||artistData.profileImage} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
+            : displayName[0]?.toUpperCase()
+          }
+        </div>
+        <div style={{ minWidth:0, flex:1 }}>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:"#fff", letterSpacing:0.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{displayName}</div>
+          <div style={st({ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:1 })}>{artistData?.category||"Artist"}</div>
+        </div>
+        {isMobile && (
+          <button onClick={()=>setDrawerOpen(false)} style={{ background:"rgba(255,255,255,0.1)", border:"none", color:"#fff", width:30, height:30, borderRadius:8, fontSize:16, cursor:"pointer", flexShrink:0 }}>✕</button>
+        )}
+      </div>
+      <nav style={{ display:"flex", flexDirection:"column", gap:4 }}>
+        {TABS.map(tab=>(
+          <button key={tab.id} onClick={()=>selectTab(tab.id)} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"none", cursor:"pointer", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13, textAlign:"left", background:activeTab===tab.id?"rgba(255,255,255,0.12)":"transparent", color:activeTab===tab.id?"#fff":"rgba(255,255,255,0.6)", borderLeft:activeTab===tab.id?"3px solid #93c5fd":"3px solid transparent", transition:"all 0.15s" }}>
+            <span style={{ fontSize:16 }}>{tab.icon}</span>
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </nav>
+      <div style={{ marginTop:"auto", paddingTop:20, textAlign:"center" }}>
+        <button onClick={()=>{ setDrawerOpen(false); navigate(`/artist-profile/${artistId}`); }} style={st({ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"rgba(255,255,255,0.7)", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", width:"100%" })}>
+          👤 View Profile
+        </button>
+      </div>
+    </>
+  );
 
   return (
-    <div style={{ display:"flex", height:"100vh", fontFamily:"'Nunito',sans-serif", background:"#f8fafc", overflow:"hidden" }}>
+    <div style={{ display:"flex", flexDirection: isMobile ? "column" : "row", height:"100vh", fontFamily:"'Nunito',sans-serif", background:"#f8fafc", overflow:"hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
-      {/* Sidebar */}
-      <aside style={{ width:220, background:"#1e3a8a", display:"flex", flexDirection:"column", padding:"24px 14px 16px", flexShrink:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:28, paddingBottom:20, borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ width:42, height:42, borderRadius:"50%", background:"#3b82f6", color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"'Bebas Neue',sans-serif", fontSize:22, flexShrink:0, overflow:"hidden" }}>
-            {artistData?.image || artistData?.profileImage
-              ? <img src={artistData.image||artistData.profileImage} alt="" style={{ width:"100%", height:"100%", objectFit:"cover" }} />
-              : displayName[0]?.toUpperCase()
-            }
-          </div>
-          <div style={{ minWidth:0 }}>
-            <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:"#fff", letterSpacing:0.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{displayName}</div>
-            <div style={st({ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:1 })}>{artistData?.category||"Artist"}</div>
-          </div>
-        </div>
-        <nav style={{ display:"flex", flexDirection:"column", gap:4 }}>
-          {TABS.map(tab=>(
-            <button key={tab.id} onClick={()=>setActiveTab(tab.id)} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, border:"none", cursor:"pointer", fontFamily:"'Nunito',sans-serif", fontWeight:700, fontSize:13, textAlign:"left", background:activeTab===tab.id?"rgba(255,255,255,0.12)":"transparent", color:activeTab===tab.id?"#fff":"rgba(255,255,255,0.6)", borderLeft:activeTab===tab.id?"3px solid #93c5fd":"3px solid transparent", transition:"all 0.15s" }}>
-              <span style={{ fontSize:16 }}>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div style={{ marginTop:"auto", paddingTop:20, textAlign:"center" }}>
-          <button onClick={()=>navigate(`/artist-profile/${artistId}`)} style={st({ background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.2)", color:"rgba(255,255,255,0.7)", padding:"8px 14px", borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", width:"100%" })}>
-            👤 View Profile
+      {/* Mobile top bar — hamburger + current tab name, replaces the sidebar's role */}
+      {isMobile && (
+        <div style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:"#1e3a8a", flexShrink:0 }}>
+          <button onClick={()=>setDrawerOpen(true)} style={{ background:"rgba(255,255,255,0.12)", border:"none", color:"#fff", width:36, height:36, borderRadius:9, fontSize:17, cursor:"pointer", flexShrink:0 }}>
+            ☰
           </button>
+          <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+            <span style={{ fontSize:16 }}>{activeTabMeta?.icon}</span>
+            <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:17, color:"#fff", letterSpacing:0.5, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+              {activeTabMeta?.label || "Dashboard"}
+            </span>
+          </div>
         </div>
-      </aside>
+      )}
+
+      {/* Desktop sidebar — always visible, part of normal flex flow */}
+      {!isMobile && (
+        <aside style={{ width:220, background:"#1e3a8a", display:"flex", flexDirection:"column", padding:"24px 14px 16px", flexShrink:0 }}>
+          <SidebarContent />
+        </aside>
+      )}
+
+      {/* Mobile drawer — overlay + slide-in panel, only rendered while open */}
+      {isMobile && drawerOpen && (
+        <>
+          <div
+            onClick={()=>setDrawerOpen(false)}
+            style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)", zIndex:200 }}
+          />
+          <aside style={{
+            position:"fixed", top:0, left:0, bottom:0, width:"78%", maxWidth:280,
+            background:"#1e3a8a", display:"flex", flexDirection:"column",
+            padding:"24px 14px 16px", zIndex:201, boxShadow:"2px 0 24px rgba(0,0,0,0.3)",
+            overflowY:"auto",
+          }}>
+            <SidebarContent />
+          </aside>
+        </>
+      )}
 
       {/* Main */}
-      <main style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
+      <main style={{ flex:1, overflowY:"auto", overflowX:"hidden", minHeight:0 }}>
         {!artistId ? (
           <div style={st({ display:"flex", alignItems:"center", justifyContent:"center", height:"100%", color:"#94a3b8", fontSize:14 })}>Artist not found. Please log in again.</div>
         ) : (
