@@ -193,10 +193,30 @@ router.get("/posts/pending", checkAdmin, async (req, res) => {
 // approved Post if one doesn't already exist for that artist+mediaUrl pair.
 router.post("/posts/backfill-works", checkAdmin, async (req, res) => {
   if (!Post) return res.status(500).json({ message: "Post model not available" });
-  if (!Artist) return res.status(500).json({ message: "Artist model not available" });
 
   try {
-    const artists = await Artist.find().select("_id name image profileImage works");
+    // Artists live in two places: the User collection (role: "artist") and
+    // a separate Artist collection — same pattern as getMergedArtists() in
+    // artistRoutes.js. Check both so we don't silently skip half of them.
+    const usersAsArtists = await User.find({ role: "artist" }).select("_id name image profileImage works");
+
+    let artistDocs = [];
+    if (Artist) {
+      try {
+        artistDocs = await Artist.find().select("_id name image profileImage works");
+      } catch (e) {
+        console.error("Backfill: Artist.find failed:", e.message);
+      }
+    }
+
+    // De-dupe by _id in case the same artist somehow exists in both places
+    const seenIds = new Set();
+    const artists = [...usersAsArtists, ...artistDocs].filter((a) => {
+      const id = String(a._id);
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
 
     let created = 0;
     let skipped = 0;
