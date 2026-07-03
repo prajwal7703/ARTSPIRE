@@ -1,9 +1,11 @@
 // artspire-frontend/src/pages/Explore.jsx
 //
-// "Near You" tab — live map of online artists, matching the RAISE REQUEST /
-// SEARCH AREA mockup. Real data only: pins come from
+// "Near You" map — matches the Explore Artists mockup (purple pill filters,
+// avatar pins with distance badges, Nearby Artists list below the map).
+// Real data only: pins + list come from
 //   GET /api/artists/nearby?lat=&lng=&radius=&category=&onlineOnly=true
 // tapping a pin opens the booking sheet, which POSTs to /api/bookings.
+// "View Profile" in the list navigates to /dashboard/:artistId.
 //
 // REQUIRES ON THE BACKEND (if the map looks empty, check these first):
 //   1. bookingRoutes mounted in server.js:
@@ -14,15 +16,13 @@
 //   3. Artists actually have `location.coordinates` set AND `locationUpdatedAt`
 //      refreshed within the last 20 minutes — otherwise onlineOnly=true
 //      returns an empty array (that's correct behavior, not a bug).
-//   4. /nearby route patched to accept ?category= and ?onlineOnly= (see
-//      artistRoutes.js patch already discussed).
+//   4. /nearby route accepts ?category= and ?onlineOnly=.
 //
 // Install once:  npm install leaflet react-leaflet
 //
-// Adjust the two paths below marked ADJUST-ME if your project structure
-// differs from what's assumed here.
+// Paths marked ADJUST-ME assume your project structure — fix if it differs.
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
@@ -41,7 +41,7 @@ const TILE_ATTR =
 const FALLBACK_CENTER = { lat: 12.9716, lng: 77.5946 }; // Bengaluru — used if geolocation is denied
 
 const CATEGORIES = [
-  "All",
+  "All Categories",
   "Painter",
   "Sketch Artist",
   "Portrait Artist",
@@ -51,7 +51,18 @@ const CATEGORIES = [
   "Illustrator",
 ];
 
+const DISTANCES = [
+  { label: "All Distance", km: 25 },
+  { label: "Within 1 km", km: 1 },
+  { label: "Within 3 km", km: 3 },
+  { label: "Within 5 km", km: 5 },
+  { label: "Within 10 km", km: 10 },
+  { label: "Within 50 km", km: 50 },
+];
+
 const DURATIONS = ["1 hour", "2 hours", "3 hours", "Half day", "Full day"];
+
+const PIN_RINGS = ["#EC4899", "#14B8A6", "#F59E0B", "#8B5CF6"]; // cycled per artist
 
 const getActor = () => {
   const account = getCurrentAccount();
@@ -84,53 +95,46 @@ function escapeHtml(str = "") {
     .replace(/"/g, "&quot;");
 }
 
-function boundsToRadiusMeters(bounds, center) {
-  const ne = bounds.getNorthEast();
-  const R = 6371000;
-  const dLat = ((ne.lat - center.lat) * Math.PI) / 180;
-  const dLng = ((ne.lng - center.lng) * Math.PI) / 180;
-  const a =
+// Haversine — straight-line km between two lat/lng points, used for the
+// distance badges on pins and in the Nearby Artists list.
+function distanceKm(a, b) {
+  if (!a || !b) return null;
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((center.lat * Math.PI) / 180) * Math.cos((ne.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-  return Math.max(1000, Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))));
+    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-// ── "You" marker: blue arrow + pill label, matches mockup ──────────────
+// ── "You" marker: purple dot with a soft pulse ring, matches mockup ─────
 const youIcon = L.divIcon({
   className: "you-pin",
-  html: `
-    <div class="you-wrap">
-      <div class="you-dot">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L20 20 L12 16 L4 20 Z"/></svg>
-      </div>
-      <span class="you-label">You</span>
-    </div>
-  `,
-  iconSize: [46, 46],
-  iconAnchor: [23, 23],
+  html: `<div class="you-pulse"><div class="you-dot"></div></div>`,
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
 });
 
-// ── Artist marker: square artwork/avatar thumbnail card + name, matches mockup ──
-function createArtistIcon(artist) {
-  const name = escapeHtml(artist.name || "Artist");
-  const initial = (artist.name || "?").trim()[0]?.toUpperCase() || "?";
+// ── Artist marker: round avatar with colored ring + distance pill below ──
+function createArtistIcon(artist, ringColor, km) {
   const thumb = artist.portfolioPreview || artist.avatar || artist.profileImage || artist.image;
+  const initial = (artist.name || "?").trim()[0]?.toUpperCase() || "?";
   const thumbHtml = thumb
-    ? `<img src="${escapeHtml(thumb)}" class="artist-thumb-img" />`
-    : `<div class="artist-thumb-fallback">${initial}</div>`;
+    ? `<img src="${escapeHtml(thumb)}" class="pin-avatar-img" />`
+    : `<div class="pin-avatar-fallback" style="background:${ringColor}">${initial}</div>`;
+  const kmLabel = km != null ? `${km.toFixed(1)} km` : "";
 
   const html = `
-    <div class="artist-pin-card">
-      <div class="artist-thumb-wrap">
+    <div class="pin-wrap">
+      <div class="pin-avatar-ring" style="border-color:${ringColor}">
         ${thumbHtml}
-        <span class="artist-online-dot"></span>
       </div>
-      <div class="artist-pin-name">${name}</div>
+      <div class="pin-badge">${kmLabel}</div>
     </div>
-    <div class="pin-tail"></div>
   `;
 
-  return L.divIcon({ html, className: "artist-pin", iconSize: [72, 84], iconAnchor: [36, 84] });
+  return L.divIcon({ html, className: "artist-pin", iconSize: [64, 74], iconAnchor: [32, 40] });
 }
 
 function MapWatcher({ onMoved }) {
@@ -146,11 +150,13 @@ export default function Explore() {
   const [center, setCenter] = useState(FALLBACK_CENTER);
   const [youLocation, setYouLocation] = useState(null);
   const [locating, setLocating] = useState(true);
-  const [category, setCategory] = useState("All");
+
+  const [category, setCategory] = useState("All Categories");
+  const [distanceKmFilter, setDistanceKmFilter] = useState(25);
+
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [areaQuery, setAreaQuery] = useState("");
 
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [artistDetail, setArtistDetail] = useState(null);
@@ -165,48 +171,49 @@ export default function Explore() {
   const [bookError, setBookError] = useState("");
   const [bookedToast, setBookedToast] = useState(false);
 
-  // Join both the raw-id room (existing request notifications) and the
-  // user_/artist_-prefixed room bookingRoutes.js actually emits to.
   useEffect(() => {
     if (!actor?.id) return;
     socket.emit("join_room", actor.id);
     socket.emit("join_room", actor.role === "artist" ? `artist_${actor.id}` : `user_${actor.id}`);
   }, [actor?.id, actor?.role]);
 
-  const fetchNearby = useCallback(
-    async (lat, lng, radius = 25000, cat = category) => {
-      setLoading(true);
-      setLoadError("");
-      try {
-        const { data } = await axios.get(`${API}/api/artists/nearby`, {
-          params: { lat, lng, radius, category: cat, onlineOnly: true },
-        });
-        setArtists(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error("Failed to load nearby artists:", e);
-        setLoadError(
-          e.response?.status === 404
-            ? "Nearby endpoint not found — check the backend route is deployed."
-            : "Couldn't load nearby artists. Pull to retry."
-        );
-        setArtists([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [category]
-  );
+  const fetchNearby = useCallback(async (lat, lng, radiusMeters, cat) => {
+    setLoading(true);
+    setLoadError("");
+    try {
+      const { data } = await axios.get(`${API}/api/artists/nearby`, {
+        params: {
+          lat,
+          lng,
+          radius: radiusMeters,
+          category: cat === "All Categories" ? "All" : cat,
+          onlineOnly: true,
+        },
+      });
+      setArtists(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Failed to load nearby artists:", e);
+      setLoadError(
+        e.response?.status === 404
+          ? "Nearby endpoint not found — check the backend route is deployed."
+          : "Couldn't load nearby artists. Pull to retry."
+      );
+      setArtists([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     getLocation()
       .then(({ lat, lng }) => {
         setYouLocation({ lat, lng });
         setCenter({ lat, lng });
-        fetchNearby(lat, lng, 25000, category);
+        fetchNearby(lat, lng, distanceKmFilter * 1000, category);
       })
       .catch(() => {
         setCenter(FALLBACK_CENTER);
-        fetchNearby(FALLBACK_CENTER.lat, FALLBACK_CENTER.lng, 25000, category);
+        fetchNearby(FALLBACK_CENTER.lat, FALLBACK_CENTER.lng, distanceKmFilter * 1000, category);
       })
       .finally(() => setLocating(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,46 +222,40 @@ export default function Explore() {
   const handleCategoryChange = (cat) => {
     setCategory(cat);
     const c = mapRef.current ? mapRef.current.getCenter() : center;
-    fetchNearby(c.lat, c.lng, 25000, cat);
+    fetchNearby(c.lat, c.lng, distanceKmFilter * 1000, cat);
+  };
+
+  const handleDistanceChange = (km) => {
+    setDistanceKmFilter(km);
+    const c = mapRef.current ? mapRef.current.getCenter() : center;
+    fetchNearby(c.lat, c.lng, km * 1000, category);
+    if (mapRef.current) {
+      const zoom = km <= 1 ? 15 : km <= 5 ? 13 : km <= 10 ? 12 : 11;
+      mapRef.current.setView([c.lat, c.lng], zoom, { animate: true });
+    }
+  };
+
+  const handleRecenter = () => {
+    if (!youLocation || !mapRef.current) return;
+    mapRef.current.setView([youLocation.lat, youLocation.lng], 14, { animate: true });
+    fetchNearby(youLocation.lat, youLocation.lng, distanceKmFilter * 1000, category);
   };
 
   const handleMapMoved = useCallback((map) => {
     mapRef.current = map;
   }, []);
 
-  const handleSearchArea = () => {
-    const map = mapRef.current;
-    if (!map) return;
-    const c = map.getCenter();
-    const radius = boundsToRadiusMeters(map.getBounds(), c);
-    fetchNearby(c.lat, c.lng, radius, category);
-  };
-
-  const handleAreaSearch = async (e) => {
-    e.preventDefault();
-    const q = areaQuery.trim();
-    if (!q || !mapRef.current) return;
-    try {
-      const { data } = await axios.get("https://nominatim.openstreetmap.org/search", {
-        params: { q, format: "json", limit: 1 },
-      });
-      if (data?.[0]) {
-        const lat = parseFloat(data[0].lat);
-        const lng = parseFloat(data[0].lon);
-        mapRef.current.setView([lat, lng], 13, { animate: true });
-        fetchNearby(lat, lng, 25000, category);
-      }
-    } catch (err) {
-      console.error("Area search failed:", err);
-    }
-  };
-
-  // ── RAISE REQUEST: matches the blue button in the mockup. Adjust the
-  // destination route to wherever your app's general "post a request" flow
-  // actually lives — /post is a placeholder guess.
-  const handleRaiseRequest = () => {
-    navigate("/post"); // ADJUST-ME to your real "raise a request" route
-  };
+  // ── Nearby Artists list — same data as the pins, sorted closest-first ───
+  const nearbyList = useMemo(() => {
+    const origin = youLocation || center;
+    return artists
+      .filter((a) => a.location?.coordinates?.length === 2)
+      .map((a) => ({
+        ...a,
+        km: distanceKm(origin, { lat: a.location.coordinates[1], lng: a.location.coordinates[0] }),
+      }))
+      .sort((a, b) => (a.km ?? Infinity) - (b.km ?? Infinity));
+  }, [artists, youLocation, center]);
 
   const openArtist = async (a) => {
     setSelectedArtist(a);
@@ -309,7 +310,7 @@ export default function Explore() {
         userEmail: actor.email || "",
         eventType:
           artistDetail?.categories?.[0] ||
-          (category !== "All" ? category : selectedArtist.categories?.[0] || "Artwork"),
+          (category !== "All Categories" ? category : selectedArtist.categories?.[0] || "Artwork"),
         eventDate,
         eventTime,
         duration,
@@ -334,42 +335,57 @@ export default function Explore() {
 
       {bookedToast && (
         <div style={styles.toast} onClick={() => navigate("/bookings")}>
-          ✅ Request sent — tap to view in My Bookings
+          Request sent — tap to view in My Bookings
         </div>
       )}
 
-      {/* ══ Top bar ══ */}
+      {/* ══ Header ══ */}
       <div style={styles.topBar}>
-        <div style={styles.brandRow}>
-          <span style={styles.brandName}>ArtSpire</span>
-          <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
-            <SearchIcon size={16} stroke="#0B0F1A" />
+        <h1 style={styles.title}>Explore Artists</h1>
+        <div style={styles.topBarIcons}>
+          <button style={styles.iconBtn} onClick={() => navigate("/search")} aria-label="Search">
+            <SearchIcon size={17} stroke="#1F2937" />
           </button>
-        </div>
-        <div style={styles.tabRow}>
-          <button style={styles.tabBtn} onClick={() => navigate("/")}>For You</button>
-          <button style={styles.tabBtn} onClick={() => navigate("/following")}>Following</button>
-          <button style={{ ...styles.tabBtn, ...styles.tabBtnActive }}>Near You</button>
+          <button style={styles.iconBtn} onClick={handleRecenter} aria-label="Filter">
+            <FilterIcon size={17} stroke="#1F2937" />
+          </button>
         </div>
       </div>
 
-      {/* ══ Search this area bar ══ */}
-      <div style={styles.mapWrap}>
-        <form style={styles.areaBar} onSubmit={handleAreaSearch}>
-          <SearchIcon size={14} stroke="#8291AC" />
-          <input
-            style={styles.areaInput}
-            placeholder="Search near this area"
-            value={areaQuery}
-            onChange={(e) => setAreaQuery(e.target.value)}
-          />
-        </form>
+      {/* ══ Filter row ══ */}
+      <div style={styles.filterRow}>
+        <button style={styles.nearYouChip} onClick={handleRecenter}>
+          <PinIcon size={13} /> Near You
+        </button>
 
+        <select
+          style={styles.filterSelect}
+          value={category}
+          onChange={(e) => handleCategoryChange(e.target.value)}
+        >
+          {CATEGORIES.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+
+        <select
+          style={styles.filterSelect}
+          value={distanceKmFilter}
+          onChange={(e) => handleDistanceChange(Number(e.target.value))}
+        >
+          {DISTANCES.map((d) => (
+            <option key={d.label} value={d.km}>{d.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* ══ Map ══ */}
+      <div style={styles.mapWrap}>
         {locating && <div style={styles.mapOverlayMsg}>Finding your location…</div>}
         {!locating && !loading && loadError && <div style={styles.mapOverlayMsg}>{loadError}</div>}
         {!locating && !loading && !loadError && artists.length === 0 && (
           <div style={styles.mapOverlayMsg}>
-            No {category !== "All" ? category.toLowerCase() + " " : ""}artists online near here yet.
+            No {category !== "All Categories" ? category.toLowerCase() + " " : ""}artists online near here yet.
           </div>
         )}
 
@@ -388,43 +404,57 @@ export default function Explore() {
 
           {youLocation && <Marker position={[youLocation.lat, youLocation.lng]} icon={youIcon} />}
 
-          {artists
-            .filter((a) => a.location?.coordinates?.length === 2)
-            .map((a) => (
-              <Marker
-                key={a._id}
-                position={[a.location.coordinates[1], a.location.coordinates[0]]}
-                icon={createArtistIcon(a)}
-                eventHandlers={{ click: () => openArtist(a) }}
-              />
-            ))}
+          {nearbyList.map((a, i) => (
+            <Marker
+              key={a._id}
+              position={[a.location.coordinates[1], a.location.coordinates[0]]}
+              icon={createArtistIcon(a, PIN_RINGS[i % PIN_RINGS.length], a.km)}
+              eventHandlers={{ click: () => openArtist(a) }}
+            />
+          ))}
         </MapContainer>
       </div>
 
-      {/* ══ Category chips ══ */}
-      <div style={styles.chipRow}>
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            style={{ ...styles.chip, ...(category === cat ? styles.chipActive : {}) }}
-            onClick={() => handleCategoryChange(cat)}
-          >
-            {cat}
-          </button>
+      {/* ══ Nearby Artists list ══ */}
+      <div style={styles.listSection}>
+        <h2 style={styles.listHeading}>Nearby Artists</h2>
+
+        {loading && (
+          <p style={styles.listMsg}>Loading artists…</p>
+        )}
+        {!loading && nearbyList.length === 0 && !loadError && (
+          <p style={styles.listMsg}>No artists online nearby right now.</p>
+        )}
+
+        {nearbyList.map((a) => (
+          <div key={a._id} style={styles.artistRow} onClick={() => openArtist(a)}>
+            {a.avatar || a.profileImage || a.image ? (
+              <img src={a.avatar || a.profileImage || a.image} alt="" style={styles.rowAvatar} />
+            ) : (
+              <div style={styles.rowAvatarFallback}>{(a.name || "?")[0]?.toUpperCase()}</div>
+            )}
+
+            <div style={styles.rowInfo}>
+              <p style={styles.rowName}>{a.name}</p>
+              <p style={styles.rowMeta}>
+                <span style={styles.onlineDot} />
+                {a.km != null ? `${a.km.toFixed(1)} km away` : "Nearby"}
+              </p>
+            </div>
+
+            <button
+              style={styles.viewProfileBtn}
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/dashboard/${a._id}`);
+              }}
+            >
+              View Profile
+            </button>
+          </div>
         ))}
       </div>
 
-      {/* ══ RAISE REQUEST / SEARCH AREA — matches mockup ══ */}
-      <div style={styles.actionRow}>
-        <button style={styles.raiseBtn} onClick={handleRaiseRequest}>
-          <RequestIcon /> RAISE REQUEST
-        </button>
-        <button style={styles.searchAreaBtn} onClick={handleSearchArea} disabled={loading}>
-          <SearchIcon size={15} stroke="#fff" /> {loading ? "SEARCHING…" : "SEARCH AREA"}
-        </button>
-      </div>
-
-      <div style={{ height: 8 }} />
       <BottomNav activeTab="explore" />
 
       {/* ══ Booking sheet ══ */}
@@ -493,7 +523,7 @@ export default function Explore() {
             <button style={styles.bookBtn} onClick={handleSubmitBooking} disabled={booking || loadingDetail}>
               {booking ? "Sending…" : `Request Booking${artistDetail?.basePrice ? ` · from ₹${Number(artistDetail.basePrice).toLocaleString()}` : ""}`}
             </button>
-            <button style={styles.viewProfileBtn} onClick={() => navigate(`/dashboard/${selectedArtist._id}`)}>
+            <button style={styles.viewProfileBtnFull} onClick={() => navigate(`/dashboard/${selectedArtist._id}`)}>
               View full profile
             </button>
           </div>
@@ -506,18 +536,23 @@ export default function Explore() {
 /* ── icons ────────────────────────────────────────────────────────────── */
 function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2.4" strokeLinecap="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round">
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
-function RequestIcon() {
+function FilterIcon({ size = 18, stroke = "#1a1a1a" }) {
   return (
-    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <path d="M14 2v6h6" />
-      <path d="M12 12v6M9 15h6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6h16M7 12h10M10 18h4" />
+    </svg>
+  );
+}
+function PinIcon({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#fff" stroke="none">
+      <path d="M12 2C7.6 2 4 5.6 4 10c0 5.8 8 12 8 12s8-6.2 8-12c0-4.4-3.6-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />
     </svg>
   );
 }
@@ -527,141 +562,146 @@ function GlobalStyles() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-      .leaflet-container { background: #EAEDF2; font-family: 'Inter', sans-serif; }
+      .leaflet-container { background: #EAEAF3; font-family: 'Inter', sans-serif; }
 
-      .you-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-      .you-dot {
-        width: 26px; height: 26px; border-radius: 50%;
-        background: #2E6BE6; border: 3px solid #fff;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      .you-pulse {
+        width: 40px; height: 40px; border-radius: 50%;
         display: flex; align-items: center; justify-content: center;
+        position: relative;
       }
-      .you-label {
-        font-size: 10px; font-weight: 700; color: #0B0F1A; background: #fff;
-        padding: 1px 6px; border-radius: 999px; box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      .you-pulse::before {
+        content: ''; position: absolute; inset: 0; border-radius: 50%;
+        background: rgba(124,58,237,0.25); animation: pulseRing 2s ease-out infinite;
+      }
+      .you-dot {
+        width: 14px; height: 14px; border-radius: 50%;
+        background: #7C3AED; border: 3px solid #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.3); z-index: 1;
+      }
+      @keyframes pulseRing {
+        0% { transform: scale(0.5); opacity: 0.7; }
+        100% { transform: scale(2.2); opacity: 0; }
       }
 
       .artist-pin { cursor: pointer; }
-      .artist-pin-card {
-        width: 56px; background: #fff; border-radius: 12px; padding: 4px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.22); border: 1px solid rgba(0,0,0,0.06);
-        display: flex; flex-direction: column; align-items: center; text-align: center;
-      }
-      .artist-thumb-wrap { position: relative; width: 48px; height: 48px; }
-      .artist-thumb-img, .artist-thumb-fallback {
-        width: 48px; height: 48px; border-radius: 8px; object-fit: cover;
-      }
-      .artist-thumb-fallback {
-        background: #D9662B; color: #fff; font-size: 16px; font-weight: 700;
+      .pin-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+      .pin-avatar-ring {
+        width: 46px; height: 46px; border-radius: 50%; border: 3px solid;
+        background: #fff; padding: 2px; box-shadow: 0 3px 10px rgba(0,0,0,0.25);
         display: flex; align-items: center; justify-content: center;
       }
-      .artist-online-dot {
-        position: absolute; bottom: -2px; right: -2px; width: 11px; height: 11px;
-        border-radius: 50%; background: #22C55E; border: 2px solid #fff;
+      .pin-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+      .pin-avatar-fallback {
+        width: 100%; height: 100%; border-radius: 50%; color: #fff;
+        display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700;
       }
-      .artist-pin-name {
-        font-size: 9px; font-weight: 700; color: #0B0F1A; margin-top: 4px;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-      }
-      .pin-tail {
-        width: 9px; height: 9px; background: #fff; margin: -5px auto 0;
-        transform: rotate(45deg); border-right: 1px solid rgba(0,0,0,0.06);
-        border-bottom: 1px solid rgba(0,0,0,0.06);
+      .pin-badge {
+        font-size: 10px; font-weight: 700; color: #4C1D95; background: #fff;
+        padding: 2px 7px; border-radius: 999px; box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+        white-space: nowrap;
       }
     `}</style>
   );
 }
 
-const INK = "#0B0F1A";
-const CLAY = "#D9662B";
-const BLUE = "#2E6BE6";
-const MUTE = "#8291AC";
+const PURPLE = "#7C3AED";
+const PURPLE_DARK = "#6D28D9";
+const CREAM = "#FBF7F2";
+const INK = "#1F2937";
+const MUTE = "#6B7280";
+const GREEN = "#22C55E";
 
 const styles = {
-  page: { fontFamily: "'Inter', sans-serif", background: INK, minHeight: "100vh", color: "#fff" },
+  page: { fontFamily: "'Inter', sans-serif", background: CREAM, minHeight: "100vh", color: INK, paddingBottom: 8 },
 
   toast: {
     position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 900,
-    background: "#131B2C", color: "#fff", padding: "10px 18px", borderRadius: 999,
-    fontSize: 13, fontWeight: 600, boxShadow: "0 6px 20px rgba(0,0,0,0.4)", cursor: "pointer",
-    border: "1px solid rgba(255,255,255,0.08)", maxWidth: "88vw", textAlign: "center",
+    background: "#1F2937", color: "#fff", padding: "10px 18px", borderRadius: 999,
+    fontSize: 13, fontWeight: 600, boxShadow: "0 6px 20px rgba(0,0,0,0.25)", cursor: "pointer",
+    maxWidth: "88vw", textAlign: "center",
   },
 
-  topBar: { padding: "16px 18px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)" },
-  brandRow: { display: "flex", alignItems: "center", justifyContent: "space-between" },
-  brandName: { fontWeight: 800, fontSize: 20, color: "#fff" },
-  searchIconBtn: { background: "#fff", border: "none", cursor: "pointer", padding: 8, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" },
-  tabRow: { display: "flex", gap: 22, marginTop: 14 },
-  tabBtn: { background: "none", border: "none", padding: 0, paddingBottom: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, color: MUTE },
-  tabBtnActive: { color: "#fff", borderBottom: `2px solid ${CLAY}` },
+  topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 18px 10px" },
+  title: { fontSize: 21, fontWeight: 800, color: INK, margin: 0 },
+  topBarIcons: { display: "flex", gap: 8 },
+  iconBtn: {
+    background: "#fff", border: "1px solid #ECEAF5", cursor: "pointer", width: 34, height: 34,
+    borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+  },
 
-  mapWrap: { position: "relative", width: "100%", height: "44vh", minHeight: 300 },
+  filterRow: { display: "flex", gap: 8, padding: "4px 16px 12px", overflowX: "auto" },
+  nearYouChip: {
+    flexShrink: 0, display: "flex", alignItems: "center", gap: 5, background: PURPLE, color: "#fff",
+    border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+  },
+  filterSelect: {
+    flexShrink: 0, background: "#fff", color: INK, border: "1px solid #ECEAF5", borderRadius: 999,
+    padding: "8px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif",
+  },
+
+  mapWrap: { position: "relative", width: "100%", height: "40vh", minHeight: 280, margin: "0 16px", borderRadius: 20, overflow: "hidden" },
   map: { width: "100%", height: "100%" },
-  areaBar: {
-    position: "absolute", top: 12, left: 14, right: 14, zIndex: 500,
-    display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 999,
-    padding: "10px 16px", boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
-  },
-  areaInput: { flex: 1, border: "none", outline: "none", fontSize: 13.5, color: "#0B0F1A", background: "transparent" },
   mapOverlayMsg: {
-    position: "absolute", top: 66, left: "50%", transform: "translateX(-50%)", zIndex: 500,
-    background: "#fff", color: "#0B0F1A", padding: "8px 16px", borderRadius: 999,
-    fontSize: 12.5, fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.2)", textAlign: "center", maxWidth: "80%",
+    position: "absolute", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 500,
+    background: "#fff", color: INK, padding: "8px 16px", borderRadius: 999,
+    fontSize: 12.5, fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.15)", textAlign: "center", maxWidth: "85%",
   },
 
-  chipRow: { display: "flex", gap: 8, padding: "12px 16px", overflowX: "auto" },
-  chip: {
-    flexShrink: 0, background: "#131B2C", color: MUTE, border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 999, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-  },
-  chipActive: { background: CLAY, color: "#fff", border: `1px solid ${CLAY}` },
+  listSection: { padding: "18px 16px 4px" },
+  listHeading: { fontSize: 15, fontWeight: 800, color: INK, margin: "0 0 12px" },
+  listMsg: { fontSize: 13, color: MUTE, padding: "8px 0" },
 
-  actionRow: { display: "flex", gap: 10, padding: "0 16px 12px" },
-  raiseBtn: {
-    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-    background: BLUE, color: "#fff", border: "none", borderRadius: 14,
-    padding: "13px 10px", fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4, cursor: "pointer",
+  artistRow: {
+    display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14,
+    padding: "10px 12px", marginBottom: 10, border: "1px solid #F1EFE8", cursor: "pointer",
   },
-  searchAreaBtn: {
-    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-    background: CLAY, color: "#fff", border: "none", borderRadius: 14,
-    padding: "13px 10px", fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4, cursor: "pointer",
+  rowAvatar: { width: 42, height: 42, borderRadius: "50%", objectFit: "cover", flexShrink: 0 },
+  rowAvatarFallback: {
+    width: 42, height: 42, borderRadius: "50%", background: PURPLE, color: "#fff", flexShrink: 0,
+    display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15,
+  },
+  rowInfo: { flex: 1, minWidth: 0 },
+  rowName: { fontWeight: 700, fontSize: 14, color: INK, margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  rowMeta: { fontSize: 12, color: MUTE, margin: "2px 0 0", display: "flex", alignItems: "center", gap: 5 },
+  onlineDot: { width: 7, height: 7, borderRadius: "50%", background: GREEN, display: "inline-block", flexShrink: 0 },
+  viewProfileBtn: {
+    flexShrink: 0, background: "#fff", color: PURPLE, border: `1.5px solid ${PURPLE}`, borderRadius: 999,
+    padding: "7px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer",
   },
 
-  sheetBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 800, display: "flex", alignItems: "flex-end" },
+  sheetBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 800, display: "flex", alignItems: "flex-end" },
   sheet: {
-    width: "100%", maxHeight: "88vh", overflowY: "auto", background: "#131B2C",
-    borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: "10px 18px 26px",
-    boxShadow: "0 -8px 24px rgba(0,0,0,0.4)", boxSizing: "border-box",
+    width: "100%", maxHeight: "88vh", overflowY: "auto", background: "#fff",
+    borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: "10px 18px 26px",
+    boxShadow: "0 -8px 24px rgba(0,0,0,0.2)", boxSizing: "border-box",
   },
-  sheetHandle: { width: 36, height: 4, borderRadius: 999, background: "rgba(255,255,255,0.2)", margin: "0 auto 16px" },
+  sheetHandle: { width: 36, height: 4, borderRadius: 999, background: "#E5E3DC", margin: "0 auto 16px" },
   sheetHead: { display: "flex", alignItems: "center", gap: 12, marginBottom: 16 },
   sheetAvatar: { width: 50, height: 50, borderRadius: "50%", objectFit: "cover" },
   sheetAvatarFallback: {
-    width: 50, height: 50, borderRadius: "50%", background: CLAY, color: "#fff",
+    width: 50, height: 50, borderRadius: "50%", background: PURPLE, color: "#fff",
     display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 18,
   },
-  sheetName: { fontWeight: 800, fontSize: 16, color: "#fff" },
+  sheetName: { fontWeight: 800, fontSize: 16, color: INK },
   sheetMeta: { fontSize: 12, color: MUTE, marginTop: 3, display: "flex", alignItems: "center", gap: 5 },
-  onlineDot: { width: 7, height: 7, borderRadius: "50%", background: "#22C55E", display: "inline-block" },
 
   sheetBody: { display: "flex", flexDirection: "column", gap: 4 },
   fieldRow: { display: "flex", gap: 10 },
   field: { flex: 1 },
   label: { fontSize: 11, fontWeight: 700, color: MUTE, textTransform: "uppercase", letterSpacing: 0.5, display: "block", margin: "10px 0 5px" },
   input: {
-    width: "100%", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: 10, color: "#fff", fontSize: 13.5, padding: "10px 12px", outline: "none",
+    width: "100%", background: "#FAF9F6", border: "1px solid #ECEAF5",
+    borderRadius: 10, color: INK, fontSize: 13.5, padding: "10px 12px", outline: "none",
     fontFamily: "'Inter', sans-serif", boxSizing: "border-box",
   },
-  errorBox: { background: "rgba(239,68,68,0.12)", color: "#FCA5A5", borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600, marginTop: 10 },
+  errorBox: { background: "#FEECEC", color: "#B91C1C", borderRadius: 10, padding: "8px 12px", fontSize: 12.5, fontWeight: 600, marginTop: 10 },
 
   bookBtn: {
-    width: "100%", background: BLUE, color: "#fff", border: "none", borderRadius: 14,
+    width: "100%", background: PURPLE, color: "#fff", border: "none", borderRadius: 14,
     padding: "14px", fontSize: 14, fontWeight: 800, cursor: "pointer", marginTop: 16, marginBottom: 8,
   },
-  viewProfileBtn: {
-    width: "100%", background: "transparent", color: MUTE, border: "1px solid rgba(255,255,255,0.12)",
+  viewProfileBtnFull: {
+    width: "100%", background: "transparent", color: MUTE, border: "1px solid #ECEAF5",
     borderRadius: 14, padding: "12px", fontSize: 13, fontWeight: 700, cursor: "pointer",
   },
 };

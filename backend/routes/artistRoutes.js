@@ -50,13 +50,6 @@ router.post("/upload", upload.single("image"), async (req, res) => {
 // Artists" and Post Request matching can use real coordinates instead of
 // just a city string.
 // body: { lat, lng }
-//
-// FIX: this route was documented in a comment but never actually
-// implemented. Without it, no artist's `location.coordinates` or
-// `locationUpdatedAt` ever gets written, which means:
-//   - $near queries in /nearby have nothing to match against
-//   - onlineOnly=true (which filters on locationUpdatedAt) excludes
-//     every artist, forever
 router.put("/:id/location", async (req, res) => {
   try {
     const { lat, lng } = req.body;
@@ -104,6 +97,20 @@ router.put("/:id/location", async (req, res) => {
 // Powers the "Find Nearby Artists" map. Falls back to city matching for
 // artists who haven't shared live location yet.
 // query: lat, lng, radius (meters, default 25000), city, category, onlineOnly
+//
+// FIX: previously only queried the `Artist` collection. Every other route
+// in this file (GET/PUT/PATCH /:id, /:id/reviews, /:id/location) checks
+// `User` (role: "artist") FIRST and falls back to `Artist` — and
+// getMergedArtists() explicitly merges both. /nearby was the odd one out,
+// so if artists live in the User collection (the common case here), this
+// route always returned an empty array — the map/list showed nothing even
+// though PUT /:id/location was saving fine.
+//
+// REQUIRES: User schema also needs a 2dsphere index, same as Artist:
+//   UserSchema.index({ location: "2dsphere" });
+// If that index is missing on User, this $near query will throw an error
+// (not just return empty) — check server logs for
+// "unable to find index for $geoNear query" if artists still don't show.
 router.get("/nearby", async (req, res) => {
   try {
     const { lat, lng, city, category, onlineOnly } = req.query;
@@ -119,24 +126,50 @@ router.get("/nearby", async (req, res) => {
     if (category && category !== "All") baseFilter.categories = category;
     if (onlineOnly === "true") baseFilter.locationUpdatedAt = { $gte: onlineCutoff };
 
+    async function nearQuery(Model, extraFilter = {}) {
+      try {
+        return await Model.find({
+          ...baseFilter,
+          ...extraFilter,
+          location: {
+            $near: {
+              $geometry: { type: "Point", coordinates: [lngNum, latNum] },
+              $maxDistance: radius,
+            },
+          },
+        }).select("-password").limit(60).lean();
+      } catch (e) {
+        // Most common cause: missing 2dsphere index on this collection.
+        console.error(`nearQuery failed on ${Model.modelName}:`, e.message);
+        return [];
+      }
+    }
+
     let artists = [];
     if (hasCoords) {
-      artists = await Artist.find({
-        ...baseFilter,
-        location: {
-          $near: {
-            $geometry: { type: "Point", coordinates: [lngNum, latNum] },
-            $maxDistance: radius,
-          },
-        },
-      }).select("-password").limit(60).lean();
+      const [usersAsArtists, artistDocs] = await Promise.all([
+        nearQuery(User, { role: "artist" }),
+        nearQuery(Artist),
+      ]);
+      // dedupe by email, same rule getMergedArtists() uses, Artist collection wins
+      const artistEmails = new Set(artistDocs.map((a) => a.email));
+      artists = [
+        ...usersAsArtists.filter((u) => !artistEmails.has(u.email)),
+        ...artistDocs,
+      ];
     }
 
     if (artists.length === 0 && city) {
-      artists = await Artist.find({
-        ...baseFilter,
-        city: new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-      }).select("-password").limit(60).lean();
+      const cityRegex = new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+      const [usersAsArtists, artistDocs] = await Promise.all([
+        User.find({ ...baseFilter, role: "artist", city: cityRegex }).select("-password").limit(60).lean(),
+        Artist.find({ ...baseFilter, city: cityRegex }).select("-password").limit(60).lean(),
+      ]);
+      const artistEmails = new Set(artistDocs.map((a) => a.email));
+      artists = [
+        ...usersAsArtists.filter((u) => !artistEmails.has(u.email)),
+        ...artistDocs,
+      ];
     }
 
     artists = artists.map((a) => ({
