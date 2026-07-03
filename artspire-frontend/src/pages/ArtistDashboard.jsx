@@ -210,7 +210,9 @@ function BookingsTab({ artistId }) {
 
   useEffect(() => {
     if (!artistId) return;
-    socket.emit("join_artist_room", artistId);
+    // FIX: server only handles "join_room", not "join_artist_room" — this
+    // was never joining the artist_${id} room bookingRoutes.js emits to.
+    socket.emit("join_room", `artist_${artistId}`);
     socket.on("new_booking_request", fetchBookings);
     socket.on("user_counter", ({ bookingId, price, message }) => {
       const entry = { from:"user", price, message, timestamp:new Date() };
@@ -622,7 +624,8 @@ function ChatTab({ artistId }) {
   useEffect(() => {
     if (!artistId) return;
     fetchConversations();
-    socket.emit("join_artist_room", artistId);
+    // FIX: server only handles "join_room", not "join_artist_room".
+    socket.emit("join_room", `artist_${artistId}`);
 
     socket.on("receive_message", (msg) => {
       setConversations(prev => prev.map(c =>
@@ -847,7 +850,8 @@ function EditProfileTab({ artistId }) {
           .catch(() => {});
       }
     };
-    socket.emit("join_artist_room", artistId);
+    // FIX: server only handles "join_room", not "join_artist_room".
+    socket.emit("join_room", `artist_${artistId}`);
     socket.on("post_status_updated", onStatusUpdate);
     return () => socket.off("post_status_updated", onStatusUpdate);
   }, [artistId]);
@@ -1397,6 +1401,37 @@ export default function ArtistDashboard() {
       .then(r=>setArtistData(r.data))
       .catch(()=>{});
   },[artistId]);
+
+  // ── Live location push ──────────────────────────────────────────────────
+  // Keeps this artist's location.coordinates / locationUpdatedAt fresh in
+  // the DB while the dashboard is open, which is what makes them show up in
+  // "Near You" / GET /api/artists/nearby?onlineOnly=true. Runs once on
+  // mount, then every 5 minutes — comfortably inside the 20-minute "online"
+  // window used server-side, so as long as an artist has this tab open
+  // they'll keep showing as online. Fails silently (permission denied, no
+  // GPS, etc.) rather than interrupting the dashboard.
+  useEffect(() => {
+    if (!artistId || !navigator.geolocation) return;
+
+    const pushLocation = () => {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          axios
+            .put(`${API}/api/artists/${artistId}/location`, {
+              lat: coords.latitude,
+              lng: coords.longitude,
+            })
+            .catch((err) => console.error("Failed to push artist location:", err));
+        },
+        (err) => console.warn("Geolocation unavailable:", err.message),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    };
+
+    pushLocation();
+    const interval = setInterval(pushLocation, 5 * 60 * 1000); // every 5 min
+    return () => clearInterval(interval);
+  }, [artistId]);
 
   // Close the drawer automatically if the screen is resized past the mobile
   // breakpoint while it's open, so it doesn't get stuck open on desktop.

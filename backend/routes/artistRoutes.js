@@ -50,24 +50,60 @@ router.post("/upload", upload.single("image"), async (req, res) => {
 // Artists" and Post Request matching can use real coordinates instead of
 // just a city string.
 // body: { lat, lng }
-// ─────────────────────────────────────────────────────────────────────────
-// PATCH for routes/artistRoutes.js
 //
-// Replace your existing `router.get("/nearby", ...)` handler with this one.
-// Everything else in the file stays exactly the same — this only touches
-// that one route.
-//
-// What changed vs. your version:
-//   - optional ?category=Painter filter (matches your Artist.categories array)
-//   - optional ?onlineOnly=true filter, using locationUpdatedAt as the
-//     "online" signal (active in the last 20 minutes) — you don't have a
-//     separate isOnline field, so this reuses what's already there instead
-//     of adding a new one
-//   - each artist in the response now carries a computed `isOnline` boolean
-//   - response shape is UNCHANGED (still a plain array, not { artists })
-//     so nothing else calling this endpoint today breaks
-// ─────────────────────────────────────────────────────────────────────────
+// FIX: this route was documented in a comment but never actually
+// implemented. Without it, no artist's `location.coordinates` or
+// `locationUpdatedAt` ever gets written, which means:
+//   - $near queries in /nearby have nothing to match against
+//   - onlineOnly=true (which filters on locationUpdatedAt) excludes
+//     every artist, forever
+router.put("/:id/location", async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
 
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      return res.status(400).json({ message: "lat and lng are required numbers" });
+    }
+
+    const update = {
+      location: { type: "Point", coordinates: [lngNum, latNum] }, // GeoJSON order: [lng, lat]
+      locationUpdatedAt: new Date(),
+    };
+
+    // Try User collection first (artists stored there), fall back to Artist
+    let artist = await User.findOneAndUpdate(
+      { _id: req.params.id, role: "artist" },
+      { $set: update },
+      { new: true }
+    ).select("-password");
+
+    if (!artist) {
+      try {
+        artist = await Artist.findByIdAndUpdate(
+          req.params.id,
+          { $set: update },
+          { new: true }
+        ).select("-password");
+      } catch (innerErr) {
+        console.error("Artist.findByIdAndUpdate (location) error:", innerErr.message);
+      }
+    }
+
+    if (!artist) return res.status(404).json({ message: "Artist not found" });
+
+    res.json(artist);
+  } catch (err) {
+    console.error("PUT /:id/location error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// ── GET /api/artists/nearby  ← MUST be before /:id ───────────────────────────
+// Powers the "Find Nearby Artists" map. Falls back to city matching for
+// artists who haven't shared live location yet.
+// query: lat, lng, radius (meters, default 25000), city, category, onlineOnly
 router.get("/nearby", async (req, res) => {
   try {
     const { lat, lng, city, category, onlineOnly } = req.query;
@@ -115,43 +151,6 @@ router.get("/nearby", async (req, res) => {
   }
 });
 
-// ── GET /api/artists/nearby  ← MUST be before /:id ───────────────────────────
-// Powers the "Find Nearby Artists" map. Falls back to city matching for
-// artists who haven't shared live location yet.
-// query: lat, lng, radius (meters, default 25000), city
-router.get("/nearby", async (req, res) => {
-  try {
-    const { lat, lng, city } = req.query;
-    const radius = Math.min(Number(req.query.radius) || 25000, 100000);
-    const latNum = lat !== undefined ? Number(lat) : undefined;
-    const lngNum = lng !== undefined ? Number(lng) : undefined;
-    const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum);
-
-    let artists = [];
-    if (hasCoords) {
-      artists = await Artist.find({
-        location: {
-          $near: {
-            $geometry: { type: "Point", coordinates: [lngNum, latNum] },
-            $maxDistance: radius,
-          },
-        },
-      }).select("-password");
-    }
-
-    if (artists.length === 0 && city) {
-      artists = await Artist.find({
-        city: new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
-      }).select("-password");
-    }
-
-    res.json(artists);
-  } catch (err) {
-    console.error("Nearby artists error:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
-});
-
 // ── GET /api/artists/:id ──────────────────────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {
@@ -180,7 +179,7 @@ router.get("/:id/reviews", async (req, res) => {
   }
 });
 
-// ── POST /api/artists/:id/reviews  ← NEW: was missing, this is Bug 2's cause ──
+// ── POST /api/artists/:id/reviews ─────────────────────────────────────────────
 // body: { userName, rating, comment/review, eventType }
 // Pushes review into the artist's reviews array, recalculates avg rating,
 // saves, and returns { artist, reviews } so the frontend can update reactively.
@@ -263,16 +262,8 @@ router.get("/:id/earnings", async (req, res) => {
 
 // ── PUT /api/artists/:id  (with optional image upload) ───────────────────────
 // Accepts both JSON and multipart/form-data (when a new photo is uploaded)
-// ⚠️ DEBUG LOGGING ADDED — check Render logs after triggering a save/upload
-// to see exactly what's happening. Remove the console.log lines once fixed.
 router.put("/:id", upload.single("image"), async (req, res) => {
   try {
-    console.log("──────────────────────────────────────");
-    console.log("PUT /api/artists/:id hit. id =", req.params.id);
-    console.log("Content-Type:", req.headers["content-type"]);
-    console.log("Request body:", req.body);
-    console.log("Has file:", !!req.file);
-
     const { password, ...updateData } = req.body;
 
     // If a new image was uploaded, Cloudinary gives us the URL in req.file.path
@@ -289,7 +280,6 @@ router.put("/:id", upload.single("image"), async (req, res) => {
     if (typeof updateData.works === "string") {
       try {
         updateData.works = JSON.parse(updateData.works);
-        console.log("Parsed works array:", updateData.works);
       } catch (parseErr) {
         console.error("Failed to parse works JSON string:", parseErr.message, "raw value:", updateData.works);
       }
@@ -302,8 +292,6 @@ router.put("/:id", upload.single("image"), async (req, res) => {
       { new: true }
     ).select("-password");
 
-    console.log("User collection lookup result:", artist ? "FOUND" : "null");
-
     // Fall back to Artist collection
     if (!artist) {
       try {
@@ -312,18 +300,13 @@ router.put("/:id", upload.single("image"), async (req, res) => {
           { $set: updateData },
           { new: true }
         ).select("-password");
-        console.log("Artist collection lookup result:", artist ? "FOUND" : "null");
       } catch (innerErr) {
         console.error("Artist.findByIdAndUpdate THREW an error:", innerErr.message);
       }
     }
 
-    if (!artist) {
-      console.log("→ Returning 404 — id not found in either User or Artist collection");
-      return res.status(404).json({ message: "Artist not found" });
-    }
+    if (!artist) return res.status(404).json({ message: "Artist not found" });
 
-    console.log("→ Update succeeded, returning updated artist");
     res.json(artist);
   } catch (err) {
     console.error("PUT /api/artists/:id OUTER error:", err);

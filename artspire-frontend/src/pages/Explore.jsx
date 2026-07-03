@@ -1,31 +1,26 @@
 // artspire-frontend/src/pages/Explore.jsx
 //
-// "Near You" tab: pick a category, see which artists in that category are
-// online near you on a real map, tap a pin to open a booking sheet, submit
-// a real Booking (pending_approval) straight into your existing negotiate
-// → pay → confirm pipeline in bookingRoutes.js / BookingPageMobile.jsx.
+// "Near You" tab — live map of online artists, matching the RAISE REQUEST /
+// SEARCH AREA mockup. Real data only: pins come from
+//   GET /api/artists/nearby?lat=&lng=&radius=&category=&onlineOnly=true
+// tapping a pin opens the booking sheet, which POSTs to /api/bookings.
+//
+// REQUIRES ON THE BACKEND (if the map looks empty, check these first):
+//   1. bookingRoutes mounted in server.js:
+//        const bookingRoutes = require("./routes/bookingRoutes");
+//        app.use("/api/bookings", bookingRoutes);
+//   2. Artist schema has a 2dsphere index:
+//        ArtistSchema.index({ location: "2dsphere" });
+//   3. Artists actually have `location.coordinates` set AND `locationUpdatedAt`
+//      refreshed within the last 20 minutes — otherwise onlineOnly=true
+//      returns an empty array (that's correct behavior, not a bug).
+//   4. /nearby route patched to accept ?category= and ?onlineOnly= (see
+//      artistRoutes.js patch already discussed).
 //
 // Install once:  npm install leaflet react-leaflet
 //
-// Requires the /nearby patch in artistRoutes-nearby-patch.js (adds
-// ?category= and ?onlineOnly= filtering — nothing else about that route
-// changes, response shape is untouched).
-//
-// Wire it up in your router, e.g.:
-//   <Route path="/explore" element={<Explore />} />
-// and point the map icon in BottomNav + the "Find Nearby Artists" card on
-// your home page at "/explore" — right now nothing links to it, which is
-// why the map isn't showing up on your deployed site.
-//
-// IMPORTANT socket fix included here: your server's `join_room` handler
-// joins whatever room name it's given, but bookingRoutes.js emits to
-// `artist_${id}` / `user_${id}` while the rest of the app (Home.jsx) only
-// joins the raw id. This page joins BOTH the raw id room (existing request
-// notifications keep working) and the `user_${id}` room (so booking_offer /
-// booking_confirmed / booking_cancelled actually reach this user). Ideally
-// this join belongs somewhere app-wide (a layout/App.jsx effect) rather
-// than just this page — flagging that, not fixing it here since it's out
-// of this file's scope.
+// Adjust the two paths below marked ADJUST-ME if your project structure
+// differs from what's assumed here.
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -33,18 +28,18 @@ import axios from "axios";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { getCurrentAccount, isArtist } from "../utils/auth";
-import BottomNav from "../BottomNav";
-import socket from "../socket";
+import { getCurrentAccount, isArtist } from "../utils/auth"; // ADJUST-ME if path differs
+import BottomNav from "../BottomNav";                          // ADJUST-ME if path differs
+import socket from "../socket";                                  // ADJUST-ME if path differs
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 const TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+const TILE_ATTR =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 const FALLBACK_CENTER = { lat: 12.9716, lng: 77.5946 }; // Bengaluru — used if geolocation is denied
 
-// Edit this list to match the categories your artists actually pick at signup
 const CATEGORIES = [
   "All",
   "Painter",
@@ -82,7 +77,11 @@ function getLocation() {
 }
 
 function escapeHtml(str = "") {
-  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function boundsToRadiusMeters(bounds, center) {
@@ -96,6 +95,7 @@ function boundsToRadiusMeters(bounds, center) {
   return Math.max(1000, Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))));
 }
 
+// ── "You" marker: blue arrow + pill label, matches mockup ──────────────
 const youIcon = L.divIcon({
   className: "you-pin",
   html: `
@@ -110,27 +110,27 @@ const youIcon = L.divIcon({
   iconAnchor: [23, 23],
 });
 
+// ── Artist marker: square artwork/avatar thumbnail card + name, matches mockup ──
 function createArtistIcon(artist) {
   const name = escapeHtml(artist.name || "Artist");
   const initial = (artist.name || "?").trim()[0]?.toUpperCase() || "?";
-  const avatarHtml = artist.avatar
-    ? `<img src="${escapeHtml(artist.avatar)}" class="artist-avatar" />`
-    : `<div class="artist-avatar-fallback">${initial}</div>`;
-  const category = escapeHtml(artist.categories?.[0] || "Artist");
+  const thumb = artist.portfolioPreview || artist.avatar || artist.profileImage || artist.image;
+  const thumbHtml = thumb
+    ? `<img src="${escapeHtml(thumb)}" class="artist-thumb-img" />`
+    : `<div class="artist-thumb-fallback">${initial}</div>`;
 
   const html = `
     <div class="artist-pin-card">
-      <div class="artist-pin-avatar-wrap">
-        ${avatarHtml}
+      <div class="artist-thumb-wrap">
+        ${thumbHtml}
         <span class="artist-online-dot"></span>
       </div>
       <div class="artist-pin-name">${name}</div>
-      <div class="artist-pin-cat">${category}</div>
     </div>
     <div class="pin-tail"></div>
   `;
 
-  return L.divIcon({ html, className: "artist-pin", iconSize: [86, 92], iconAnchor: [43, 92] });
+  return L.divIcon({ html, className: "artist-pin", iconSize: [72, 84], iconAnchor: [36, 84] });
 }
 
 function MapWatcher({ onMoved }) {
@@ -149,11 +149,11 @@ export default function Explore() {
   const [category, setCategory] = useState("All");
   const [artists, setArtists] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [showSearchArea, setShowSearchArea] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [areaQuery, setAreaQuery] = useState("");
 
-  const [selectedArtist, setSelectedArtist] = useState(null); // summary from the pin
-  const [artistDetail, setArtistDetail] = useState(null);     // full profile, incl. basePrice
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [artistDetail, setArtistDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   const [eventDate, setEventDate] = useState("");
@@ -173,20 +173,29 @@ export default function Explore() {
     socket.emit("join_room", actor.role === "artist" ? `artist_${actor.id}` : `user_${actor.id}`);
   }, [actor?.id, actor?.role]);
 
-  const fetchNearby = useCallback(async (lat, lng, radius = 25000, cat = category) => {
-    setLoading(true);
-    try {
-      const { data } = await axios.get(`${API}/api/artists/nearby`, {
-        params: { lat, lng, radius, category: cat, onlineOnly: true },
-      });
-      setArtists(Array.isArray(data) ? data : []);
-    } catch (e) {
-      console.error("Failed to load nearby artists:", e);
-    } finally {
-      setLoading(false);
-      setShowSearchArea(false);
-    }
-  }, [category]);
+  const fetchNearby = useCallback(
+    async (lat, lng, radius = 25000, cat = category) => {
+      setLoading(true);
+      setLoadError("");
+      try {
+        const { data } = await axios.get(`${API}/api/artists/nearby`, {
+          params: { lat, lng, radius, category: cat, onlineOnly: true },
+        });
+        setArtists(Array.isArray(data) ? data : []);
+      } catch (e) {
+        console.error("Failed to load nearby artists:", e);
+        setLoadError(
+          e.response?.status === 404
+            ? "Nearby endpoint not found — check the backend route is deployed."
+            : "Couldn't load nearby artists. Pull to retry."
+        );
+        setArtists([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [category]
+  );
 
   useEffect(() => {
     getLocation()
@@ -211,7 +220,6 @@ export default function Explore() {
 
   const handleMapMoved = useCallback((map) => {
     mapRef.current = map;
-    setShowSearchArea(true);
   }, []);
 
   const handleSearchArea = () => {
@@ -241,13 +249,13 @@ export default function Explore() {
     }
   };
 
-  const recenterOnMe = () => {
-    if (!youLocation || !mapRef.current) return;
-    mapRef.current.setView([youLocation.lat, youLocation.lng], 14, { animate: true });
-    fetchNearby(youLocation.lat, youLocation.lng, 25000, category);
+  // ── RAISE REQUEST: matches the blue button in the mockup. Adjust the
+  // destination route to wherever your app's general "post a request" flow
+  // actually lives — /post is a placeholder guess.
+  const handleRaiseRequest = () => {
+    navigate("/post"); // ADJUST-ME to your real "raise a request" route
   };
 
-  // ── tap a pin: load full profile, prefill the booking sheet ────────────
   const openArtist = async (a) => {
     setSelectedArtist(a);
     setArtistDetail(null);
@@ -268,8 +276,6 @@ export default function Explore() {
       setLoadingDetail(false);
     }
 
-    // best-effort reverse geocode of the user's current position as a
-    // starting point for the "location" field — editable either way
     const coords = youLocation || center;
     try {
       const { data } = await axios.get("https://nominatim.openstreetmap.org/reverse", {
@@ -301,7 +307,9 @@ export default function Explore() {
         userId: actor.id,
         userName: actor.name,
         userEmail: actor.email || "",
-        eventType: artistDetail?.categories?.[0] || category !== "All" ? category : (selectedArtist.categories?.[0] || "Artwork"),
+        eventType:
+          artistDetail?.categories?.[0] ||
+          (category !== "All" ? category : selectedArtist.categories?.[0] || "Artwork"),
         eventDate,
         eventTime,
         duration,
@@ -335,7 +343,7 @@ export default function Explore() {
         <div style={styles.brandRow}>
           <span style={styles.brandName}>ArtSpire</span>
           <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
-            <SearchIcon size={18} stroke="#0B0F1A" />
+            <SearchIcon size={16} stroke="#0B0F1A" />
           </button>
         </div>
         <div style={styles.tabRow}>
@@ -345,20 +353,7 @@ export default function Explore() {
         </div>
       </div>
 
-      {/* ══ Category chips ══ */}
-      <div style={styles.chipRow}>
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            style={{ ...styles.chip, ...(category === cat ? styles.chipActive : {}) }}
-            onClick={() => handleCategoryChange(cat)}
-          >
-            {cat}
-          </button>
-        ))}
-      </div>
-
-      {/* ══ Map ══ */}
+      {/* ══ Search this area bar ══ */}
       <div style={styles.mapWrap}>
         <form style={styles.areaBar} onSubmit={handleAreaSearch}>
           <SearchIcon size={14} stroke="#8291AC" />
@@ -371,7 +366,8 @@ export default function Explore() {
         </form>
 
         {locating && <div style={styles.mapOverlayMsg}>Finding your location…</div>}
-        {!locating && !loading && artists.length === 0 && (
+        {!locating && !loading && loadError && <div style={styles.mapOverlayMsg}>{loadError}</div>}
+        {!locating && !loading && !loadError && artists.length === 0 && (
           <div style={styles.mapOverlayMsg}>
             No {category !== "All" ? category.toLowerCase() + " " : ""}artists online near here yet.
           </div>
@@ -403,19 +399,32 @@ export default function Explore() {
               />
             ))}
         </MapContainer>
-
-        <button style={styles.recenterBtn} onClick={recenterOnMe} aria-label="Recenter on me">
-          <LocateIcon />
-        </button>
-
-        {showSearchArea && (
-          <button style={styles.searchAreaFloating} onClick={handleSearchArea}>
-            {loading ? "Searching…" : "Search this area"}
-          </button>
-        )}
       </div>
 
-      <div style={{ height: 96 }} />
+      {/* ══ Category chips ══ */}
+      <div style={styles.chipRow}>
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            style={{ ...styles.chip, ...(category === cat ? styles.chipActive : {}) }}
+            onClick={() => handleCategoryChange(cat)}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      {/* ══ RAISE REQUEST / SEARCH AREA — matches mockup ══ */}
+      <div style={styles.actionRow}>
+        <button style={styles.raiseBtn} onClick={handleRaiseRequest}>
+          <RequestIcon /> RAISE REQUEST
+        </button>
+        <button style={styles.searchAreaBtn} onClick={handleSearchArea} disabled={loading}>
+          <SearchIcon size={15} stroke="#fff" /> {loading ? "SEARCHING…" : "SEARCH AREA"}
+        </button>
+      </div>
+
+      <div style={{ height: 8 }} />
       <BottomNav activeTab="explore" />
 
       {/* ══ Booking sheet ══ */}
@@ -456,7 +465,9 @@ export default function Explore() {
 
               <label style={styles.label}>Duration</label>
               <select style={styles.input} value={duration} onChange={(e) => setDuration(e.target.value)}>
-                {DURATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                {DURATIONS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
               </select>
 
               <label style={styles.label}>Location</label>
@@ -495,16 +506,18 @@ export default function Explore() {
 /* ── icons ────────────────────────────────────────────────────────────── */
 function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round">
-      <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2.4" strokeLinecap="round">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
     </svg>
   );
 }
-function LocateIcon() {
+function RequestIcon() {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#0B0F1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M12 12v6M9 15h6" />
     </svg>
   );
 }
@@ -530,27 +543,26 @@ function GlobalStyles() {
 
       .artist-pin { cursor: pointer; }
       .artist-pin-card {
-        width: 68px; background: #fff; border-radius: 14px; padding: 6px 4px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.2); border: 1px solid rgba(0,0,0,0.06);
+        width: 56px; background: #fff; border-radius: 12px; padding: 4px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.22); border: 1px solid rgba(0,0,0,0.06);
         display: flex; flex-direction: column; align-items: center; text-align: center;
       }
-      .artist-pin-avatar-wrap { position: relative; }
-      .artist-avatar, .artist-avatar-fallback {
-        width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #D9662B;
+      .artist-thumb-wrap { position: relative; width: 48px; height: 48px; }
+      .artist-thumb-img, .artist-thumb-fallback {
+        width: 48px; height: 48px; border-radius: 8px; object-fit: cover;
       }
-      .artist-avatar-fallback {
-        background: #D9662B; color: #fff; font-size: 15px; font-weight: 700;
+      .artist-thumb-fallback {
+        background: #D9662B; color: #fff; font-size: 16px; font-weight: 700;
         display: flex; align-items: center; justify-content: center;
       }
       .artist-online-dot {
-        position: absolute; bottom: -1px; right: -1px; width: 10px; height: 10px;
+        position: absolute; bottom: -2px; right: -2px; width: 11px; height: 11px;
         border-radius: 50%; background: #22C55E; border: 2px solid #fff;
       }
       .artist-pin-name {
-        font-size: 9.5px; font-weight: 800; color: #0B0F1A; margin-top: 4px;
+        font-size: 9px; font-weight: 700; color: #0B0F1A; margin-top: 4px;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
       }
-      .artist-pin-cat { font-size: 8px; font-weight: 600; color: #8291AC; margin-top: 1px; }
       .pin-tail {
         width: 9px; height: 9px; background: #fff; margin: -5px auto 0;
         transform: rotate(45deg); border-right: 1px solid rgba(0,0,0,0.06);
@@ -583,14 +595,7 @@ const styles = {
   tabBtn: { background: "none", border: "none", padding: 0, paddingBottom: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, color: MUTE },
   tabBtnActive: { color: "#fff", borderBottom: `2px solid ${CLAY}` },
 
-  chipRow: { display: "flex", gap: 8, padding: "12px 16px", overflowX: "auto", borderBottom: "1px solid rgba(255,255,255,0.08)" },
-  chip: {
-    flexShrink: 0, background: "#131B2C", color: MUTE, border: "1px solid rgba(255,255,255,0.1)",
-    borderRadius: 999, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
-  },
-  chipActive: { background: CLAY, color: "#fff", border: `1px solid ${CLAY}` },
-
-  mapWrap: { position: "relative", width: "100%", height: "calc(100vh - 320px)", minHeight: 340 },
+  mapWrap: { position: "relative", width: "100%", height: "44vh", minHeight: 300 },
   map: { width: "100%", height: "100%" },
   areaBar: {
     position: "absolute", top: 12, left: 14, right: 14, zIndex: 500,
@@ -603,15 +608,24 @@ const styles = {
     background: "#fff", color: "#0B0F1A", padding: "8px 16px", borderRadius: 999,
     fontSize: 12.5, fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.2)", textAlign: "center", maxWidth: "80%",
   },
-  recenterBtn: {
-    position: "absolute", right: 14, bottom: 14, zIndex: 500,
-    width: 40, height: 40, borderRadius: "50%", background: "#fff", border: "none",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.25)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+
+  chipRow: { display: "flex", gap: 8, padding: "12px 16px", overflowX: "auto" },
+  chip: {
+    flexShrink: 0, background: "#131B2C", color: MUTE, border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 999, padding: "7px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
   },
-  searchAreaFloating: {
-    position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)", zIndex: 500,
-    background: CLAY, color: "#fff", border: "none", borderRadius: 999,
-    padding: "10px 20px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", boxShadow: "0 6px 16px rgba(0,0,0,0.35)",
+  chipActive: { background: CLAY, color: "#fff", border: `1px solid ${CLAY}` },
+
+  actionRow: { display: "flex", gap: 10, padding: "0 16px 12px" },
+  raiseBtn: {
+    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+    background: BLUE, color: "#fff", border: "none", borderRadius: 14,
+    padding: "13px 10px", fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4, cursor: "pointer",
+  },
+  searchAreaBtn: {
+    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+    background: CLAY, color: "#fff", border: "none", borderRadius: 14,
+    padding: "13px 10px", fontSize: 12.5, fontWeight: 800, letterSpacing: 0.4, cursor: "pointer",
   },
 
   sheetBackdrop: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 800, display: "flex", alignItems: "flex-end" },
