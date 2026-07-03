@@ -1,141 +1,65 @@
-// artspire-frontend/src/BottomNav.jsx
-import { useRef } from "react";
+import { Home, Compass, Plus, Bell, User } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 
-export default function BottomNav() {
+/**
+ * Fixed bottom navigation used across Home / Explore / Activity / Profile.
+ * The center "+" button is meant to open the CreateSheet modal (artwork,
+ * photo, video, event, offer, blog) — wire onCreateClick to that.
+ */
+export default function BottomNav({ onCreateClick }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const fileInputRef = useRef(null);
 
-  const isActive = (path) => location.pathname === path;
+  const tabs = [
+    { key: "home", label: "Home", icon: Home, path: "/" },
+    { key: "explore", label: "Explore", icon: Compass, path: "/explore" },
+    { key: "create", label: "", icon: Plus, path: null },
+    { key: "activity", label: "Activity", icon: Bell, path: "/activity" },
+    { key: "profile", label: "Profile", icon: User, path: "/profile" },
+  ];
 
-  const handleAddClick = () => {
-    // Opens camera on mobile (capture="environment") or gallery/file picker as fallback
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Hand the picked file off to your create/upload page.
-    // Adjust "/create" to whatever route you use for composing a post.
-    navigate("/create", { state: { file } });
-    e.target.value = ""; // reset so picking the same file again still fires onChange
-  };
+  const isActive = (path) =>
+    path && (location.pathname === path || (path !== "/" && location.pathname.startsWith(path)));
 
   return (
-    <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*,video/*"
-        capture="environment"
-        style={styles.hiddenInput}
-        onChange={handleFileChange}
-      />
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-stone-100 bg-white/95 backdrop-blur px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2">
+      <div className="mx-auto flex max-w-md items-center justify-between">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
 
-      <nav style={styles.nav}>
-        <NavIcon
-          active={isActive("/") || isActive("/home")}
-          onClick={() => navigate("/")}
-          label="Home"
-        >
-          <path d="M3 11.5 12 4l9 7.5" />
-          <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9" />
-        </NavIcon>
+          if (tab.key === "create") {
+            return (
+              <button
+                key={tab.key}
+                onClick={onCreateClick}
+                aria-label="Create"
+                className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg shadow-violet-300/60 transition-transform active:scale-95"
+              >
+                <Icon size={26} strokeWidth={2.5} />
+              </button>
+            );
+          }
 
-        <NavIcon
-          active={isActive("/search") || isActive("/explore")}
-          onClick={() => navigate("/search")}
-          label="Search"
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </NavIcon>
-
-        {/* Center "Add Post" button, raised like Instagram */}
-        <button style={styles.addBtn} onClick={handleAddClick} aria-label="Add post">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
-
-        <NavIcon
-          active={isActive("/notifications")}
-          onClick={() => navigate("/notifications")}
-          label="Activity"
-        >
-          <path d="M12 21s-7-4.35-9.5-8.5C.5 8.5 3 5 6.5 5 9 5 11 6.7 12 8c1-1.3 3-3 5.5-3 3.5 0 6 3.5 4 7.5C19 16.65 12 21 12 21z" />
-        </NavIcon>
-
-        <NavIcon
-          active={isActive("/profile")}
-          onClick={() => navigate("/profile")}
-          label="Profile"
-        >
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21c0-4 4-6.5 8-6.5s8 2.5 8 6.5" />
-        </NavIcon>
-      </nav>
-    </>
+          const active = isActive(tab.path);
+          return (
+            <button
+              key={tab.key}
+              onClick={() => tab.path && navigate(tab.path)}
+              className="flex flex-col items-center gap-1 px-3 py-1 text-stone-400"
+            >
+              <Icon
+                size={22}
+                strokeWidth={active ? 2.5 : 1.8}
+                className={active ? "text-violet-600" : "text-stone-400"}
+              />
+              <span className={`text-[11px] ${active ? "font-medium text-violet-600" : "text-stone-400"}`}>
+                {tab.label}
+              </span>
+              {active && <span className="h-1 w-1 rounded-full bg-violet-600" />}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
-
-function NavIcon({ active, onClick, label, children }) {
-  return (
-    <button style={styles.iconBtn} onClick={onClick} aria-label={label}>
-      <svg
-        width="24"
-        height="24"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={active ? "#fff" : "#8a8f98"}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {children}
-      </svg>
-    </button>
-  );
-}
-
-const styles = {
-  nav: {
-    position: "fixed",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 64,
-    background: "#0b1424",
-    borderTop: "1px solid rgba(255,255,255,0.08)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-around",
-    padding: "0 8px",
-    zIndex: 50,
-  },
-  iconBtn: {
-    background: "transparent",
-    border: "none",
-    padding: 8,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-  },
-  addBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: "50%",
-    background: "linear-gradient(135deg,#f97316,#ec4899)",
-    border: "none",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    marginTop: -18, // raises it above the bar, Instagram-style
-    boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
-  },
-  hiddenInput: { display: "none" },
-};
