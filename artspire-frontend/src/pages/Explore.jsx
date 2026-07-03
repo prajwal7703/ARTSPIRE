@@ -1,11 +1,11 @@
 // artspire-frontend/src/pages/Explore.jsx
 //
-// "Near You" tab: a real, live map (Leaflet + free CARTO dark tiles — no
-// Google Maps key/billing needed) showing nearby posts as pins, a pulsing
-// "You are here" marker from geolocation, and Airbnb/Zillow-style search:
-// panning the map reveals a "Search this area" button instead of silently
-// refetching underneath you. "Raise Request" opens your existing
-// PostRequestModal. Matches the Home.jsx dark theme tokens.
+// "Near You" tab, matching the light Pinterest-style map mockup: tab row
+// (For You / Following / Near You), a floating "Search near this area" bar
+// over a real light-mode map (Leaflet + free CARTO Positron tiles — no
+// Google Maps key/billing needed), white post-card pins with a Save badge,
+// a "You" location marker, and Raise Request / Search Area buttons at the
+// bottom. Raise Request opens your existing PostRequestModal.
 //
 // Install once:  npm install leaflet react-leaflet
 //
@@ -16,7 +16,7 @@
 //
 // Wire it up in your router, e.g.:
 //   <Route path="/explore" element={<Explore />} />
-// and point the compass icon in BottomNav at "/explore".
+// and point the compass/search icon in BottomNav at "/explore".
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,8 +30,8 @@ import PostRequestModal from "../components/PostRequestModal";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-// Free, no-API-key dark tiles that match the app's theme
-const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+// Free, no-API-key light tiles ("Positron") — matches the mockup's light map
+const TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 const FALLBACK_CENTER = { lat: 12.9716, lng: 77.5946 }; // Bengaluru — used if geolocation is denied
@@ -78,11 +78,19 @@ function boundsToRadiusKm(bounds, center) {
   return Math.max(1, Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))));
 }
 
+// "You" marker: blue circle with an upward heading arrow, like the mockup
 const youIcon = L.divIcon({
   className: "you-pin",
-  html: `<div class="you-dot"><div class="you-pulse"></div></div>`,
-  iconSize: [18, 18],
-  iconAnchor: [9, 9],
+  html: `
+    <div class="you-wrap">
+      <div class="you-dot">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff"><path d="M12 2 L20 20 L12 16 L4 20 Z"/></svg>
+      </div>
+      <span class="you-label">You</span>
+    </div>
+  `,
+  iconSize: [46, 46],
+  iconAnchor: [23, 23],
 });
 
 function createPostIcon(post) {
@@ -100,7 +108,10 @@ function createPostIcon(post) {
       <div class="pin-card-head">
         ${avatarHtml}
         <span class="pin-name">${name}</span>
-        <span class="pin-save">Save</span>
+        <span class="pin-save">
+          <svg width="9" height="9" viewBox="0 0 24 24" fill="#fff"><path d="M6 2h12a1 1 0 0 1 1 1v19l-7-4-7 4V3a1 1 0 0 1 1-1z"/></svg>
+          Save
+        </span>
       </div>
       ${thumbHtml}
     </div>
@@ -110,8 +121,8 @@ function createPostIcon(post) {
   return L.divIcon({
     html,
     className: "post-pin",
-    iconSize: [118, 150],
-    iconAnchor: [59, 150],
+    iconSize: [110, 138],
+    iconAnchor: [55, 138],
   });
 }
 
@@ -135,6 +146,7 @@ export default function Explore() {
   const [loading, setLoading] = useState(false);
   const [showSearchArea, setShowSearchArea] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [areaQuery, setAreaQuery] = useState("");
 
   const fetchNearby = useCallback(async (lat, lng, radiusKm = 8) => {
     setLoading(true);
@@ -179,6 +191,26 @@ export default function Explore() {
     fetchNearby(c.lat, c.lng, radiusKm);
   };
 
+  // "Search near this area" text box: geocode via OSM Nominatim (free, no key)
+  const handleAreaSearch = async (e) => {
+    e.preventDefault();
+    const q = areaQuery.trim();
+    if (!q || !mapRef.current) return;
+    try {
+      const { data } = await axios.get("https://nominatim.openstreetmap.org/search", {
+        params: { q, format: "json", limit: 1 },
+      });
+      if (data?.[0]) {
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        mapRef.current.setView([lat, lng], 13, { animate: true });
+        fetchNearby(lat, lng);
+      }
+    } catch (err) {
+      console.error("Area search failed:", err);
+    }
+  };
+
   const recenterOnMe = () => {
     if (!youLocation || !mapRef.current) return;
     mapRef.current.setView([youLocation.lat, youLocation.lng], 14, { animate: true });
@@ -189,15 +221,34 @@ export default function Explore() {
     <div style={styles.page}>
       <GlobalStyles />
 
+      {/* ══ Top bar ══ */}
       <div style={styles.topBar}>
-        <span style={styles.brandName}>ArtSpire</span>
-        <span style={styles.tabLabel}>Near You</span>
+        <div style={styles.brandRow}>
+          <span style={styles.brandName}>ArtSpire</span>
+          <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
+            <SearchIcon size={18} stroke="#0B0F1A" />
+          </button>
+        </div>
+        <div style={styles.tabRow}>
+          <button style={styles.tabBtn} onClick={() => navigate("/")}>For You</button>
+          <button style={styles.tabBtn} onClick={() => navigate("/following")}>Following</button>
+          <button style={{ ...styles.tabBtn, ...styles.tabBtnActive }}>Near You</button>
+        </div>
       </div>
 
+      {/* ══ Map ══ */}
       <div style={styles.mapWrap}>
-        {locating && (
-          <div style={styles.mapOverlayMsg}>Finding your location…</div>
-        )}
+        <form style={styles.areaBar} onSubmit={handleAreaSearch}>
+          <SearchIcon size={14} stroke="#8291AC" />
+          <input
+            style={styles.areaInput}
+            placeholder="Search near this area"
+            value={areaQuery}
+            onChange={(e) => setAreaQuery(e.target.value)}
+          />
+        </form>
+
+        {locating && <div style={styles.mapOverlayMsg}>Finding your location…</div>}
 
         <MapContainer
           center={[center.lat, center.lng]}
@@ -241,6 +292,7 @@ export default function Explore() {
         )}
       </div>
 
+      {/* ══ Action row ══ */}
       <div style={styles.actionRow}>
         <button style={styles.raiseBtn} onClick={() => setShowRequestModal(true)}>
           <RequestIcon /> RAISE REQUEST
@@ -251,7 +303,7 @@ export default function Explore() {
       </div>
 
       <div style={{ height: 96 }} />
-      <BottomNav />
+      <BottomNav activeTab="explore" />
 
       {showRequestModal && (
         <PostRequestModal actor={actor} onClose={() => setShowRequestModal(false)} />
@@ -278,7 +330,7 @@ function RequestIcon() {
 }
 function LocateIcon() {
   return (
-    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#0B0F1A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
     </svg>
@@ -290,53 +342,50 @@ function GlobalStyles() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-      .leaflet-container { background: #0B0F1A; font-family: 'Inter', sans-serif; }
+      .leaflet-container { background: #EAEDF2; font-family: 'Inter', sans-serif; }
 
+      .you-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
       .you-dot {
-        width: 16px; height: 16px; border-radius: 50%;
-        background: #3B82F6; border: 2px solid #fff;
-        box-shadow: 0 0 0 3px rgba(59,130,246,0.35);
-        position: relative;
+        width: 26px; height: 26px; border-radius: 50%;
+        background: #2E6BE6; border: 3px solid #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+        display: flex; align-items: center; justify-content: center;
       }
-      .you-pulse {
-        position: absolute; inset: -10px; border-radius: 50%;
-        background: rgba(59,130,246,0.35);
-        animation: youPulse 1.8s ease-out infinite;
-      }
-      @keyframes youPulse {
-        0% { transform: scale(0.4); opacity: 0.8; }
-        100% { transform: scale(1.6); opacity: 0; }
+      .you-label {
+        font-size: 10px; font-weight: 700; color: #0B0F1A; background: #fff;
+        padding: 1px 6px; border-radius: 999px; box-shadow: 0 2px 4px rgba(0,0,0,0.15);
       }
 
       .post-pin { cursor: pointer; }
       .pin-card {
-        width: 108px; background: #131B2C; border-radius: 12px; padding: 6px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.08);
+        width: 100px; background: #fff; border-radius: 12px; padding: 5px;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.18); border: 1px solid rgba(0,0,0,0.06);
       }
-      .pin-card-head { display: flex; align-items: center; gap: 5px; padding: 2px 2px 5px; }
+      .pin-card-head { display: flex; align-items: center; gap: 4px; padding: 2px 2px 5px; }
       .pin-avatar, .pin-avatar-fallback {
-        width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
+        width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0; object-fit: cover;
       }
       .pin-avatar-fallback {
-        background: #D9662B; color: #fff; font-size: 9px; font-weight: 700;
+        background: #D9662B; color: #fff; font-size: 8px; font-weight: 700;
         display: flex; align-items: center; justify-content: center;
       }
       .pin-name {
-        font-size: 10px; font-weight: 700; color: #fff; flex: 1;
+        font-size: 9px; font-weight: 700; color: #0B0F1A; flex: 1;
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
       }
       .pin-save {
-        font-size: 8px; font-weight: 700; color: #D9662B; border: 1px solid #D9662B;
-        border-radius: 999px; padding: 1px 5px; flex-shrink: 0;
+        display: flex; align-items: center; gap: 2px;
+        font-size: 7.5px; font-weight: 700; color: #fff; background: #D9662B;
+        border-radius: 999px; padding: 2px 6px; flex-shrink: 0;
       }
       .pin-thumb, .pin-thumb-empty {
-        width: 100%; height: 82px; border-radius: 8px; object-fit: cover; display: block;
-        background: #1a2233;
+        width: 100%; height: 76px; border-radius: 8px; object-fit: cover; display: block;
+        background: #EAEDF2;
       }
       .pin-tail {
-        width: 10px; height: 10px; background: #131B2C; margin: -5px auto 0;
-        transform: rotate(45deg); border-right: 1px solid rgba(255,255,255,0.08);
-        border-bottom: 1px solid rgba(255,255,255,0.08);
+        width: 9px; height: 9px; background: #fff; margin: -5px auto 0;
+        transform: rotate(45deg); border-right: 1px solid rgba(0,0,0,0.06);
+        border-bottom: 1px solid rgba(0,0,0,0.06);
       }
     `}</style>
   );
@@ -351,31 +400,44 @@ const MUTE = "#8291AC";
 const styles = {
   page: { fontFamily: "'Inter', sans-serif", background: INK, minHeight: "100vh", color: "#fff" },
 
-  topBar: {
-    display: "flex", alignItems: "baseline", justifyContent: "space-between",
-    padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)",
-  },
+  topBar: { padding: "16px 18px 10px", borderBottom: "1px solid rgba(255,255,255,0.08)" },
+  brandRow: { display: "flex", alignItems: "center", justifyContent: "space-between" },
   brandName: { fontWeight: 800, fontSize: 20, color: "#fff" },
-  tabLabel: { fontWeight: 700, fontSize: 13, color: CLAY },
+  searchIconBtn: {
+    background: "#fff", border: "none", cursor: "pointer", padding: 8,
+    borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+  },
+  tabRow: { display: "flex", gap: 22, marginTop: 14 },
+  tabBtn: {
+    background: "none", border: "none", padding: 0, paddingBottom: 8, cursor: "pointer",
+    fontSize: 14, fontWeight: 600, color: MUTE,
+  },
+  tabBtnActive: { color: "#fff", borderBottom: `2px solid ${CLAY}` },
 
   mapWrap: { position: "relative", width: "100%", height: "calc(100vh - 260px)", minHeight: 380 },
   map: { width: "100%", height: "100%" },
+  areaBar: {
+    position: "absolute", top: 12, left: 14, right: 14, zIndex: 500,
+    display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 999,
+    padding: "10px 16px", boxShadow: "0 6px 16px rgba(0,0,0,0.25)",
+  },
+  areaInput: { flex: 1, border: "none", outline: "none", fontSize: 13.5, color: "#0B0F1A", background: "transparent" },
   mapOverlayMsg: {
-    position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 500,
-    background: SURFACE, color: "#fff", padding: "8px 16px", borderRadius: 999,
-    fontSize: 12.5, fontWeight: 600, border: "1px solid rgba(255,255,255,0.1)",
+    position: "absolute", top: 66, left: "50%", transform: "translateX(-50%)", zIndex: 500,
+    background: "#fff", color: "#0B0F1A", padding: "8px 16px", borderRadius: 999,
+    fontSize: 12.5, fontWeight: 600, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
   },
   recenterBtn: {
     position: "absolute", right: 14, bottom: 14, zIndex: 500,
-    width: 38, height: 38, borderRadius: "50%", background: SURFACE,
-    border: "1px solid rgba(255,255,255,0.12)", display: "flex", alignItems: "center",
-    justifyContent: "center", cursor: "pointer",
+    width: 40, height: 40, borderRadius: "50%", background: "#fff",
+    border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.25)", display: "flex",
+    alignItems: "center", justifyContent: "center", cursor: "pointer",
   },
   searchAreaFloating: {
-    position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 500,
-    background: "#fff", color: "#0B0F1A", border: "none", borderRadius: 999,
-    padding: "9px 18px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
-    boxShadow: "0 6px 16px rgba(0,0,0,0.4)",
+    position: "absolute", bottom: 14, left: "50%", transform: "translateX(-50%)", zIndex: 500,
+    background: CLAY, color: "#fff", border: "none", borderRadius: 999,
+    padding: "10px 20px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+    boxShadow: "0 6px 16px rgba(0,0,0,0.35)",
   },
 
   actionRow: { display: "flex", gap: 10, padding: "14px 16px 0" },
