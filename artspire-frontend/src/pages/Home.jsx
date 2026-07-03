@@ -1,6 +1,6 @@
 // artspire-frontend/src/pages/Home.jsx
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { getCurrentAccount, isArtist } from "../utils/auth";
 import BottomNav from "../BottomNav";
@@ -11,8 +11,6 @@ const fmt = (n) => Number(n).toLocaleString("en-IN");
 
 // Looping hero video — served from public/artbg.mp4, same as your old homepage.
 const HERO_VIDEO_URL = "/artbg.mp4";
-
-const TABS = ["For You", "Following", "Near You"];
 
 const getActor = () => {
   const account = getCurrentAccount();
@@ -29,9 +27,9 @@ export default function Home() {
   const navigate = useNavigate();
   const actor = getActor();
 
-  const [activeTab, setActiveTab] = useState("For You");
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [locating, setLocating] = useState(false);
 
   const [posts, setPosts] = useState([]);
   const [page, setPage] = useState(1);
@@ -102,6 +100,28 @@ export default function Home() {
     setPosts((prev) => prev.map((p) => (p._id === id ? { ...p, ...patch } : p)));
   };
 
+  // Live geolocation lookup — asks the browser for the user's real coordinates,
+  // then sends them to the Artists page to sort/filter by distance.
+  const handleNearYou = () => {
+    if (!navigator.geolocation) {
+      navigate("/artists");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocating(false);
+        const { latitude, longitude } = pos.coords;
+        navigate(`/artists?lat=${latitude}&lng=${longitude}&near=true`);
+      },
+      () => {
+        setLocating(false);
+        navigate("/artists");
+      },
+      { timeout: 6000 }
+    );
+  };
+
   const q = query.trim().toLowerCase();
   const visiblePosts = q
     ? posts.filter(
@@ -143,17 +163,9 @@ export default function Home() {
         </div>
       )}
 
-      {/* ══ Tabs ══ */}
+      {/* ══ Section label ══ */}
       <div style={styles.tabsRow}>
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            style={{ ...styles.tabBtn, ...(activeTab === tab ? styles.tabBtnActive : {}) }}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
+        <span style={{ ...styles.tabBtn, ...styles.tabBtnActive }}>For You</span>
       </div>
 
       {/* ══ Hero banner ══ */}
@@ -180,11 +192,14 @@ export default function Home() {
             Near You
           </h1>
           <div style={styles.heroBtnRow}>
-            <button style={styles.heroBtnPrimary} onClick={() => navigate("/artists")}>
+            <button style={styles.heroBtn} onClick={() => navigate("/artists")}>
               Explore Artists
             </button>
-            <button style={styles.heroBtnSecondary} onClick={() => navigate("/artist-register")}>
+            <button style={styles.heroBtn} onClick={() => navigate("/artist-register")}>
               Join As Artist
+            </button>
+            <button style={styles.heroBtn} onClick={handleNearYou} disabled={locating}>
+              {locating ? "Locating…" : "Near You"}
             </button>
           </div>
         </div>
@@ -192,46 +207,34 @@ export default function Home() {
 
       {/* ══ Live feed grid ══ */}
       <div style={styles.feedCol}>
-        {activeTab !== "For You" ? (
+        {visiblePosts.length === 0 && !loading && (
           <div style={styles.comingSoon}>
-            <div style={{ fontSize: 34 }}>✨</div>
-            <div style={{ fontWeight: 800, marginTop: 6 }}>{activeTab} is coming soon</div>
+            <div style={{ fontSize: 34 }}>🖼️</div>
+            <div style={{ fontWeight: 800, marginTop: 6 }}>
+              {q ? "No matches found." : "No posts yet."}
+            </div>
             <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4 }}>
-              For now, check out what's trending in For You.
+              {q ? "Try a different search term." : "New work from artists will show up here as soon as it's approved."}
             </div>
           </div>
-        ) : (
-          <>
-            {visiblePosts.length === 0 && !loading && (
-              <div style={styles.comingSoon}>
-                <div style={{ fontSize: 34 }}>🖼️</div>
-                <div style={{ fontWeight: 800, marginTop: 6 }}>
-                  {q ? "No matches found." : "No posts yet."}
-                </div>
-                <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4 }}>
-                  {q ? "Try a different search term." : "New work from artists will show up here as soon as it's approved."}
-                </div>
-              </div>
-            )}
+        )}
 
-            <div className="discover-grid">
-              {visiblePosts.map((p) => (
-                <DiscoverCard
-                  key={p._id}
-                  post={p}
-                  actor={actor}
-                  onUpdate={(patch) => updatePost(p._id, patch)}
-                  onOpen={() => navigate("/feed")}
-                />
-              ))}
-            </div>
+        <div className="discover-grid">
+          {visiblePosts.map((p) => (
+            <DiscoverCard
+              key={p._id}
+              post={p}
+              actor={actor}
+              onUpdate={(patch) => updatePost(p._id, patch)}
+              onOpen={() => navigate("/feed")}
+            />
+          ))}
+        </div>
 
-            {!q && hasMore && (
-              <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
-                {loading ? "Loading…" : "Load more"}
-              </button>
-            )}
-          </>
+        {!q && hasMore && (
+          <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
+            {loading ? "Loading…" : "Load more"}
+          </button>
         )}
       </div>
 
@@ -276,14 +279,18 @@ function DiscoverCard({ post, actor, onUpdate, onOpen }) {
   return (
     <div className="discover-card" onClick={onOpen}>
       <div style={styles.cardTopRow}>
-        <div style={styles.cardArtist}>
+        <Link
+          to={`/dashboard/${post.artistId}`}
+          style={styles.cardArtist}
+          onClick={(e) => e.stopPropagation()}
+        >
           {post.artistAvatar ? (
             <img src={post.artistAvatar} alt="" style={styles.cardAvatar} />
           ) : (
             <div style={styles.cardAvatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>
           )}
           <span style={styles.cardArtistName}>{post.artistName || "Unknown artist"}</span>
-        </div>
+        </Link>
         <button
           style={{ ...styles.saveBtn, ...(saved ? styles.saveBtnActive : {}) }}
           onClick={toggleSave}
@@ -416,23 +423,22 @@ const styles = {
   tabBtnActive: { color: "#1a1a1a", borderBottom: "2px solid #1a1a1a" },
 
   hero: {
-    position: "relative", margin: "14px 14px 0", borderRadius: 20, overflow: "hidden",
-    minHeight: 190, display: "flex", alignItems: "flex-end",
+    position: "relative", margin: 0, borderRadius: 0, overflow: "hidden",
+    minHeight: 340, display: "flex", alignItems: "flex-end",
   },
   heroMedia: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" },
   heroFallbackBg: { position: "absolute", inset: 0 },
   heroOverlay: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15))" },
   heroContent: { position: "relative", padding: "18px 18px 20px", width: "100%" },
   heroTitle: { margin: 0, fontSize: 26, fontWeight: 900, lineHeight: 1.15, color: "#fff" },
-  heroBtnRow: { display: "flex", gap: 10, marginTop: 14 },
-  heroBtnPrimary: { background: "#f97316", color: "#fff", border: "none", borderRadius: 999, padding: "9px 18px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" },
-  heroBtnSecondary: { background: "rgba(255,255,255,0.12)", color: "#fff", border: "1px solid rgba(255,255,255,0.5)", borderRadius: 999, padding: "9px 18px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" },
+  heroBtnRow: { display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" },
+  heroBtn: { background: "#f97316", color: "#fff", border: "none", borderRadius: 999, padding: "9px 18px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" },
 
   feedCol: { maxWidth: 1400, margin: "0 auto", padding: "18px 12px 0" },
   comingSoon: { textAlign: "center", color: "#94a3b8", padding: "50px 20px", fontWeight: 600 },
 
   cardTopRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 8px 6px", gap: 6 },
-  cardArtist: { display: "flex", alignItems: "center", gap: 6, minWidth: 0 },
+  cardArtist: { display: "flex", alignItems: "center", gap: 6, minWidth: 0, textDecoration: "none" },
   cardAvatar: { width: 20, height: 20, borderRadius: "50%", objectFit: "cover" },
   cardAvatarFallback: { width: 20, height: 20, borderRadius: "50%", background: "#f97316", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 },
   cardArtistName: { fontSize: 11.5, fontWeight: 700, color: "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
