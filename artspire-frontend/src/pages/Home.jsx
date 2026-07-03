@@ -1,19 +1,18 @@
 // artspire-frontend/src/pages/Home.jsx
 //
-// Design system for this pass:
-//   Ink      #0B0F1A   background
-//   Surface  #131B2C   dark panels / dock
+// Design system:
+//   Ink      #0B0F1A   overlay tone on top of video
+//   Surface  #131B2C   dock / glass panels
 //   Paper    #F6F1E7   card mats (warm ivory, not stark white)
 //   Clay     #D9662B   primary accent (burnt terracotta)
-//   Rose     #C15C79   secondary accent, used sparingly
 //   Mute     #8291AC   secondary text on dark
 //   Charcoal #2B2420   text on paper
-//   Display  Fraunces (italic)   — headline, gallery labels
+//   Display  Fraunces (italic)   — brand + gallery labels
 //   Body     Inter                — UI text
-//   Utility  Inter, uppercase, tracked — category eyebrows
 //
-// Signature element: each artwork sits in a paper "mat" with a museum-style
-// label plate beneath it (artist + category), instead of a social-feed pill.
+// The video is now a fixed full-page background (not just a hero strip) —
+// everything scrolls over it. Cards stay opaque (paper mat) for legibility;
+// everything else is glassy/transparent so the video shows through.
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
@@ -47,13 +46,12 @@ function getLocation() {
   });
 }
 
-// Pull a display category out of whatever the post record has.
 function firstCategory(post) {
   if (Array.isArray(post.categories) && post.categories.length) return post.categories[0];
   if (typeof post.categories === "string" && post.categories.trim()) {
     return post.categories.split(",")[0].trim();
   }
-  return post.category || "Original work";
+  return post.category || "Art";
 }
 
 export default function Home() {
@@ -173,7 +171,6 @@ export default function Home() {
     );
   };
 
-  // Real categories, derived from whatever's actually loaded — not decorative.
   const categories = useMemo(() => {
     const set = new Set();
     posts.forEach((p) => set.add(firstCategory(p)));
@@ -193,123 +190,123 @@ export default function Home() {
     <div style={styles.page}>
       <GlobalStyles />
 
-      {toast && (
-        <div style={styles.toast} onClick={() => setToast(null)}>🔔 {toast}</div>
-      )}
+      {/* ══ Fixed full-page video background ══ */}
+      <video style={styles.bgVideo} src={HERO_VIDEO_URL} autoPlay loop muted playsInline />
+      <div style={styles.bgOverlay} />
 
-      {/* ══ Top bar ══ */}
-      <div style={styles.topBar}>
-        <div style={styles.brand}>
-          <span style={styles.brandMark}>A</span>
-          <span style={styles.brandName}>ArtSpire</span>
+      {/* ══ Everything below scrolls over the video ══ */}
+      <div style={styles.content}>
+        {toast && (
+          <div style={styles.toast} onClick={() => setToast(null)}>🔔 {toast}</div>
+        )}
+
+        {/* ══ Top bar — glassy, over the video ══ */}
+        <div style={styles.topBar}>
+          <div style={styles.brand}>
+            <span style={styles.brandMark}>A</span>
+            <span style={styles.brandName}>ArtSpire</span>
+          </div>
+          <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
+            <SearchIcon size={17} stroke="#fff" />
+          </button>
         </div>
-        <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
-          <SearchIcon size={17} stroke="#2B2420" />
-        </button>
-      </div>
 
-      {/* ══ Editorial hero ══ */}
-      <div style={styles.hero}>
-        <video style={styles.heroMedia} src={HERO_VIDEO_URL} autoPlay loop muted playsInline />
-        <div style={styles.heroOverlay} />
-        <div style={styles.heroContent}>
-          <span style={styles.heroEyebrow}>A marketplace for working artists</span>
+        {/* ══ Hero content ══ */}
+        <div style={styles.hero}>
           <h1 style={styles.heroTitle}>
-            Discover <em style={styles.heroTitleAccent}>extraordinary</em>
-            <br />makers, near you.
+            Discover
+            <br />
+            <span style={styles.heroTitleAccent}>Creative Artists</span>
+            <br />
+            Near You
           </h1>
-          <p style={styles.heroStat}>
-            {loading && posts.length === 0
-              ? "Loading the live gallery…"
-              : `${posts.length}${hasMore ? "+" : ""} original ${posts.length === 1 ? "piece" : "pieces"} on ArtSpire right now`}
-          </p>
 
           <div style={styles.heroActions}>
-            <button style={styles.heroPrimary} onClick={() => navigate("/artists")}>
-              Explore artists
+            <button style={styles.heroBtn} onClick={() => navigate("/artists")}>
+              Explore Artists
             </button>
-            <button style={styles.heroLink} onClick={() => navigate("/artist-register")}>
-              Join as an artist <ArrowIcon />
+            <button style={styles.heroBtn} onClick={() => navigate("/artist-register")}>
+              Join As Artist
             </button>
-            <button style={styles.heroLink} onClick={handleNearYou} disabled={locating}>
-              {locating ? "Locating…" : "Find work near me"} <ArrowIcon />
+            <button style={styles.heroBtn} onClick={handleNearYou} disabled={locating}>
+              {locating ? "Locating…" : "Near You"}
             </button>
           </div>
         </div>
-      </div>
 
-      {/* ══ Category rail — real filter, derived from live posts ══ */}
-      <div style={styles.railWrap}>
-        <div className="category-rail">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              style={{
-                ...styles.railChip,
-                ...(activeCategory === cat ? styles.railChipActive : {}),
-              }}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ══ Gallery wall ══ */}
-      <div style={styles.feedCol}>
-        {visiblePosts.length === 0 && !loading && (
-          <div style={styles.comingSoon}>
-            <div style={{ fontSize: 32 }}>🖼️</div>
-            <div style={styles.comingSoonTitle}>
-              {q || activeCategory !== "All" ? "Nothing here yet." : "The wall is empty, for now."}
-            </div>
-            <div style={styles.comingSoonSub}>
-              {q || activeCategory !== "All"
-                ? "Try a different search or category."
-                : "New work from artists appears here the moment it's approved."}
-            </div>
+        {/* ══ Category rail ══ */}
+        <div style={styles.railWrap}>
+          <div className="category-rail">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                style={{
+                  ...styles.railChip,
+                  ...(activeCategory === cat ? styles.railChipActive : {}),
+                }}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
-        )}
-
-        <div className="gallery-grid">
-          {visiblePosts.map((p) => (
-            <GalleryCard
-              key={p._id}
-              post={p}
-              actor={actor}
-              onUpdate={(patch) => updatePost(p._id, patch)}
-              onOpen={() => navigate("/feed")}
-            />
-          ))}
         </div>
 
-        {!q && activeCategory === "All" && hasMore && (
-          <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
-            {loading ? "Loading…" : "Load more work"}
+        {/* ══ Gallery wall ══ */}
+        <div style={styles.feedCol}>
+          {visiblePosts.length === 0 && !loading && (
+            <div style={styles.comingSoon}>
+              <div style={{ fontSize: 32 }}>🖼️</div>
+              <div style={styles.comingSoonTitle}>
+                {q || activeCategory !== "All" ? "Nothing here yet." : "Nothing posted yet."}
+              </div>
+              <div style={styles.comingSoonSub}>
+                {q || activeCategory !== "All"
+                  ? "Try a different search or category."
+                  : "New posts from artists show up here as soon as they're approved."}
+              </div>
+            </div>
+          )}
+
+          <div className="gallery-grid">
+            {visiblePosts.map((p) => (
+              <GalleryCard
+                key={p._id}
+                post={p}
+                actor={actor}
+                onUpdate={(patch) => updatePost(p._id, patch)}
+                onOpen={() => navigate("/feed")}
+              />
+            ))}
+          </div>
+
+          {!q && activeCategory === "All" && hasMore && (
+            <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
+              {loading ? "Loading…" : "Load more"}
+            </button>
+          )}
+        </div>
+
+        {/* ══ Search / post dock ══ */}
+        <div style={{ height: 66 }} />
+        <div style={styles.searchDock}>
+          <SearchIcon size={15} stroke="#8291AC" />
+          <input
+            style={styles.searchDockInput}
+            placeholder="Search for artwork, artists, or a request…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <button type="button" style={styles.searchDockAction} onClick={() => setShowPostModal(true)} aria-label="Post a request">
+            + Post
           </button>
-        )}
+        </div>
+
+        <div style={{ height: 96 }} />
+        <BottomNav />
+
+        {showPostModal && <PostRequestModal actor={actor} onClose={() => setShowPostModal(false)} />}
       </div>
-
-      {/* ══ Search / post dock, quiet version blended into the nav zone ══ */}
-      <div style={{ height: 66 }} />
-      <div style={styles.searchDock}>
-        <SearchIcon size={15} stroke="#8291AC" />
-        <input
-          style={styles.searchDockInput}
-          placeholder="Search artwork, artists, or a request…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <button type="button" style={styles.searchDockAction} onClick={() => setShowPostModal(true)} aria-label="Post a request">
-          + Post
-        </button>
-      </div>
-
-      <div style={{ height: 96 }} />
-      <BottomNav />
-
-      {showPostModal && <PostRequestModal actor={actor} onClose={() => setShowPostModal(false)} />}
     </div>
   );
 }
@@ -332,8 +329,7 @@ function useSaveToggle(post, actor, onUpdate) {
   return { saved, toggleSave };
 }
 
-/* ── the signature element: artwork "matted" like a framed print, with a
-      museum-label plate underneath instead of a social pill row ──────────── */
+/* ── artwork "matted" like a framed print, museum-label plate underneath ── */
 function GalleryCard({ post, actor, onUpdate, onOpen }) {
   const { saved, toggleSave } = useSaveToggle(post, actor, onUpdate);
   const category = firstCategory(post);
@@ -366,7 +362,6 @@ function GalleryCard({ post, actor, onUpdate, onOpen }) {
           </button>
         </div>
 
-        {/* label plate */}
         <div style={styles.plate}>
           <span style={styles.plateEyebrow}>{category}</span>
           <Link
@@ -395,13 +390,6 @@ function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round">
       <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
-    </svg>
-  );
-}
-function ArrowIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 4 }}>
-      <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   );
 }
@@ -455,15 +443,24 @@ function GlobalStyles() {
 }
 
 const CLAY = "#D9662B";
-const ROSE = "#C15C79";
-const INK = "#0B0F1A";
 const SURFACE = "#131B2C";
 const PAPER = "#F6F1E7";
 const MUTE = "#8291AC";
 const CHARCOAL = "#2B2420";
 
 const styles = {
-  page: { fontFamily: "'Inter', sans-serif", background: INK, minHeight: "100vh", color: "#fff" },
+  page: { fontFamily: "'Inter', sans-serif", minHeight: "100vh", color: "#fff", position: "relative" },
+
+  // Fixed, full-viewport video sits behind everything and never scrolls.
+  bgVideo: {
+    position: "fixed", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0,
+  },
+  bgOverlay: {
+    position: "fixed", inset: 0, zIndex: 1,
+    background: "linear-gradient(180deg, rgba(11,15,26,0.55) 0%, rgba(11,15,26,0.75) 40%, rgba(11,15,26,0.94) 78%, #0B0F1A 100%)",
+  },
+
+  content: { position: "relative", zIndex: 2, minHeight: "100vh" },
 
   toast: {
     position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 200,
@@ -474,7 +471,7 @@ const styles = {
 
   topBar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "16px 18px", background: PAPER,
+    padding: "18px 18px 0",
   },
   brand: { display: "flex", alignItems: "center", gap: 8 },
   brandMark: {
@@ -482,36 +479,25 @@ const styles = {
     color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
     fontWeight: 700, fontSize: 13, fontFamily: "'Fraunces', serif", fontStyle: "italic",
   },
-  brandName: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 19, color: CHARCOAL },
-  searchIconBtn: { background: "none", border: "none", cursor: "pointer", padding: 6 },
+  brandName: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 19, color: "#fff" },
+  searchIconBtn: {
+    background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%",
+    width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+  },
 
-  hero: {
-    position: "relative", minHeight: 300, display: "flex", alignItems: "flex-end", overflow: "hidden",
-  },
-  heroMedia: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" },
-  heroOverlay: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(11,15,26,0.97) 15%, rgba(11,15,26,0.55) 65%, rgba(11,15,26,0.25))" },
-  heroContent: { position: "relative", padding: "24px 18px 22px", width: "100%" },
-  heroEyebrow: {
-    display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
-    color: ROSE, marginBottom: 10,
-  },
-  heroTitle: { margin: 0, fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 30, lineHeight: 1.18, color: "#fff" },
+  hero: { padding: "48px 18px 26px" },
+  heroTitle: { margin: 0, fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 32, lineHeight: 1.18, color: "#fff" },
   heroTitleAccent: { color: CLAY, fontStyle: "italic" },
-  heroStat: { margin: "12px 0 0", fontSize: 13, color: MUTE, fontWeight: 500 },
 
-  heroActions: { display: "flex", alignItems: "center", gap: 18, marginTop: 18, flexWrap: "wrap" },
-  heroPrimary: {
-    background: CLAY, color: "#fff", border: "none", borderRadius: 10, padding: "11px 20px",
-    fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-  },
-  heroLink: {
-    background: "none", border: "none", padding: 0, color: "#fff", fontWeight: 600, fontSize: 13,
-    display: "flex", alignItems: "center", cursor: "pointer", opacity: 0.85,
+  heroActions: { display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" },
+  heroBtn: {
+    background: CLAY, color: "#fff", border: "none", borderRadius: 999, padding: "10px 20px",
+    fontWeight: 700, fontSize: 13, cursor: "pointer",
   },
 
-  railWrap: { background: INK, paddingTop: 14, paddingBottom: 4 },
+  railWrap: { paddingTop: 6, paddingBottom: 4 },
   railChip: {
-    flex: "0 0 auto", background: "transparent", border: "1px solid rgba(255,255,255,0.14)",
+    flex: "0 0 auto", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)",
     borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, color: MUTE, cursor: "pointer",
     whiteSpace: "nowrap",
   },
@@ -522,8 +508,7 @@ const styles = {
   comingSoonTitle: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 18, color: "#fff", marginTop: 10 },
   comingSoonSub: { fontSize: 13, marginTop: 6 },
 
-  // the "mat" — paper-toned frame around each artwork
-  mat: { background: PAPER, borderRadius: 14, padding: 8, boxShadow: "0 4px 18px rgba(0,0,0,0.3)" },
+  mat: { background: PAPER, borderRadius: 14, padding: 8, boxShadow: "0 4px 18px rgba(0,0,0,0.35)" },
   mediaWrap: { position: "relative", width: "100%", borderRadius: 8, overflow: "hidden", background: "#E4DCC8" },
   media: { width: "100%", display: "block", objectFit: "cover" },
   bookmarkBtn: {
@@ -533,7 +518,6 @@ const styles = {
   },
   bookmarkBtnActive: { background: "rgba(255,255,255,0.9)" },
 
-  // label plate — the museum-tag treatment
   plate: { padding: "9px 4px 2px" },
   plateEyebrow: {
     display: "block", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
