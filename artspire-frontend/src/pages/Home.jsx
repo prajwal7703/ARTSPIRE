@@ -5,6 +5,7 @@ import axios from "axios";
 import { getCurrentAccount, isArtist } from "../utils/auth";
 import BottomNav from "../BottomNav";
 import socket from "../socket";
+import PostRequestModal from "../components/PostRequestModal";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
@@ -38,7 +39,6 @@ export default function Home() {
   const navigate = useNavigate();
   const actor = getActor();
 
-  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState(null);
@@ -194,27 +194,16 @@ export default function Home() {
           <span style={styles.brandMark}>A</span>
           <span style={styles.brandName}>ArtSpire</span>
         </div>
+        {/* Search icon now takes you to the dedicated Search/Discover page
+            (hero + Post & Find), instead of toggling an inline search bar. */}
         <button
           style={styles.searchIconBtn}
-          onClick={() => setSearchOpen((v) => !v)}
+          onClick={() => navigate("/search")}
           aria-label="Search"
         >
           <SearchIcon size={18} stroke="#1a1a1a" />
         </button>
       </div>
-
-      {searchOpen && (
-        <div style={styles.searchBarWrap}>
-          <SearchIcon size={16} stroke="#6b7280" />
-          <input
-            autoFocus
-            style={styles.searchInput}
-            placeholder="Search artistic works…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      )}
 
       {/* ══ Section label ══ */}
       <div style={styles.tabsRow}>
@@ -247,7 +236,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* ══ Live feed grid ══ */}
+      {/* ══ Live feed grid — real posts artists have made, pulled from the API ══ */}
       <div style={styles.feedCol}>
         {visiblePosts.length === 0 && !loading && (
           <div style={styles.comingSoon}>
@@ -280,7 +269,9 @@ export default function Home() {
         )}
       </div>
 
-      {/* ══ Fixed search-and-post bar, sits above the bottom nav ══ */}
+      {/* ══ Fixed search-and-post bar, sits above the bottom nav.
+          This filters the posts already loaded on this page — separate
+          from the top-right icon, which jumps to the dedicated /search page. ══ */}
       <div style={{ height: 66 }} />
       <div style={styles.searchDock}>
         <SearchIcon size={16} stroke="#6b7280" />
@@ -381,124 +372,6 @@ function DiscoverCard({ post, actor, onUpdate, onOpen }) {
   );
 }
 
-/* ── Post Request modal: "post what I want", notifies nearby artists ────── */
-function PostRequestModal({ actor, onClose }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [categories, setCategories] = useState("");
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState("");
-  const [status, setStatus] = useState("idle"); // idle | locating | posting | done | error
-  const [notifiedCount, setNotifiedCount] = useState(0);
-  const [errorMsg, setErrorMsg] = useState("");
-
-  const handleFile = (e) => {
-    const f = e.target.files?.[0];
-    setFile(f || null);
-    setPreview(f ? URL.createObjectURL(f) : "");
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!actor) { setErrorMsg("Log in to post a request."); return; }
-    if (!title.trim() || !description.trim()) { setErrorMsg("Title and description are required."); return; }
-    setErrorMsg("");
-    setStatus("locating");
-
-    let coords = null;
-    try {
-      coords = await getLocation();
-    } catch {
-      // Location is optional — the backend falls back to city matching.
-    }
-
-    setStatus("posting");
-    try {
-      const form = new FormData();
-      form.append("requesterId", actor.id);
-      form.append("requesterName", actor.name || "Someone");
-      form.append("requesterAvatar", actor.avatar || "");
-      form.append("title", title.trim());
-      form.append("description", description.trim());
-      if (categories.trim()) form.append("categories", categories.trim());
-      if (coords) { form.append("lat", coords.lat); form.append("lng", coords.lng); }
-      if (file) form.append("media", file);
-
-      const { data } = await axios.post(`${API}/api/requests`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setNotifiedCount(data?.notifiedArtists || 0);
-      setStatus("done");
-    } catch (err) {
-      console.error("Post request failed:", err);
-      setErrorMsg("Couldn't post your request, try again.");
-      setStatus("error");
-    }
-  };
-
-  return (
-    <div style={styles.modalOverlay} onClick={onClose}>
-      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader}>
-          <strong>Post Request</strong>
-          <button style={styles.modalClose} onClick={onClose}>✕</button>
-        </div>
-
-        {status === "done" ? (
-          <div style={styles.modalBody}>
-            <div style={{ textAlign: "center", padding: "24px 0" }}>
-              <div style={{ fontSize: 34 }}>✅</div>
-              <div style={{ fontWeight: 800, marginTop: 8 }}>Request posted!</div>
-              <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 6 }}>
-                {notifiedCount > 0
-                  ? `${notifiedCount} nearby artist${notifiedCount === 1 ? "" : "s"} notified instantly.`
-                  : "No artists matched nearby yet — your request stays open and visible."}
-              </div>
-              <button style={styles.pfSubmitBtn} onClick={onClose}>Done</button>
-            </div>
-          </div>
-        ) : (
-          <form style={styles.modalBody} onSubmit={submit}>
-            <label style={styles.formLabel}>What do you want made?</label>
-            <input
-              style={styles.formInput}
-              placeholder="e.g. Custom watercolor portrait"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-
-            <label style={styles.formLabel}>Describe it</label>
-            <textarea
-              style={{ ...styles.formInput, minHeight: 80, resize: "vertical" }}
-              placeholder="Style, size, deadline, budget — anything artists should know"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-
-            <label style={styles.formLabel}>Categories (optional)</label>
-            <input
-              style={styles.formInput}
-              placeholder="e.g. painting, portrait, watercolor"
-              value={categories}
-              onChange={(e) => setCategories(e.target.value)}
-            />
-
-            <label style={styles.formLabel}>Reference image (optional)</label>
-            <input type="file" accept="image/*" onChange={handleFile} style={{ fontSize: 13 }} />
-            {preview && <img src={preview} alt="preview" style={styles.formPreview} />}
-
-            {errorMsg && <div style={{ color: "#f87171", fontSize: 13, marginTop: 8 }}>{errorMsg}</div>}
-
-            <button type="submit" style={styles.pfSubmitBtn} disabled={status === "locating" || status === "posting"}>
-              {status === "locating" ? "Getting your location…" : status === "posting" ? "Posting…" : "Post Request"}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ── icons ────────────────────────────────────────────────────────────── */
 function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
   return (
@@ -587,15 +460,6 @@ const styles = {
   brandName: { fontFamily: "'Playfair Display', Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 19, color: "#1a1a1a" },
   searchIconBtn: { background: "none", border: "none", cursor: "pointer", padding: 6 },
 
-  searchBarWrap: {
-    display: "flex", alignItems: "center", gap: 8, background: "#fff",
-    padding: "0 18px 12px",
-  },
-  searchInput: {
-    flex: 1, border: "1px solid rgba(0,0,0,0.1)", outline: "none", borderRadius: 999,
-    padding: "9px 14px", fontSize: 14, color: "#1a1a1a", background: "#f5f1e8",
-  },
-
   tabsRow: { display: "flex", gap: 22, padding: "6px 18px 14px", background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.06)" },
   tabBtn: { background: "none", border: "none", padding: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#9ca3af", cursor: "pointer", borderBottom: "2px solid transparent" },
   tabBtnActive: { color: "#1a1a1a", borderBottom: "2px solid #1a1a1a" },
@@ -640,16 +504,4 @@ const styles = {
   },
   searchDockInput: { flex: 1, border: "1px solid rgba(255,255,255,0.12)", outline: "none", borderRadius: 999, padding: "9px 14px", fontSize: 13.5, color: "#fff", background: "rgba(255,255,255,0.06)" },
   searchDockAction: { width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg,#f97316,#ec4899)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
-
-  modalOverlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 },
-  modalBox: { background: "#0f1a2e", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 16, width: "100%", maxWidth: 420, maxHeight: "82vh", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" },
-  modalClose: { background: "none", border: "none", color: "#94a3b8", fontSize: 16, cursor: "pointer" },
-  modalBody: { overflowY: "auto", padding: "14px 16px 18px", display: "flex", flexDirection: "column" },
-
-  formLabel: { fontSize: 12, fontWeight: 700, color: "#cbd5e1", marginTop: 12, marginBottom: 6 },
-  formInput: { border: "1px solid rgba(255,255,255,0.14)", outline: "none", borderRadius: 10, padding: "10px 12px", fontSize: 13.5, color: "#fff", background: "rgba(255,255,255,0.06)" },
-  formPreview: { width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 10, marginTop: 8 },
-
-  pfSubmitBtn: { marginTop: 16, background: "#f97316", color: "#fff", border: "none", borderRadius: 999, padding: "11px 0", fontWeight: 800, fontSize: 14, cursor: "pointer" },
 };
