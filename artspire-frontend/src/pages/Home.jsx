@@ -1,9 +1,22 @@
-import { useState } from "react";
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, Plus, MessageSquare } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Heart,
+  MessageCircle,
+  Send,
+  Bookmark,
+  MoreHorizontal,
+  Plus,
+  LogIn,
+  LogOut,
+} from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import CreateSheet from "../components/CreateSheet";
 
-// TODO: replace with GET /api/posts/feed
+// Adjust this if your env var / dev proxy setup is different
+const API_BASE = import.meta.env.VITE_API_URL || "";
+
+// TODO: replace with a real stories endpoint when you have one
 const STORIES = [
   { id: "s1", name: "@sketchify", avatar: "https://i.pravatar.cc/150?img=47", ring: "ring-pink-400" },
   { id: "s2", name: "@color.swirl", avatar: "https://i.pravatar.cc/150?img=32", ring: "ring-orange-400" },
@@ -11,41 +24,120 @@ const STORIES = [
   { id: "s4", name: "@creative.vi", avatar: "https://i.pravatar.cc/150?img=25", ring: "ring-rose-400" },
 ];
 
-const POSTS = [
-  {
-    id: "p1",
-    name: "Ananya Sharma",
-    handle: "@ananyaartz",
-    time: "2h",
-    avatar: "https://i.pravatar.cc/150?img=47",
-    image:
-      "https://images.unsplash.com/photo-1541961017774-22349e4a1262?q=80&w=1200&auto=format&fit=crop",
-    likes: "1.2K",
-    comments: 56,
-    caption: "Bloom where you are planted 🌸",
-    tags: ["#artspire", "#digitalart", "#bloom"],
-  },
-  {
-    id: "p2",
-    name: "Harshit Verma",
-    handle: "@sketchfolio",
-    time: "4h",
-    avatar: "https://i.pravatar.cc/150?img=12",
-    image:
-      "https://images.unsplash.com/photo-1547891654-e66ed7ebb968?q=80&w=1200&auto=format&fit=crop",
-    likes: "842",
-    comments: 31,
-    caption: "Three hours, one fineliner, no regrets ✏️",
-    tags: ["#architecture", "#pencilsketch"],
-  },
-];
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(dateStr).toLocaleDateString();
+}
 
 export default function Home() {
+  const navigate = useNavigate();
+
   const [createOpen, setCreateOpen] = useState(false);
   const [liked, setLiked] = useState({});
   const [saved, setSaved] = useState({});
 
-  const toggleLike = (id) => setLiked((s) => ({ ...s, [id]: !s[id] }));
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // ── Auth state (adjust to match however you actually store the session) ──
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
+      return null;
+    }
+  })();
+  const isLoggedIn = Boolean(localStorage.getItem("token"));
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/login");
+  };
+
+  // ── Load real feed data ───────────────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFeed() {
+      try {
+        setLoading(true);
+        setError("");
+        const res = await fetch(`${API_BASE}/api/posts/feed?page=1&limit=10`);
+        if (!res.ok) throw new Error("Failed to load feed");
+        const data = await res.json();
+        if (!cancelled) {
+          setPosts(data.posts || []);
+
+          // seed "liked" state from server data if we know who's viewing
+          if (currentUser?._id || currentUser?.id) {
+            const uid = currentUser._id || currentUser.id;
+            const likedMap = {};
+            (data.posts || []).forEach((p) => {
+              if (Array.isArray(p.likes) && p.likes.includes(uid)) likedMap[p._id] = true;
+            });
+            setLiked(likedMap);
+          }
+        }
+      } catch (err) {
+        console.error("Feed load error:", err);
+        if (!cancelled) setError("Couldn't load posts. Pull down to try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadFeed();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleLike = async (post) => {
+    const uid = currentUser?._id || currentUser?.id;
+    if (!uid) {
+      navigate("/login");
+      return;
+    }
+
+    const wasLiked = Boolean(liked[post._id]);
+    // optimistic update
+    setLiked((s) => ({ ...s, [post._id]: !wasLiked }));
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p._id !== post._id) return p;
+        const likes = wasLiked ? p.likes.filter((id) => id !== uid) : [...p.likes, uid];
+        return { ...p, likes };
+      })
+    );
+
+    try {
+      const res = await fetch(`${API_BASE}/api/posts/${post._id}/like`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actorId: uid }),
+      });
+      if (!res.ok) throw new Error("Like failed");
+      const data = await res.json();
+      setPosts((prev) => prev.map((p) => (p._id === post._id ? { ...p, likes: data.likes } : p)));
+    } catch (err) {
+      console.error("Like error:", err);
+      // revert on failure
+      setLiked((s) => ({ ...s, [post._id]: wasLiked }));
+      setPosts((prev) => prev.map((p) => (p._id === post._id ? post : p)));
+    }
+  };
+
   const toggleSave = (id) => setSaved((s) => ({ ...s, [id]: !s[id] }));
 
   return (
@@ -55,14 +147,25 @@ export default function Home() {
         <h1 className="font-serif text-2xl font-semibold tracking-tight text-stone-900">
           ArtSpire
         </h1>
-        <div className="flex items-center gap-4">
-          <button aria-label="Likes">
-            <Heart size={22} className="text-stone-700" strokeWidth={1.8} />
-          </button>
-          <button aria-label="Messages" className="relative">
-            <MessageSquare size={22} className="text-stone-700" strokeWidth={1.8} />
-            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-violet-600 ring-2 ring-[#FBF7F2]" />
-          </button>
+
+        <div className="flex items-center gap-3">
+          {isLoggedIn ? (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 rounded-full border border-stone-200 px-3.5 py-1.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+            >
+              <LogOut size={16} strokeWidth={1.8} />
+              Logout
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/login")}
+              className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-violet-700"
+            >
+              <LogIn size={16} strokeWidth={1.8} />
+              Login
+            </button>
+          )}
         </div>
       </header>
 
@@ -90,38 +193,67 @@ export default function Home() {
         ))}
       </div>
 
+      {/* Feed states */}
+      {loading && (
+        <p className="px-5 py-10 text-center text-sm text-stone-400">Loading posts…</p>
+      )}
+      {!loading && error && (
+        <p className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>
+      )}
+      {!loading && !error && posts.length === 0 && (
+        <p className="px-5 py-10 text-center text-sm text-stone-400">
+          No posts yet. Be the first to share your art!
+        </p>
+      )}
+
       {/* Feed */}
       <div className="flex flex-col gap-6 px-5">
-        {POSTS.map((post) => (
+        {posts.map((post) => (
           <article
-            key={post.id}
+            key={post._id}
             className="overflow-hidden rounded-3xl border border-stone-100 bg-white shadow-sm shadow-stone-200/50"
           >
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
-                <img src={post.avatar} alt={post.name} className="h-9 w-9 rounded-full object-cover" />
+                <img
+                  src={post.artistAvatar || "https://i.pravatar.cc/150"}
+                  alt={post.artistName}
+                  className="h-9 w-9 rounded-full object-cover"
+                />
                 <div className="leading-tight">
-                  <p className="text-sm font-semibold text-stone-900">{post.name}</p>
-                  <p className="text-xs text-stone-400">{post.handle}</p>
+                  <p className="text-sm font-semibold text-stone-900">{post.artistName}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-xs text-stone-400">
-                {post.time}
+                {timeAgo(post.createdAt)}
                 <button aria-label="More options">
                   <MoreHorizontal size={18} />
                 </button>
               </div>
             </div>
 
-            <img src={post.image} alt={post.caption} className="aspect-square w-full object-cover" />
+            {post.mediaType === "video" ? (
+              <video
+                src={post.mediaUrl}
+                className="aspect-square w-full object-cover"
+                controls
+                playsInline
+              />
+            ) : (
+              <img
+                src={post.mediaUrl}
+                alt={post.caption || "Post"}
+                className="aspect-square w-full object-cover"
+              />
+            )}
 
             <div className="flex items-center justify-between px-4 pt-3">
               <div className="flex items-center gap-4">
-                <button onClick={() => toggleLike(post.id)} aria-label="Like">
+                <button onClick={() => toggleLike(post)} aria-label="Like">
                   <Heart
                     size={23}
                     strokeWidth={1.8}
-                    className={liked[post.id] ? "fill-rose-500 text-rose-500" : "text-stone-700"}
+                    className={liked[post._id] ? "fill-rose-500 text-rose-500" : "text-stone-700"}
                   />
                 </button>
                 <button aria-label="Comment">
@@ -131,24 +263,29 @@ export default function Home() {
                   <Send size={21} strokeWidth={1.8} className="text-stone-700" />
                 </button>
               </div>
-              <button onClick={() => toggleSave(post.id)} aria-label="Save">
+              <button onClick={() => toggleSave(post._id)} aria-label="Save">
                 <Bookmark
                   size={21}
                   strokeWidth={1.8}
-                  className={saved[post.id] ? "fill-stone-800 text-stone-800" : "text-stone-700"}
+                  className={saved[post._id] ? "fill-stone-800 text-stone-800" : "text-stone-700"}
                 />
               </button>
             </div>
 
             <div className="px-4 pb-4 pt-2 text-sm">
-              <p className="font-semibold text-stone-900">{post.likes} likes</p>
-              <p className="mt-0.5 text-stone-700">
-                <span className="font-semibold text-stone-900">{post.name}</span>{" "}
-                {post.caption}
+              <p className="font-semibold text-stone-900">
+                {(post.likes?.length ?? 0).toLocaleString()} likes
               </p>
-              <p className="mt-0.5 text-violet-600">{post.tags.join("  ")}</p>
-              {post.comments > 0 && (
-                <p className="mt-1 text-stone-400">View all {post.comments} comments</p>
+              {post.caption && (
+                <p className="mt-0.5 text-stone-700">
+                  <span className="font-semibold text-stone-900">{post.artistName}</span>{" "}
+                  {post.caption}
+                </p>
+              )}
+              {(post.comments?.length ?? 0) > 0 && (
+                <p className="mt-1 text-stone-400">
+                  View all {post.comments.length} comments
+                </p>
               )}
             </div>
           </article>
