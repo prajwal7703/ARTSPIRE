@@ -1,5 +1,20 @@
 // artspire-frontend/src/pages/Home.jsx
-import { useEffect, useState, useCallback } from "react";
+//
+// Design system for this pass:
+//   Ink      #0B0F1A   background
+//   Surface  #131B2C   dark panels / dock
+//   Paper    #F6F1E7   card mats (warm ivory, not stark white)
+//   Clay     #D9662B   primary accent (burnt terracotta)
+//   Rose     #C15C79   secondary accent, used sparingly
+//   Mute     #8291AC   secondary text on dark
+//   Charcoal #2B2420   text on paper
+//   Display  Fraunces (italic)   — headline, gallery labels
+//   Body     Inter                — UI text
+//   Utility  Inter, uppercase, tracked — category eyebrows
+//
+// Signature element: each artwork sits in a paper "mat" with a museum-style
+// label plate beneath it (artist + category), instead of a social-feed pill.
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { getCurrentAccount, isArtist } from "../utils/auth";
@@ -8,8 +23,6 @@ import socket from "../socket";
 import PostRequestModal from "../components/PostRequestModal";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
-
-// Looping hero video — served from public/artbg.mp4, same as your old homepage.
 const HERO_VIDEO_URL = "/artbg.mp4";
 
 const getActor = () => {
@@ -23,7 +36,6 @@ const getActor = () => {
   };
 };
 
-// Wraps the browser geolocation callback API in a promise so we can await it.
 function getLocation() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) return reject(new Error("Geolocation not supported"));
@@ -35,11 +47,21 @@ function getLocation() {
   });
 }
 
+// Pull a display category out of whatever the post record has.
+function firstCategory(post) {
+  if (Array.isArray(post.categories) && post.categories.length) return post.categories[0];
+  if (typeof post.categories === "string" && post.categories.trim()) {
+    return post.categories.split(",")[0].trim();
+  }
+  return post.category || "Original work";
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const actor = getActor();
 
   const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("All");
   const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState(null);
   const [showPostModal, setShowPostModal] = useState(false);
@@ -65,7 +87,6 @@ export default function Home() {
 
   useEffect(() => { loadPage(1); }, [loadPage]);
 
-  // Live-append newly approved posts the moment admin approves something.
   useEffect(() => {
     const onApproved = (post) => {
       setPosts((prev) => (prev.some((p) => p._id === post._id) ? prev : [post, ...prev]));
@@ -74,7 +95,6 @@ export default function Home() {
     return () => socket.off("post_approved", onApproved);
   }, []);
 
-  // Live-remove posts an artist deletes.
   useEffect(() => {
     const onDeleted = ({ postId }) => {
       setPosts((prev) => prev.filter((p) => p._id !== postId));
@@ -83,8 +103,6 @@ export default function Home() {
     return () => socket.off("post_deleted", onDeleted);
   }, []);
 
-  // Re-sync page 1 on reconnect (e.g. backend cold-start), merging so
-  // "Load more" results aren't lost.
   useEffect(() => {
     const onConnect = () => {
       axios
@@ -103,13 +121,9 @@ export default function Home() {
     return () => socket.off("connect", onConnect);
   }, []);
 
-  // ── Live request notifications: join a personal room so artists get
-  // pushed "new request near you" instantly, and requesters get pushed
-  // "an artist responded" instantly. No polling needed.
   useEffect(() => {
     if (!actor?.id) return;
     socket.emit("join_room", actor.id);
-
     const onNewRequest = (request) => setToast(`New request near you: "${request.title}"`);
     const onNewResponse = ({ response }) => setToast(`${response.artistName} responded to your request`);
     socket.on("new_request", onNewRequest);
@@ -126,8 +140,6 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Artists silently share a fresh location fix so they show up in nearby
-  // request matching.
   useEffect(() => {
     if (actor?.role !== "artist") return;
     getLocation()
@@ -147,13 +159,8 @@ export default function Home() {
     setPosts((prev) => prev.map((p) => (p._id === id ? { ...p, ...patch } : p)));
   };
 
-  // Live geolocation lookup — asks the browser for the user's real coordinates,
-  // then sends them to the Artists page to sort/filter by distance.
   const handleNearYou = () => {
-    if (!navigator.geolocation) {
-      navigate("/artists");
-      return;
-    }
+    if (!navigator.geolocation) { navigate("/artists"); return; }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -161,31 +168,33 @@ export default function Home() {
         const { latitude, longitude } = pos.coords;
         navigate(`/artists?lat=${latitude}&lng=${longitude}&near=true`);
       },
-      () => {
-        setLocating(false);
-        navigate("/artists");
-      },
+      () => { setLocating(false); navigate("/artists"); },
       { timeout: 6000 }
     );
   };
 
+  // Real categories, derived from whatever's actually loaded — not decorative.
+  const categories = useMemo(() => {
+    const set = new Set();
+    posts.forEach((p) => set.add(firstCategory(p)));
+    return ["All", ...Array.from(set).slice(0, 8)];
+  }, [posts]);
+
   const q = query.trim().toLowerCase();
-  const visiblePosts = q
-    ? posts.filter(
-        (p) =>
-          (p.caption || "").toLowerCase().includes(q) ||
-          (p.artistName || "").toLowerCase().includes(q)
-      )
-    : posts;
+  const visiblePosts = posts.filter((p) => {
+    const matchesQuery = q
+      ? (p.caption || "").toLowerCase().includes(q) || (p.artistName || "").toLowerCase().includes(q)
+      : true;
+    const matchesCategory = activeCategory === "All" || firstCategory(p) === activeCategory;
+    return matchesQuery && matchesCategory;
+  });
 
   return (
     <div style={styles.page}>
       <GlobalStyles />
 
       {toast && (
-        <div style={styles.toast} onClick={() => setToast(null)}>
-          🔔 {toast}
-        </div>
+        <div style={styles.toast} onClick={() => setToast(null)}>🔔 {toast}</div>
       )}
 
       {/* ══ Top bar ══ */}
@@ -194,65 +203,78 @@ export default function Home() {
           <span style={styles.brandMark}>A</span>
           <span style={styles.brandName}>ArtSpire</span>
         </div>
-        {/* Search icon now takes you to the dedicated Search/Discover page
-            (hero + Post & Find), instead of toggling an inline search bar. */}
-        <button
-          style={styles.searchIconBtn}
-          onClick={() => navigate("/search")}
-          aria-label="Search"
-        >
-          <SearchIcon size={18} stroke="#1a1a1a" />
+        <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
+          <SearchIcon size={17} stroke="#2B2420" />
         </button>
       </div>
 
-      {/* ══ Section label ══ */}
-      <div style={styles.tabsRow}>
-        <span style={{ ...styles.tabBtn, ...styles.tabBtnActive }}>For You</span>
-      </div>
-
-      {/* ══ Hero banner ══ */}
+      {/* ══ Editorial hero ══ */}
       <div style={styles.hero}>
         <video style={styles.heroMedia} src={HERO_VIDEO_URL} autoPlay loop muted playsInline />
         <div style={styles.heroOverlay} />
         <div style={styles.heroContent}>
+          <span style={styles.heroEyebrow}>A marketplace for working artists</span>
           <h1 style={styles.heroTitle}>
-            Discover
-            <br />
-            <span style={{ color: "#f97316" }}>Creative Artists</span>
-            <br />
-            Near You
+            Discover <em style={styles.heroTitleAccent}>extraordinary</em>
+            <br />makers, near you.
           </h1>
-          <div style={styles.heroBtnRow}>
-            <button style={styles.heroBtn} onClick={() => navigate("/artists")}>
-              Explore Artists
+          <p style={styles.heroStat}>
+            {loading && posts.length === 0
+              ? "Loading the live gallery…"
+              : `${posts.length}${hasMore ? "+" : ""} original ${posts.length === 1 ? "piece" : "pieces"} on ArtSpire right now`}
+          </p>
+
+          <div style={styles.heroActions}>
+            <button style={styles.heroPrimary} onClick={() => navigate("/artists")}>
+              Explore artists
             </button>
-            <button style={styles.heroBtn} onClick={() => navigate("/artist-register")}>
-              Join As Artist
+            <button style={styles.heroLink} onClick={() => navigate("/artist-register")}>
+              Join as an artist <ArrowIcon />
             </button>
-            <button style={styles.heroBtn} onClick={handleNearYou} disabled={locating}>
-              {locating ? "Locating…" : "Near You"}
+            <button style={styles.heroLink} onClick={handleNearYou} disabled={locating}>
+              {locating ? "Locating…" : "Find work near me"} <ArrowIcon />
             </button>
           </div>
         </div>
       </div>
 
-      {/* ══ Live feed grid — real posts artists have made, pulled from the API ══ */}
+      {/* ══ Category rail — real filter, derived from live posts ══ */}
+      <div style={styles.railWrap}>
+        <div className="category-rail">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              style={{
+                ...styles.railChip,
+                ...(activeCategory === cat ? styles.railChipActive : {}),
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ══ Gallery wall ══ */}
       <div style={styles.feedCol}>
         {visiblePosts.length === 0 && !loading && (
           <div style={styles.comingSoon}>
-            <div style={{ fontSize: 34 }}>🖼️</div>
-            <div style={{ fontWeight: 800, marginTop: 6 }}>
-              {q ? "No matches found." : "No posts yet."}
+            <div style={{ fontSize: 32 }}>🖼️</div>
+            <div style={styles.comingSoonTitle}>
+              {q || activeCategory !== "All" ? "Nothing here yet." : "The wall is empty, for now."}
             </div>
-            <div style={{ fontSize: 13, opacity: 0.6, marginTop: 4 }}>
-              {q ? "Try a different search term." : "New work from artists will show up here as soon as it's approved."}
+            <div style={styles.comingSoonSub}>
+              {q || activeCategory !== "All"
+                ? "Try a different search or category."
+                : "New work from artists appears here the moment it's approved."}
             </div>
           </div>
         )}
 
-        <div className="discover-grid">
+        <div className="gallery-grid">
           {visiblePosts.map((p) => (
-            <DiscoverCard
+            <GalleryCard
               key={p._id}
               post={p}
               actor={actor}
@@ -262,36 +284,32 @@ export default function Home() {
           ))}
         </div>
 
-        {!q && hasMore && (
+        {!q && activeCategory === "All" && hasMore && (
           <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
-            {loading ? "Loading…" : "Load more"}
+            {loading ? "Loading…" : "Load more work"}
           </button>
         )}
       </div>
 
-      {/* ══ Fixed search-and-post bar, sits above the bottom nav.
-          This filters the posts already loaded on this page — separate
-          from the top-right icon, which jumps to the dedicated /search page. ══ */}
+      {/* ══ Search / post dock, quiet version blended into the nav zone ══ */}
       <div style={{ height: 66 }} />
       <div style={styles.searchDock}>
-        <SearchIcon size={16} stroke="#6b7280" />
+        <SearchIcon size={15} stroke="#8291AC" />
         <input
           style={styles.searchDockInput}
-          placeholder="Search for artwork, artists, or a request…"
+          placeholder="Search artwork, artists, or a request…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <button type="button" style={styles.searchDockAction} onClick={() => setShowPostModal(true)} aria-label="Post a request">
-          <PlusIcon />
+          + Post
         </button>
       </div>
 
       <div style={{ height: 96 }} />
       <BottomNav />
 
-      {showPostModal && (
-        <PostRequestModal actor={actor} onClose={() => setShowPostModal(false)} />
-      )}
+      {showPostModal && <PostRequestModal actor={actor} onClose={() => setShowPostModal(false)} />}
     </div>
   );
 }
@@ -314,9 +332,11 @@ function useSaveToggle(post, actor, onUpdate) {
   return { saved, toggleSave };
 }
 
-/* ── card matching the mockup: avatar/name/Save strip, media, share/more ── */
-function DiscoverCard({ post, actor, onUpdate, onOpen }) {
+/* ── the signature element: artwork "matted" like a framed print, with a
+      museum-label plate underneath instead of a social pill row ──────────── */
+function GalleryCard({ post, actor, onUpdate, onOpen }) {
   const { saved, toggleSave } = useSaveToggle(post, actor, onUpdate);
+  const category = firstCategory(post);
 
   const handleShare = (e) => {
     e.stopPropagation();
@@ -329,44 +349,42 @@ function DiscoverCard({ post, actor, onUpdate, onOpen }) {
   };
 
   return (
-    <div className="discover-card" onClick={onOpen}>
-      <div style={styles.cardTopRow}>
-        <Link
-          to={`/dashboard/${post.artistId}`}
-          style={styles.cardArtist}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {post.artistAvatar ? (
-            <img src={post.artistAvatar} alt="" style={styles.cardAvatar} />
+    <div className="gallery-card" onClick={onOpen}>
+      <div style={styles.mat}>
+        <div style={styles.mediaWrap}>
+          {post.mediaType === "video" ? (
+            <video src={post.mediaUrl} style={styles.media} muted loop playsInline autoPlay />
           ) : (
-            <div style={styles.cardAvatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>
+            <img src={post.mediaUrl} alt={post.caption || "artwork"} style={styles.media} />
           )}
-          <span style={styles.cardArtistName}>{post.artistName || "Unknown artist"}</span>
-        </Link>
-        <button
-          style={{ ...styles.saveBtn, ...(saved ? styles.saveBtnActive : {}) }}
-          onClick={toggleSave}
-        >
-          <BookmarkIcon size={11} filled={saved} />
-          {saved ? "Saved" : "Save"}
-        </button>
-      </div>
+          <button
+            style={{ ...styles.bookmarkBtn, ...(saved ? styles.bookmarkBtnActive : {}) }}
+            onClick={toggleSave}
+            aria-label={saved ? "Saved" : "Save"}
+          >
+            <BookmarkIcon size={13} filled={saved} />
+          </button>
+        </div>
 
-      <div style={styles.cardMediaWrap}>
-        {post.mediaType === "video" ? (
-          <video src={post.mediaUrl} style={styles.cardMedia} muted loop playsInline autoPlay />
-        ) : (
-          <img src={post.mediaUrl} alt={post.caption || "artwork"} style={styles.cardMedia} />
-        )}
-      </div>
-
-      <div style={styles.cardBottomRow}>
-        <button style={styles.cardActionBtn} onClick={handleShare}>
-          <ShareIcon size={13} /> Share
-        </button>
-        <button style={styles.cardActionBtn} onClick={(e) => { e.stopPropagation(); onOpen(); }}>
-          <DotsIcon size={13} /> More
-        </button>
+        {/* label plate */}
+        <div style={styles.plate}>
+          <span style={styles.plateEyebrow}>{category}</span>
+          <Link
+            to={`/dashboard/${post.artistId}`}
+            style={styles.plateArtistRow}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {post.artistAvatar ? (
+              <img src={post.artistAvatar} alt="" style={styles.plateAvatar} />
+            ) : (
+              <div style={styles.plateAvatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>
+            )}
+            <span style={styles.plateArtistName}>{post.artistName || "Unknown artist"}</span>
+          </Link>
+          <button style={styles.plateShare} onClick={handleShare}>
+            <ShareIcon size={12} /> Share
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -380,128 +398,178 @@ function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
     </svg>
   );
 }
-function PlusIcon() {
+function ArrowIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round">
-      <path d="M12 5v14M5 12h14" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 4 }}>
+      <path d="M5 12h14M13 6l6 6-6 6" />
     </svg>
   );
 }
 function BookmarkIcon({ size = 12, filled }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "#f97316" : "none"} stroke={filled ? "#f97316" : "#1a1a1a"} strokeWidth="2" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "#D9662B" : "rgba(255,255,255,0.9)"} stroke={filled ? "#D9662B" : "#2B2420"} strokeWidth="1.6" strokeLinejoin="round">
       <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" />
     </svg>
   );
 }
 function ShareIcon({ size = 13 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#4b5563" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#8291AC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
       <path d="M16 6l-4-4-4 4" /><path d="M12 2v14" />
     </svg>
   );
 }
-function DotsIcon({ size = 13 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="#4b5563">
-      <circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" />
-    </svg>
-  );
-}
 
-/* ── global CSS: masonry grid ─────────────────────────────────────────── */
+/* ── global CSS: fonts, masonry grid, category rail scroll ───────────────── */
 function GlobalStyles() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,600&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,500;1,600&family=Inter:wght@400;500;600;700;800&display=swap');
 
-      .discover-grid {
+      .gallery-grid {
         column-count: 2;
-        column-gap: 12px;
+        column-gap: 14px;
         width: 100%;
       }
-      @media (min-width: 560px) { .discover-grid { column-count: 3; } }
-      @media (min-width: 860px) { .discover-grid { column-count: 4; } }
-      @media (min-width: 1180px) { .discover-grid { column-count: 5; } }
+      @media (min-width: 560px) { .gallery-grid { column-count: 3; } }
+      @media (min-width: 860px) { .gallery-grid { column-count: 4; } }
+      @media (min-width: 1180px) { .gallery-grid { column-count: 5; } }
 
-      .discover-card {
+      .gallery-card {
         break-inside: avoid;
-        margin-bottom: 12px;
-        background: #ffffff;
-        border-radius: 16px;
-        overflow: hidden;
+        margin-bottom: 14px;
         cursor: pointer;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.25);
       }
+
+      .category-rail {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        padding: 0 18px 2px;
+        scrollbar-width: none;
+      }
+      .category-rail::-webkit-scrollbar { display: none; }
     `}</style>
   );
 }
 
+const CLAY = "#D9662B";
+const ROSE = "#C15C79";
+const INK = "#0B0F1A";
+const SURFACE = "#131B2C";
+const PAPER = "#F6F1E7";
+const MUTE = "#8291AC";
+const CHARCOAL = "#2B2420";
+
 const styles = {
-  page: { fontFamily: "'Nunito','Inter',sans-serif", background: "#081120", minHeight: "100vh", color: "#fff" },
+  page: { fontFamily: "'Inter', sans-serif", background: INK, minHeight: "100vh", color: "#fff" },
 
   toast: {
     position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 200,
-    background: "#111827", color: "#fff", padding: "10px 18px", borderRadius: 999,
-    fontSize: 13, fontWeight: 700, boxShadow: "0 6px 20px rgba(0,0,0,0.4)", cursor: "pointer",
-    maxWidth: "88vw", textAlign: "center",
+    background: SURFACE, color: "#fff", padding: "10px 18px", borderRadius: 999,
+    fontSize: 13, fontWeight: 600, boxShadow: "0 6px 20px rgba(0,0,0,0.4)", cursor: "pointer",
+    maxWidth: "88vw", textAlign: "center", border: "1px solid rgba(255,255,255,0.08)",
   },
 
   topBar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "16px 18px 4px", background: "#fff",
+    padding: "16px 18px", background: PAPER,
   },
   brand: { display: "flex", alignItems: "center", gap: 8 },
   brandMark: {
-    width: 26, height: 26, borderRadius: 8, background: "linear-gradient(135deg,#f97316,#ec4899)",
-    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14,
+    width: 26, height: 26, borderRadius: 7, background: CLAY,
+    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+    fontWeight: 700, fontSize: 13, fontFamily: "'Fraunces', serif", fontStyle: "italic",
   },
-  brandName: { fontFamily: "'Playfair Display', Georgia, serif", fontStyle: "italic", fontWeight: 700, fontSize: 19, color: "#1a1a1a" },
+  brandName: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 19, color: CHARCOAL },
   searchIconBtn: { background: "none", border: "none", cursor: "pointer", padding: 6 },
 
-  tabsRow: { display: "flex", gap: 22, padding: "6px 18px 14px", background: "#fff", borderBottom: "1px solid rgba(0,0,0,0.06)" },
-  tabBtn: { background: "none", border: "none", padding: "0 0 8px", fontSize: 14, fontWeight: 700, color: "#9ca3af", cursor: "pointer", borderBottom: "2px solid transparent" },
-  tabBtnActive: { color: "#1a1a1a", borderBottom: "2px solid #1a1a1a" },
-
   hero: {
-    position: "relative", margin: 0, borderRadius: 0, overflow: "hidden",
-    minHeight: 340, display: "flex", alignItems: "flex-end",
+    position: "relative", minHeight: 300, display: "flex", alignItems: "flex-end", overflow: "hidden",
   },
   heroMedia: { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" },
-  heroOverlay: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.75), rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15))" },
-  heroContent: { position: "relative", padding: "18px 18px 20px", width: "100%" },
-  heroTitle: { margin: 0, fontSize: 26, fontWeight: 900, lineHeight: 1.15, color: "#fff" },
-  heroBtnRow: { display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" },
-  heroBtn: { background: "#f97316", color: "#fff", border: "none", borderRadius: 999, padding: "9px 18px", fontWeight: 800, fontSize: 12.5, cursor: "pointer" },
+  heroOverlay: { position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(11,15,26,0.97) 15%, rgba(11,15,26,0.55) 65%, rgba(11,15,26,0.25))" },
+  heroContent: { position: "relative", padding: "24px 18px 22px", width: "100%" },
+  heroEyebrow: {
+    display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase",
+    color: ROSE, marginBottom: 10,
+  },
+  heroTitle: { margin: 0, fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 30, lineHeight: 1.18, color: "#fff" },
+  heroTitleAccent: { color: CLAY, fontStyle: "italic" },
+  heroStat: { margin: "12px 0 0", fontSize: 13, color: MUTE, fontWeight: 500 },
+
+  heroActions: { display: "flex", alignItems: "center", gap: 18, marginTop: 18, flexWrap: "wrap" },
+  heroPrimary: {
+    background: CLAY, color: "#fff", border: "none", borderRadius: 10, padding: "11px 20px",
+    fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+  },
+  heroLink: {
+    background: "none", border: "none", padding: 0, color: "#fff", fontWeight: 600, fontSize: 13,
+    display: "flex", alignItems: "center", cursor: "pointer", opacity: 0.85,
+  },
+
+  railWrap: { background: INK, paddingTop: 14, paddingBottom: 4 },
+  railChip: {
+    flex: "0 0 auto", background: "transparent", border: "1px solid rgba(255,255,255,0.14)",
+    borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, color: MUTE, cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  railChipActive: { background: CLAY, borderColor: CLAY, color: "#fff" },
 
   feedCol: { maxWidth: 1400, margin: "0 auto", padding: "18px 12px 0" },
-  comingSoon: { textAlign: "center", color: "#94a3b8", padding: "50px 20px", fontWeight: 600 },
+  comingSoon: { textAlign: "center", color: MUTE, padding: "60px 20px" },
+  comingSoonTitle: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 18, color: "#fff", marginTop: 10 },
+  comingSoonSub: { fontSize: 13, marginTop: 6 },
 
-  cardTopRow: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 8px 6px", gap: 6 },
-  cardArtist: { display: "flex", alignItems: "center", gap: 6, minWidth: 0, textDecoration: "none" },
-  cardAvatar: { width: 20, height: 20, borderRadius: "50%", objectFit: "cover" },
-  cardAvatarFallback: { width: 20, height: 20, borderRadius: "50%", background: "#f97316", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700, flexShrink: 0 },
-  cardArtistName: { fontSize: 11.5, fontWeight: 700, color: "#1a1a1a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
-  saveBtn: {
-    display: "flex", alignItems: "center", gap: 4, background: "#fff7ed", border: "1px solid #fed7aa",
-    borderRadius: 999, padding: "3px 9px", fontSize: 10.5, fontWeight: 800, color: "#ea580c", cursor: "pointer", flexShrink: 0,
+  // the "mat" — paper-toned frame around each artwork
+  mat: { background: PAPER, borderRadius: 14, padding: 8, boxShadow: "0 4px 18px rgba(0,0,0,0.3)" },
+  mediaWrap: { position: "relative", width: "100%", borderRadius: 8, overflow: "hidden", background: "#E4DCC8" },
+  media: { width: "100%", display: "block", objectFit: "cover" },
+  bookmarkBtn: {
+    position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
+    background: "rgba(11,15,26,0.35)", border: "none", display: "flex", alignItems: "center",
+    justifyContent: "center", cursor: "pointer", backdropFilter: "blur(3px)",
   },
-  saveBtnActive: { background: "#f97316", border: "1px solid #f97316", color: "#fff" },
+  bookmarkBtnActive: { background: "rgba(255,255,255,0.9)" },
 
-  cardMediaWrap: { width: "100%", background: "#e5e0d5" },
-  cardMedia: { width: "100%", display: "block", objectFit: "cover" },
+  // label plate — the museum-tag treatment
+  plate: { padding: "9px 4px 2px" },
+  plateEyebrow: {
+    display: "block", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
+    color: "#A9885F", marginBottom: 5,
+  },
+  plateArtistRow: { display: "flex", alignItems: "center", gap: 6, textDecoration: "none", minWidth: 0 },
+  plateAvatar: { width: 18, height: 18, borderRadius: "50%", objectFit: "cover", flexShrink: 0 },
+  plateAvatarFallback: {
+    width: 18, height: 18, borderRadius: "50%", background: CLAY, color: "#fff", display: "flex",
+    alignItems: "center", justifyContent: "center", fontSize: 8.5, fontWeight: 700, flexShrink: 0,
+  },
+  plateArtistName: {
+    fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 13, color: CHARCOAL,
+    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+  },
+  plateShare: {
+    display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 7,
+    fontSize: 10.5, fontWeight: 600, color: "#8291AC", cursor: "pointer", padding: 0,
+  },
 
-  cardBottomRow: { display: "flex", gap: 14, padding: "8px 10px 10px" },
-  cardActionBtn: { display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", fontSize: 11, fontWeight: 700, color: "#4b5563", cursor: "pointer", padding: 0 },
-
-  loadMoreBtn: { display: "block", margin: "6px auto 0", padding: "10px 26px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)", fontWeight: 700, color: "#f97316", cursor: "pointer" },
+  loadMoreBtn: {
+    display: "block", margin: "10px auto 0", padding: "11px 28px", borderRadius: 999,
+    border: `1px solid ${CLAY}`, background: "transparent", fontWeight: 700, fontSize: 13, color: CLAY, cursor: "pointer",
+  },
 
   searchDock: {
     position: "fixed", bottom: 64, left: 0, right: 0, zIndex: 40,
-    display: "flex", alignItems: "center", gap: 8, background: "#0f1a2e",
+    display: "flex", alignItems: "center", gap: 10, background: SURFACE,
     borderTop: "1px solid rgba(255,255,255,0.08)", padding: "10px 14px",
   },
-  searchDockInput: { flex: 1, border: "1px solid rgba(255,255,255,0.12)", outline: "none", borderRadius: 999, padding: "9px 14px", fontSize: 13.5, color: "#fff", background: "rgba(255,255,255,0.06)" },
-  searchDockAction: { width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg,#f97316,#ec4899)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 },
+  searchDockInput: {
+    flex: 1, border: "1px solid rgba(255,255,255,0.12)", outline: "none", borderRadius: 999,
+    padding: "9px 14px", fontSize: 13.5, color: "#fff", background: "rgba(255,255,255,0.05)",
+  },
+  searchDockAction: {
+    flexShrink: 0, background: CLAY, color: "#fff", border: "none", borderRadius: 999,
+    padding: "9px 16px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+  },
 };
