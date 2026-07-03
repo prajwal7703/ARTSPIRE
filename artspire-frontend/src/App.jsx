@@ -1,4 +1,4 @@
-// artspire-frontend/src/App.jsx
+﻿// artspire-frontend/src/App.jsx
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getToken, getArtist } from "./utils/auth";
 
@@ -15,6 +15,7 @@ import ArtistLogin from "./pages/ArtistLogin";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import DiscoverPage from "./pages/DiscoverPage";
+import SearchLanding from "./pages/SearchLanding";
 import UserDashboard from "./pages/UserDashboard";
 import BookingPage from "./pages/BookingPage";
 import UserChat from "./pages/UserChat";
@@ -63,6 +64,7 @@ function App() {
 
         {/* Public */}
         <Route path="/" element={<Home />} />
+        <Route path="/search" element={<SearchLanding />} />
         <Route path="/artists" element={<Artists />} />
         <Route path="/explore" element={<Artists />} />
         <Route path="/discover" element={<DiscoverPage />} />
@@ -72,7 +74,7 @@ function App() {
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/feed" element={<Feed />} />
 
-        {/* Admin � gated by its own password check inside AdminDashboard,
+        {/* Admin — gated by its own password check inside AdminDashboard,
             reachable either directly or via UserLogin redirecting here
             when the admin email is used to sign in. */}
         <Route path="/admin" element={<AdminDashboard />} />
