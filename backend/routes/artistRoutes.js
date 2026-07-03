@@ -50,33 +50,67 @@ router.post("/upload", upload.single("image"), async (req, res) => {
 // Artists" and Post Request matching can use real coordinates instead of
 // just a city string.
 // body: { lat, lng }
-router.put("/:id/location", async (req, res) => {
+// ─────────────────────────────────────────────────────────────────────────
+// PATCH for routes/artistRoutes.js
+//
+// Replace your existing `router.get("/nearby", ...)` handler with this one.
+// Everything else in the file stays exactly the same — this only touches
+// that one route.
+//
+// What changed vs. your version:
+//   - optional ?category=Painter filter (matches your Artist.categories array)
+//   - optional ?onlineOnly=true filter, using locationUpdatedAt as the
+//     "online" signal (active in the last 20 minutes) — you don't have a
+//     separate isOnline field, so this reuses what's already there instead
+//     of adding a new one
+//   - each artist in the response now carries a computed `isOnline` boolean
+//   - response shape is UNCHANGED (still a plain array, not { artists })
+//     so nothing else calling this endpoint today breaks
+// ─────────────────────────────────────────────────────────────────────────
+
+router.get("/nearby", async (req, res) => {
   try {
-    const { lat, lng } = req.body;
-    const latNum = Number(lat);
-    const lngNum = Number(lng);
-    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
-      return res.status(400).json({ message: "Valid lat and lng are required" });
+    const { lat, lng, city, category, onlineOnly } = req.query;
+    const radius = Math.min(Number(req.query.radius) || 25000, 100000);
+    const latNum = lat !== undefined ? Number(lat) : undefined;
+    const lngNum = lng !== undefined ? Number(lng) : undefined;
+    const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum);
+
+    const ONLINE_WINDOW_MS = 20 * 60 * 1000; // "online" = location updated in last 20 min
+    const onlineCutoff = new Date(Date.now() - ONLINE_WINDOW_MS);
+
+    const baseFilter = {};
+    if (category && category !== "All") baseFilter.categories = category;
+    if (onlineOnly === "true") baseFilter.locationUpdatedAt = { $gte: onlineCutoff };
+
+    let artists = [];
+    if (hasCoords) {
+      artists = await Artist.find({
+        ...baseFilter,
+        location: {
+          $near: {
+            $geometry: { type: "Point", coordinates: [lngNum, latNum] },
+            $maxDistance: radius,
+          },
+        },
+      }).select("-password").limit(60).lean();
     }
 
-    const update = {
-      location: { type: "Point", coordinates: [lngNum, latNum] },
-      locationUpdatedAt: new Date(),
-    };
-
-    let artist = await Artist.findByIdAndUpdate(req.params.id, { $set: update }, { new: true }).select("-password");
-    if (!artist) {
-      artist = await User.findOneAndUpdate(
-        { _id: req.params.id, role: "artist" },
-        { $set: update },
-        { new: true }
-      ).select("-password");
+    if (artists.length === 0 && city) {
+      artists = await Artist.find({
+        ...baseFilter,
+        city: new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+      }).select("-password").limit(60).lean();
     }
-    if (!artist) return res.status(404).json({ message: "Artist not found" });
 
-    res.json({ success: true, location: artist.location });
+    artists = artists.map((a) => ({
+      ...a,
+      isOnline: a.locationUpdatedAt ? new Date(a.locationUpdatedAt) >= onlineCutoff : false,
+    }));
+
+    res.json(artists);
   } catch (err) {
-    console.error("Update location error:", err);
+    console.error("Nearby artists error:", err);
     res.status(500).json({ message: "Server error", error: err.message });
   }
 });

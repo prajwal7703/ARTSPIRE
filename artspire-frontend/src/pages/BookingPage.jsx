@@ -60,9 +60,9 @@ export default function BookingPageMobile() {
   useEffect(() => { fetchBookings(); }, [userId]);
 
   /* ── Sockets ── */
-  useEffect(() => {
+ useEffect(() => {
     if (!userId) return;
-    socket.emit("join_user_room", userId);
+    socket.emit("join_room", `user_${userId}`);
 
     socket.on("booking_offer", ({ bookingId, price, message, status }) => {
       const entry = { from: "artist", price, message, timestamp: new Date() };
@@ -103,10 +103,10 @@ export default function BookingPageMobile() {
   };
 
   /* ── Negotiation ── */
-  const acceptOffer = async (price) => {
+ const acceptOffer = async (price) => {
     setSending(true);
     try {
-      await axios.post(`${API}/api/bookings/${selected._id}/accept`, { price });
+      await axios.post(`${API}/api/bookings/${selected._id}/user-accept`, { price });
       setSelected(s => ({ ...s, status: "price_agreed", agreedPrice: price }));
       setBookings(bs => bs.map(b => b._id === selected._id ? { ...b, status: "price_agreed", agreedPrice: price } : b));
     } catch { setError("Failed to accept price."); }

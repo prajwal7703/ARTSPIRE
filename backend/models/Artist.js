@@ -1,7 +1,24 @@
 // models/Artist.js
 
 const mongoose = require("mongoose");
-
+// If you already have an Artist model, just merge these fields in — don't
+// duplicate the whole schema.
+ 
+const ArtistLocationFields = {
+  // GeoJSON point — required shape for MongoDB's $near queries
+  location: {
+    type: { type: String, enum: ["Point"], default: "Point" },
+    coordinates: { type: [Number], default: [0, 0] }, // [lng, lat]  (note the order!)
+  },
+  categories: {
+    type: [String], // e.g. ["Painter", "Portrait Artist"]
+    default: [],
+    index: true,
+  },
+  isOnline: { type: Boolean, default: false },
+  lastActiveAt: { type: Date, default: null },
+};
+ 
 // Separate sub-schema (not just an inline object) with an explicit
 // `default: undefined` on the parent field below — this is deliberate.
 // If we let Mongoose auto-populate `location: { type: "Point" }` with no
