@@ -1,19 +1,10 @@
 // artspire-frontend/src/pages/Home.jsx
 //
-// Design system:
-//   Ink      #0B0F1A   overlay tone on top of video
-//   Surface  #131B2C   dock / glass panels
-//   Paper    #F6F1E7   card mats (warm ivory, not stark white)
-//   Clay     #D9662B   primary accent (burnt terracotta)
-//   Mute     #8291AC   secondary text on dark
-//   Charcoal #2B2420   text on paper
-//   Display  Fraunces (italic)   — brand + gallery labels
-//   Body     Inter                — UI text
-//
-// The video is now a fixed full-page background (not just a hero strip) —
-// everything scrolls over it. Cards stay opaque (paper mat) for legibility;
-// everything else is glassy/transparent so the video shows through.
-import { useEffect, useState, useCallback, useMemo } from "react";
+// Stripped down to an Instagram-style feed: top bar with the brand name,
+// then a single column of posts (artist name + avatar, full-width media,
+// like/save + share). No hero, no video background, no category rail.
+// Bottom nav and the search/post dock are unchanged.
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 import { getCurrentAccount, isArtist } from "../utils/auth";
@@ -22,7 +13,6 @@ import socket from "../socket";
 import PostRequestModal from "../components/PostRequestModal";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
-const HERO_VIDEO_URL = "/artbg.mp4";
 
 const getActor = () => {
   const account = getCurrentAccount();
@@ -46,21 +36,11 @@ function getLocation() {
   });
 }
 
-function firstCategory(post) {
-  if (Array.isArray(post.categories) && post.categories.length) return post.categories[0];
-  if (typeof post.categories === "string" && post.categories.trim()) {
-    return post.categories.split(",")[0].trim();
-  }
-  return post.category || "Art";
-}
-
 export default function Home() {
   const navigate = useNavigate();
   const actor = getActor();
 
   const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
-  const [locating, setLocating] = useState(false);
   const [toast, setToast] = useState(null);
   const [showPostModal, setShowPostModal] = useState(false);
 
@@ -157,156 +137,74 @@ export default function Home() {
     setPosts((prev) => prev.map((p) => (p._id === id ? { ...p, ...patch } : p)));
   };
 
-  const handleNearYou = () => {
-    if (!navigator.geolocation) { navigate("/artists"); return; }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLocating(false);
-        const { latitude, longitude } = pos.coords;
-        navigate(`/artists?lat=${latitude}&lng=${longitude}&near=true`);
-      },
-      () => { setLocating(false); navigate("/artists"); },
-      { timeout: 6000 }
-    );
-  };
-
-  const categories = useMemo(() => {
-    const set = new Set();
-    posts.forEach((p) => set.add(firstCategory(p)));
-    return ["All", ...Array.from(set).slice(0, 8)];
-  }, [posts]);
-
   const q = query.trim().toLowerCase();
-  const visiblePosts = posts.filter((p) => {
-    const matchesQuery = q
-      ? (p.caption || "").toLowerCase().includes(q) || (p.artistName || "").toLowerCase().includes(q)
-      : true;
-    const matchesCategory = activeCategory === "All" || firstCategory(p) === activeCategory;
-    return matchesQuery && matchesCategory;
-  });
+  const visiblePosts = q
+    ? posts.filter(
+        (p) =>
+          (p.caption || "").toLowerCase().includes(q) ||
+          (p.artistName || "").toLowerCase().includes(q)
+      )
+    : posts;
 
   return (
     <div style={styles.page}>
       <GlobalStyles />
 
-      {/* ══ Fixed full-page video background ══ */}
-      <video style={styles.bgVideo} src={HERO_VIDEO_URL} autoPlay loop muted playsInline />
-      <div style={styles.bgOverlay} />
+      {toast && (
+        <div style={styles.toast} onClick={() => setToast(null)}>🔔 {toast}</div>
+      )}
 
-      {/* ══ Everything below scrolls over the video ══ */}
-      <div style={styles.content}>
-        {toast && (
-          <div style={styles.toast} onClick={() => setToast(null)}>🔔 {toast}</div>
+      {/* ══ Top bar ══ */}
+      <div style={styles.topBar}>
+        <span style={styles.brandName}>ArtSpire</span>
+        <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
+          <SearchIcon size={20} stroke="#fff" />
+        </button>
+      </div>
+
+      {/* ══ Feed ══ */}
+      <div style={styles.feedCol}>
+        {visiblePosts.length === 0 && !loading && (
+          <div style={styles.comingSoon}>
+            {q ? "No matches found." : "No posts yet."}
+          </div>
         )}
 
-        {/* ══ Top bar — glassy, over the video ══ */}
-        <div style={styles.topBar}>
-          <div style={styles.brand}>
-            <span style={styles.brandMark}>A</span>
-            <span style={styles.brandName}>ArtSpire</span>
-          </div>
-          <button style={styles.searchIconBtn} onClick={() => navigate("/search")} aria-label="Search">
-            <SearchIcon size={17} stroke="#fff" />
-          </button>
-        </div>
-
-        {/* ══ Hero content ══ */}
-        <div style={styles.hero}>
-          <h1 style={styles.heroTitle}>
-            Discover
-            <br />
-            <span style={styles.heroTitleAccent}>Creative Artists</span>
-            <br />
-            Near You
-          </h1>
-
-          <div style={styles.heroActions}>
-            <button style={styles.heroBtn} onClick={() => navigate("/artists")}>
-              Explore Artists
-            </button>
-            <button style={styles.heroBtn} onClick={() => navigate("/artist-register")}>
-              Join As Artist
-            </button>
-            <button style={styles.heroBtn} onClick={handleNearYou} disabled={locating}>
-              {locating ? "Locating…" : "Near You"}
-            </button>
-          </div>
-        </div>
-
-        {/* ══ Category rail ══ */}
-        <div style={styles.railWrap}>
-          <div className="category-rail">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                style={{
-                  ...styles.railChip,
-                  ...(activeCategory === cat ? styles.railChipActive : {}),
-                }}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* ══ Gallery wall ══ */}
-        <div style={styles.feedCol}>
-          {visiblePosts.length === 0 && !loading && (
-            <div style={styles.comingSoon}>
-              <div style={{ fontSize: 32 }}>🖼️</div>
-              <div style={styles.comingSoonTitle}>
-                {q || activeCategory !== "All" ? "Nothing here yet." : "Nothing posted yet."}
-              </div>
-              <div style={styles.comingSoonSub}>
-                {q || activeCategory !== "All"
-                  ? "Try a different search or category."
-                  : "New posts from artists show up here as soon as they're approved."}
-              </div>
-            </div>
-          )}
-
-          <div className="gallery-grid">
-            {visiblePosts.map((p) => (
-              <GalleryCard
-                key={p._id}
-                post={p}
-                actor={actor}
-                onUpdate={(patch) => updatePost(p._id, patch)}
-                onOpen={() => navigate("/feed")}
-              />
-            ))}
-          </div>
-
-          {!q && activeCategory === "All" && hasMore && (
-            <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
-              {loading ? "Loading…" : "Load more"}
-            </button>
-          )}
-        </div>
-
-        {/* ══ Search / post dock ══ */}
-        <div style={{ height: 66 }} />
-        <div style={styles.searchDock}>
-          <SearchIcon size={15} stroke="#8291AC" />
-          <input
-            style={styles.searchDockInput}
-            placeholder="Search for artwork, artists, or a request…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+        {visiblePosts.map((p) => (
+          <FeedPost
+            key={p._id}
+            post={p}
+            actor={actor}
+            onUpdate={(patch) => updatePost(p._id, patch)}
           />
-          <button type="button" style={styles.searchDockAction} onClick={() => setShowPostModal(true)} aria-label="Post a request">
-            + Post
+        ))}
+
+        {!q && hasMore && (
+          <button style={styles.loadMoreBtn} onClick={loadMore} disabled={loading}>
+            {loading ? "Loading…" : "Load more"}
           </button>
-        </div>
-
-        <div style={{ height: 96 }} />
-        <BottomNav />
-
-        {showPostModal && <PostRequestModal actor={actor} onClose={() => setShowPostModal(false)} />}
+        )}
       </div>
+
+      {/* ══ Search / post dock ══ */}
+      <div style={{ height: 66 }} />
+      <div style={styles.searchDock}>
+        <SearchIcon size={15} stroke="#8291AC" />
+        <input
+          style={styles.searchDockInput}
+          placeholder="Search for artwork, artists, or a request…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <button type="button" style={styles.searchDockAction} onClick={() => setShowPostModal(true)} aria-label="Post a request">
+          + Post
+        </button>
+      </div>
+
+      <div style={{ height: 96 }} />
+      <BottomNav />
+
+      {showPostModal && <PostRequestModal actor={actor} onClose={() => setShowPostModal(false)} />}
     </div>
   );
 }
@@ -315,8 +213,7 @@ export default function Home() {
 function useSaveToggle(post, actor, onUpdate) {
   const saves = post.likes || [];
   const saved = actor ? saves.includes(actor.id) : false;
-  const toggleSave = async (e) => {
-    e?.stopPropagation();
+  const toggleSave = async () => {
     if (!actor) return alert("Log in to save posts.");
     const next = saved ? saves.filter((id) => id !== actor.id) : [...saves, actor.id];
     onUpdate({ likes: next });
@@ -329,13 +226,11 @@ function useSaveToggle(post, actor, onUpdate) {
   return { saved, toggleSave };
 }
 
-/* ── artwork "matted" like a framed print, museum-label plate underneath ── */
-function GalleryCard({ post, actor, onUpdate, onOpen }) {
+/* ── one Instagram-style post: header (avatar + name), full media, actions ── */
+function FeedPost({ post, actor, onUpdate }) {
   const { saved, toggleSave } = useSaveToggle(post, actor, onUpdate);
-  const category = firstCategory(post);
 
-  const handleShare = (e) => {
-    e.stopPropagation();
+  const handleShare = () => {
     const url = `${window.location.origin}/feed`;
     if (navigator.share) {
       navigator.share({ title: post.artistName || "ArtSpire", url }).catch(() => {});
@@ -345,42 +240,38 @@ function GalleryCard({ post, actor, onUpdate, onOpen }) {
   };
 
   return (
-    <div className="gallery-card" onClick={onOpen}>
-      <div style={styles.mat}>
-        <div style={styles.mediaWrap}>
-          {post.mediaType === "video" ? (
-            <video src={post.mediaUrl} style={styles.media} muted loop playsInline autoPlay />
-          ) : (
-            <img src={post.mediaUrl} alt={post.caption || "artwork"} style={styles.media} />
-          )}
-          <button
-            style={{ ...styles.bookmarkBtn, ...(saved ? styles.bookmarkBtnActive : {}) }}
-            onClick={toggleSave}
-            aria-label={saved ? "Saved" : "Save"}
-          >
-            <BookmarkIcon size={13} filled={saved} />
-          </button>
-        </div>
+    <div style={styles.post}>
+      <Link to={`/dashboard/${post.artistId}`} style={styles.postHeader}>
+        {post.artistAvatar ? (
+          <img src={post.artistAvatar} alt="" style={styles.avatar} />
+        ) : (
+          <div style={styles.avatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>
+        )}
+        <span style={styles.postName}>{post.artistName || "Unknown artist"}</span>
+      </Link>
 
-        <div style={styles.plate}>
-          <span style={styles.plateEyebrow}>{category}</span>
-          <Link
-            to={`/dashboard/${post.artistId}`}
-            style={styles.plateArtistRow}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {post.artistAvatar ? (
-              <img src={post.artistAvatar} alt="" style={styles.plateAvatar} />
-            ) : (
-              <div style={styles.plateAvatarFallback}>{post.artistName?.[0]?.toUpperCase() || "?"}</div>
-            )}
-            <span style={styles.plateArtistName}>{post.artistName || "Unknown artist"}</span>
-          </Link>
-          <button style={styles.plateShare} onClick={handleShare}>
-            <ShareIcon size={12} /> Share
-          </button>
-        </div>
+      <div style={styles.mediaWrap}>
+        {post.mediaType === "video" ? (
+          <video src={post.mediaUrl} style={styles.media} muted loop playsInline autoPlay />
+        ) : (
+          <img src={post.mediaUrl} alt={post.caption || "artwork"} style={styles.media} />
+        )}
       </div>
+
+      <div style={styles.postActions}>
+        <button style={styles.actionBtn} onClick={toggleSave}>
+          <HeartIcon size={22} filled={saved} />
+        </button>
+        <button style={styles.actionBtn} onClick={handleShare}>
+          <ShareIcon size={20} />
+        </button>
+      </div>
+
+      {post.caption && (
+        <div style={styles.caption}>
+          <span style={styles.captionName}>{post.artistName}</span> {post.caption}
+        </div>
+      )}
     </div>
   );
 }
@@ -393,74 +284,37 @@ function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
     </svg>
   );
 }
-function BookmarkIcon({ size = 12, filled }) {
+function HeartIcon({ size = 22, filled }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "#D9662B" : "rgba(255,255,255,0.9)"} stroke={filled ? "#D9662B" : "#2B2420"} strokeWidth="1.6" strokeLinejoin="round">
-      <path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "#D9662B" : "none"} stroke={filled ? "#D9662B" : "#fff"} strokeWidth="2" strokeLinejoin="round">
+      <path d="M12 21s-7.5-4.9-10-9.3C.5 8.4 2 5 5.3 5c2 0 3.4 1.1 4.7 2.7C11.3 6.1 12.7 5 14.7 5 18 5 19.5 8.4 22 11.7 19.5 16.1 12 21 12 21z" />
     </svg>
   );
 }
 function ShareIcon({ size = 13 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#8291AC" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
       <path d="M16 6l-4-4-4 4" /><path d="M12 2v14" />
     </svg>
   );
 }
 
-/* ── global CSS: fonts, masonry grid, category rail scroll ───────────────── */
 function GlobalStyles() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;1,500;1,600&family=Inter:wght@400;500;600;700;800&display=swap');
-
-      .gallery-grid {
-        column-count: 2;
-        column-gap: 14px;
-        width: 100%;
-      }
-      @media (min-width: 560px) { .gallery-grid { column-count: 3; } }
-      @media (min-width: 860px) { .gallery-grid { column-count: 4; } }
-      @media (min-width: 1180px) { .gallery-grid { column-count: 5; } }
-
-      .gallery-card {
-        break-inside: avoid;
-        margin-bottom: 14px;
-        cursor: pointer;
-      }
-
-      .category-rail {
-        display: flex;
-        gap: 6px;
-        overflow-x: auto;
-        padding: 0 18px 2px;
-        scrollbar-width: none;
-      }
-      .category-rail::-webkit-scrollbar { display: none; }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     `}</style>
   );
 }
 
-const CLAY = "#D9662B";
+const INK = "#0B0F1A";
 const SURFACE = "#131B2C";
-const PAPER = "#F6F1E7";
+const CLAY = "#D9662B";
 const MUTE = "#8291AC";
-const CHARCOAL = "#2B2420";
 
 const styles = {
-  page: { fontFamily: "'Inter', sans-serif", minHeight: "100vh", color: "#fff", position: "relative" },
-
-  // Fixed, full-viewport video sits behind everything and never scrolls.
-  bgVideo: {
-    position: "fixed", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0,
-  },
-  bgOverlay: {
-    position: "fixed", inset: 0, zIndex: 1,
-    background: "linear-gradient(180deg, rgba(11,15,26,0.55) 0%, rgba(11,15,26,0.75) 40%, rgba(11,15,26,0.94) 78%, #0B0F1A 100%)",
-  },
-
-  content: { position: "relative", zIndex: 2, minHeight: "100vh" },
+  page: { fontFamily: "'Inter', sans-serif", background: INK, minHeight: "100vh", color: "#fff" },
 
   toast: {
     position: "fixed", top: 14, left: "50%", transform: "translateX(-50%)", zIndex: 200,
@@ -471,72 +325,31 @@ const styles = {
 
   topBar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "18px 18px 0",
+    padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.08)",
   },
-  brand: { display: "flex", alignItems: "center", gap: 8 },
-  brandMark: {
-    width: 26, height: 26, borderRadius: 7, background: CLAY,
-    color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-    fontWeight: 700, fontSize: 13, fontFamily: "'Fraunces', serif", fontStyle: "italic",
-  },
-  brandName: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 19, color: "#fff" },
-  searchIconBtn: {
-    background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%",
-    width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-  },
+  brandName: { fontWeight: 800, fontSize: 20, color: "#fff" },
+  searchIconBtn: { background: "none", border: "none", cursor: "pointer", padding: 6 },
 
-  hero: { padding: "48px 18px 26px" },
-  heroTitle: { margin: 0, fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 32, lineHeight: 1.18, color: "#fff" },
-  heroTitleAccent: { color: CLAY, fontStyle: "italic" },
+  feedCol: { maxWidth: 480, margin: "0 auto", padding: "0 0 12px" },
+  comingSoon: { textAlign: "center", color: MUTE, padding: "60px 20px", fontWeight: 600 },
 
-  heroActions: { display: "flex", gap: 10, marginTop: 20, flexWrap: "wrap" },
-  heroBtn: {
-    background: CLAY, color: "#fff", border: "none", borderRadius: 999, padding: "10px 20px",
-    fontWeight: 700, fontSize: 13, cursor: "pointer",
+  post: { borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 10 },
+  postHeader: { display: "flex", alignItems: "center", gap: 10, padding: "12px 12px", textDecoration: "none" },
+  avatar: { width: 34, height: 34, borderRadius: "50%", objectFit: "cover" },
+  avatarFallback: {
+    width: 34, height: 34, borderRadius: "50%", background: CLAY, color: "#fff",
+    display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14, flexShrink: 0,
   },
+  postName: { fontWeight: 700, fontSize: 14, color: "#fff" },
 
-  railWrap: { paddingTop: 6, paddingBottom: 4 },
-  railChip: {
-    flex: "0 0 auto", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.14)",
-    borderRadius: 999, padding: "6px 14px", fontSize: 12.5, fontWeight: 600, color: MUTE, cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  railChipActive: { background: CLAY, borderColor: CLAY, color: "#fff" },
+  mediaWrap: { width: "100%", background: "#1a2233" },
+  media: { width: "100%", maxHeight: 560, display: "block", objectFit: "cover" },
 
-  feedCol: { maxWidth: 1400, margin: "0 auto", padding: "18px 12px 0" },
-  comingSoon: { textAlign: "center", color: MUTE, padding: "60px 20px" },
-  comingSoonTitle: { fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 18, color: "#fff", marginTop: 10 },
-  comingSoonSub: { fontSize: 13, marginTop: 6 },
+  postActions: { display: "flex", gap: 16, padding: "10px 12px 4px" },
+  actionBtn: { background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" },
 
-  mat: { background: PAPER, borderRadius: 14, padding: 8, boxShadow: "0 4px 18px rgba(0,0,0,0.35)" },
-  mediaWrap: { position: "relative", width: "100%", borderRadius: 8, overflow: "hidden", background: "#E4DCC8" },
-  media: { width: "100%", display: "block", objectFit: "cover" },
-  bookmarkBtn: {
-    position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
-    background: "rgba(11,15,26,0.35)", border: "none", display: "flex", alignItems: "center",
-    justifyContent: "center", cursor: "pointer", backdropFilter: "blur(3px)",
-  },
-  bookmarkBtnActive: { background: "rgba(255,255,255,0.9)" },
-
-  plate: { padding: "9px 4px 2px" },
-  plateEyebrow: {
-    display: "block", fontSize: 9.5, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-    color: "#A9885F", marginBottom: 5,
-  },
-  plateArtistRow: { display: "flex", alignItems: "center", gap: 6, textDecoration: "none", minWidth: 0 },
-  plateAvatar: { width: 18, height: 18, borderRadius: "50%", objectFit: "cover", flexShrink: 0 },
-  plateAvatarFallback: {
-    width: 18, height: 18, borderRadius: "50%", background: CLAY, color: "#fff", display: "flex",
-    alignItems: "center", justifyContent: "center", fontSize: 8.5, fontWeight: 700, flexShrink: 0,
-  },
-  plateArtistName: {
-    fontFamily: "'Fraunces', serif", fontStyle: "italic", fontWeight: 600, fontSize: 13, color: CHARCOAL,
-    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-  },
-  plateShare: {
-    display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", marginTop: 7,
-    fontSize: 10.5, fontWeight: 600, color: "#8291AC", cursor: "pointer", padding: 0,
-  },
+  caption: { padding: "0 12px", fontSize: 13.5, color: "#e5e7eb", lineHeight: 1.4 },
+  captionName: { fontWeight: 700, color: "#fff", marginRight: 4 },
 
   loadMoreBtn: {
     display: "block", margin: "10px auto 0", padding: "11px 28px", borderRadius: 999,
