@@ -15,18 +15,14 @@ app.use(express.json());
 app.use("/uploads", express.static("uploads"));
 
 const authRoutes         = require("./routes/authRoutes");
-const chatRoutes         = require("./routes/chatRoutes");
 const uploadRoutes       = require("./routes/uploadRoutes");
 const artistRoutes       = require("./routes/artistRoutes");
 const postRoutes         = require("./routes/postRoutes");
 const userRoutes         = require("./routes/userRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
-const groupRoutes        = require("./routes/groups");
 
-app.use("/api/groups",        groupRoutes);
 app.use("/api/users",         userRoutes);
 app.use("/api/auth",          authRoutes);
-app.use("/api/chat",          chatRoutes);
 app.use("/api/artists",       artistRoutes);
 app.use("/api/upload",        uploadRoutes);
 app.use("/api/post",         postRoutes);
@@ -47,8 +43,6 @@ const io = new Server(server, {
 
 io.on("connection", (socket) => {
   console.log("User Connected:", socket.id);
-  socket.on("join_room", (id) => { socket.join(id); });
-  socket.on("send_message", (data) => { io.to(data.receiverId).emit("receive_message", data); });
   socket.on("disconnect", () => { console.log("User Disconnected"); });
 });
 

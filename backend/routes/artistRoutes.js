@@ -45,6 +45,79 @@ router.post("/upload", upload.single("image"), async (req, res) => {
   }
 });
 
+// ── PUT /api/artists/:id/location  ← MUST be before /:id ────────────────────
+// Called whenever the artist's app has a fresh GPS fix, so "Find Nearby
+// Artists" and Post Request matching can use real coordinates instead of
+// just a city string.
+// body: { lat, lng }
+router.put("/:id/location", async (req, res) => {
+  try {
+    const { lat, lng } = req.body;
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      return res.status(400).json({ message: "Valid lat and lng are required" });
+    }
+
+    const update = {
+      location: { type: "Point", coordinates: [lngNum, latNum] },
+      locationUpdatedAt: new Date(),
+    };
+
+    let artist = await Artist.findByIdAndUpdate(req.params.id, { $set: update }, { new: true }).select("-password");
+    if (!artist) {
+      artist = await User.findOneAndUpdate(
+        { _id: req.params.id, role: "artist" },
+        { $set: update },
+        { new: true }
+      ).select("-password");
+    }
+    if (!artist) return res.status(404).json({ message: "Artist not found" });
+
+    res.json({ success: true, location: artist.location });
+  } catch (err) {
+    console.error("Update location error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// ── GET /api/artists/nearby  ← MUST be before /:id ───────────────────────────
+// Powers the "Find Nearby Artists" map. Falls back to city matching for
+// artists who haven't shared live location yet.
+// query: lat, lng, radius (meters, default 25000), city
+router.get("/nearby", async (req, res) => {
+  try {
+    const { lat, lng, city } = req.query;
+    const radius = Math.min(Number(req.query.radius) || 25000, 100000);
+    const latNum = lat !== undefined ? Number(lat) : undefined;
+    const lngNum = lng !== undefined ? Number(lng) : undefined;
+    const hasCoords = Number.isFinite(latNum) && Number.isFinite(lngNum);
+
+    let artists = [];
+    if (hasCoords) {
+      artists = await Artist.find({
+        location: {
+          $near: {
+            $geometry: { type: "Point", coordinates: [lngNum, latNum] },
+            $maxDistance: radius,
+          },
+        },
+      }).select("-password");
+    }
+
+    if (artists.length === 0 && city) {
+      artists = await Artist.find({
+        city: new RegExp(`^${city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"),
+      }).select("-password");
+    }
+
+    res.json(artists);
+  } catch (err) {
+    console.error("Nearby artists error:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 // ── GET /api/artists/:id ──────────────────────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {

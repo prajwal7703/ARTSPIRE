@@ -2,6 +2,20 @@
 
 const mongoose = require("mongoose");
 
+// Separate sub-schema (not just an inline object) with an explicit
+// `default: undefined` on the parent field below — this is deliberate.
+// If we let Mongoose auto-populate `location: { type: "Point" }` with no
+// coordinates for every artist who hasn't shared their location yet, the
+// 2dsphere index below would choke on invalid/incomplete geometry. Keeping
+// `location` entirely absent until it's explicitly set avoids that.
+const pointSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ["Point"], default: "Point" },
+    coordinates: { type: [Number], default: undefined }, // [lng, lat]
+  },
+  { _id: false }
+);
+
 const artistSchema = new mongoose.Schema(
   {
     name: {
@@ -35,6 +49,17 @@ const artistSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
+    },
+    // ── Live geolocation, for the "Find Nearby Artists" map + matching
+    // artists to nearby Post Requests. Updated via
+    // PUT /api/artists/:id/location whenever the artist's app has a fresh
+    // GPS fix. Stays undefined until an artist opts in / shares location.
+    location: {
+      type: pointSchema,
+      default: undefined,
+    },
+    locationUpdatedAt: {
+      type: Date,
     },
     instagram: {
       type: String,
@@ -86,5 +111,7 @@ const artistSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+artistSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("Artist", artistSchema);
