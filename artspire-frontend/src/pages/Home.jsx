@@ -7,6 +7,8 @@ import {
   Bookmark,
   MoreHorizontal,
   Plus,
+  Search,
+  Bell,
   LogIn,
   LogOut,
 } from "lucide-react";
@@ -15,14 +17,6 @@ import CreateSheet from "../components/CreateSheet";
 
 // Adjust this if your env var / dev proxy setup is different
 const API_BASE = import.meta.env.VITE_API_URL || "";
-
-// TODO: replace with a real stories endpoint when you have one
-const STORIES = [
-  { id: "s1", name: "@sketchify", avatar: "https://i.pravatar.cc/150?img=47", ring: "ring-pink-400" },
-  { id: "s2", name: "@color.swirl", avatar: "https://i.pravatar.cc/150?img=32", ring: "ring-orange-400" },
-  { id: "s3", name: "@art_by_me", avatar: "https://i.pravatar.cc/150?img=13", ring: "ring-stone-300" },
-  { id: "s4", name: "@creative.vi", avatar: "https://i.pravatar.cc/150?img=25", ring: "ring-rose-400" },
-];
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -47,6 +41,9 @@ export default function Home() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [stories, setStories] = useState([]);
+  const [storiesLoading, setStoriesLoading] = useState(true);
 
   // ── Auth state (adjust to match however you actually store the session) ──
   const currentUser = (() => {
@@ -76,17 +73,22 @@ export default function Home() {
         if (!res.ok) throw new Error("Failed to load feed");
         const data = await res.json();
         if (!cancelled) {
-          setPosts(data.posts || []);
+          const feedPosts = data.posts || [];
+          setPosts(feedPosts);
 
           // seed "liked" state from server data if we know who's viewing
           if (currentUser?._id || currentUser?.id) {
             const uid = currentUser._id || currentUser.id;
             const likedMap = {};
-            (data.posts || []).forEach((p) => {
+            feedPosts.forEach((p) => {
               if (Array.isArray(p.likes) && p.likes.includes(uid)) likedMap[p._id] = true;
             });
             setLiked(likedMap);
           }
+
+          // Fallback stories: derive from distinct authors in the real feed,
+          // used only if /api/stories isn't available yet (see loadStories below).
+          window.__feedAuthorsFallback = dedupeAuthors(feedPosts);
         }
       } catch (err) {
         console.error("Feed load error:", err);
@@ -96,7 +98,42 @@ export default function Home() {
       }
     }
 
-    loadFeed();
+    function dedupeAuthors(feedPosts) {
+      const seen = new Set();
+      const out = [];
+      for (const p of feedPosts) {
+        const key = p.artistId || p.artistName;
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          id: p.artistId || p._id,
+          name: p.artistName,
+          avatar: p.artistAvatar,
+          hasStory: true,
+        });
+      }
+      return out;
+    }
+
+    // ── Load real stories, falling back to feed authors if the endpoint
+    // doesn't exist yet on the backend ─────────────────────────────────────
+    async function loadStories() {
+      try {
+        setStoriesLoading(true);
+        const res = await fetch(`${API_BASE}/api/stories`);
+        if (!res.ok) throw new Error("no stories endpoint");
+        const data = await res.json();
+        if (!cancelled) setStories(data.stories || []);
+      } catch (err) {
+        // Backend doesn't have a stories endpoint yet — fall back to
+        // real authors pulled from the feed instead of fake placeholder data.
+        if (!cancelled) setStories(window.__feedAuthorsFallback || []);
+      } finally {
+        if (!cancelled) setStoriesLoading(false);
+      }
+    }
+
+    loadFeed().then(loadStories);
     return () => {
       cancelled = true;
     };
@@ -144,19 +181,36 @@ export default function Home() {
     <div className="min-h-screen bg-[#FBF7F2] pb-24">
       {/* Header */}
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-stone-100 bg-[#FBF7F2]/95 px-5 py-4 backdrop-blur">
-        <h1 className="font-serif text-2xl font-semibold tracking-tight text-stone-900">
+        <button
+          aria-label="Search"
+          onClick={() => navigate("/search")}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100"
+        >
+          <Search size={20} strokeWidth={1.8} />
+        </button>
+
+        <h1 className="font-serif text-xl font-semibold tracking-tight text-stone-900">
           ArtSpire
         </h1>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {isLoggedIn ? (
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 rounded-full border border-stone-200 px-3.5 py-1.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
-            >
-              <LogOut size={16} strokeWidth={1.8} />
-              Logout
-            </button>
+            <>
+              <button
+                aria-label="Notifications"
+                onClick={() => navigate("/notifications")}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100"
+              >
+                <Bell size={20} strokeWidth={1.8} />
+              </button>
+              <button
+                onClick={handleLogout}
+                aria-label="Logout"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100"
+              >
+                <LogOut size={18} strokeWidth={1.8} />
+              </button>
+            </>
           ) : (
             <button
               onClick={() => navigate("/login")}
@@ -181,16 +235,31 @@ export default function Home() {
           <span className="text-[11px] text-stone-500">Your Story</span>
         </div>
 
-        {STORIES.map((s) => (
-          <div key={s.id} className="flex shrink-0 flex-col items-center gap-1.5">
-            <img
-              src={s.avatar}
-              alt={s.name}
-              className={`h-14 w-14 rounded-full object-cover ring-2 ring-offset-2 ring-offset-[#FBF7F2] ${s.ring}`}
-            />
-            <span className="max-w-[64px] truncate text-[11px] text-stone-500">{s.name}</span>
+        {storiesLoading &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex shrink-0 flex-col items-center gap-1.5">
+              <div className="h-14 w-14 animate-pulse rounded-full bg-stone-200" />
+              <div className="h-2.5 w-10 animate-pulse rounded bg-stone-200" />
+            </div>
+          ))}
+
+        {!storiesLoading &&
+          stories.map((s) => (
+            <div key={s.id} className="flex shrink-0 flex-col items-center gap-1.5">
+              <img
+                src={s.avatar}
+                alt={s.name}
+                className="h-14 w-14 rounded-full object-cover ring-2 ring-offset-2 ring-offset-[#FBF7F2] ring-violet-300"
+              />
+              <span className="max-w-[64px] truncate text-[11px] text-stone-500">{s.name}</span>
+            </div>
+          ))}
+
+        {!storiesLoading && stories.length === 0 && (
+          <div className="flex shrink-0 items-center text-[11px] text-stone-400">
+            No stories yet
           </div>
-        ))}
+        )}
       </div>
 
       {/* Feed states */}
@@ -213,6 +282,7 @@ export default function Home() {
             key={post._id}
             className="overflow-hidden rounded-3xl border border-stone-100 bg-white shadow-sm shadow-stone-200/50"
           >
+            {/* Author row */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
                 <img
@@ -222,15 +292,18 @@ export default function Home() {
                 />
                 <div className="leading-tight">
                   <p className="text-sm font-semibold text-stone-900">{post.artistName}</p>
+                  <p className="text-xs text-stone-400">{timeAgo(post.createdAt)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-xs text-stone-400">
-                {timeAgo(post.createdAt)}
-                <button aria-label="More options">
-                  <MoreHorizontal size={18} />
-                </button>
-              </div>
+              <button aria-label="More options" className="text-stone-400">
+                <MoreHorizontal size={18} />
+              </button>
             </div>
+
+            {/* Caption sits above the media */}
+            {post.caption && (
+              <p className="px-4 pb-3 text-sm text-stone-700">{post.caption}</p>
+            )}
 
             {post.mediaType === "video" ? (
               <video
@@ -247,46 +320,33 @@ export default function Home() {
               />
             )}
 
-            <div className="flex items-center justify-between px-4 pt-3">
-              <div className="flex items-center gap-4">
-                <button onClick={() => toggleLike(post)} aria-label="Like">
+            {/* Inline like / comment / share counts + save */}
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-5">
+                <button onClick={() => toggleLike(post)} aria-label="Like" className="flex items-center gap-1.5">
                   <Heart
-                    size={23}
+                    size={22}
                     strokeWidth={1.8}
                     className={liked[post._id] ? "fill-rose-500 text-rose-500" : "text-stone-700"}
                   />
+                  <span className="text-sm text-stone-600">{(post.likes?.length ?? 0).toLocaleString()}</span>
                 </button>
-                <button aria-label="Comment">
-                  <MessageCircle size={22} strokeWidth={1.8} className="text-stone-700" />
+                <button aria-label="Comment" className="flex items-center gap-1.5">
+                  <MessageCircle size={21} strokeWidth={1.8} className="text-stone-700" />
+                  <span className="text-sm text-stone-600">{post.comments?.length ?? 0}</span>
                 </button>
-                <button aria-label="Share">
-                  <Send size={21} strokeWidth={1.8} className="text-stone-700" />
+                <button aria-label="Share" className="flex items-center gap-1.5">
+                  <Send size={20} strokeWidth={1.8} className="text-stone-700" />
+                  <span className="text-sm text-stone-600">{post.shares?.length ?? 0}</span>
                 </button>
               </div>
               <button onClick={() => toggleSave(post._id)} aria-label="Save">
                 <Bookmark
-                  size={21}
+                  size={20}
                   strokeWidth={1.8}
                   className={saved[post._id] ? "fill-stone-800 text-stone-800" : "text-stone-700"}
                 />
               </button>
-            </div>
-
-            <div className="px-4 pb-4 pt-2 text-sm">
-              <p className="font-semibold text-stone-900">
-                {(post.likes?.length ?? 0).toLocaleString()} likes
-              </p>
-              {post.caption && (
-                <p className="mt-0.5 text-stone-700">
-                  <span className="font-semibold text-stone-900">{post.artistName}</span>{" "}
-                  {post.caption}
-                </p>
-              )}
-              {(post.comments?.length ?? 0) > 0 && (
-                <p className="mt-1 text-stone-400">
-                  View all {post.comments.length} comments
-                </p>
-              )}
             </div>
           </article>
         ))}
