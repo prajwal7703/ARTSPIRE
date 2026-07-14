@@ -7,7 +7,7 @@ import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const fmt = (n) => Number(n).toLocaleString("en-IN");
 
 const getCurrentAccount = () => {
@@ -25,16 +25,16 @@ const STATUS_META = {
   negotiating:      { label: "Negotiating",       color: "#1d4ed8", bg: "#eff6ff", dot: "#3b82f6" },
   price_agreed:     { label: "Price Agreed",      color: "#15803d", bg: "#f0fdf4", dot: "#22c55e" },
   payment_pending:  { label: "Pay Now",           color: "#7c3aed", bg: "#f5f3ff", dot: "#8b5cf6" },
-  confirmed:        { label: "Confirmed ✓",       color: "#065f46", bg: "#ecfdf5", dot: "#10b981" },
+  confirmed:        { label: "Confirmed âœ“",       color: "#065f46", bg: "#ecfdf5", dot: "#10b981" },
   cancelled:        { label: "Cancelled",         color: "#7f1d1d", bg: "#fef2f2", dot: "#ef4444" },
 };
 
 const STEPS = [
-  { key: "pending_approval", label: "Request Sent",  icon: "📤" },
-  { key: "negotiating",      label: "Negotiating",   icon: "💬" },
-  { key: "price_agreed",     label: "Price Agreed",  icon: "🤝" },
-  { key: "payment_pending",  label: "Payment",       icon: "💳" },
-  { key: "confirmed",        label: "Confirmed",     icon: "✅" },
+  { key: "pending_approval", label: "Request Sent",  icon: "ðŸ“¤" },
+  { key: "negotiating",      label: "Negotiating",   icon: "ðŸ’¬" },
+  { key: "price_agreed",     label: "Price Agreed",  icon: "ðŸ¤" },
+  { key: "payment_pending",  label: "Payment",       icon: "ðŸ’³" },
+  { key: "confirmed",        label: "Confirmed",     icon: "âœ…" },
 ];
 
 const STEP_ORDER = STEPS.map((s) => s.key);
@@ -55,7 +55,7 @@ function loadRazorpay() {
   });
 }
 
-// ── main component ────────────────────────────────────────────────────────────
+// â”€â”€ main component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function UserDashboard() {
   const account  = getCurrentAccount();
   const userId   = account?._id;
@@ -73,7 +73,7 @@ export default function UserDashboard() {
   const [counterMsg,   setCounterMsg]   = useState("");
   const threadRef = useRef(null);
 
-  // ── fetch ──
+  // â”€â”€ fetch â”€â”€
   const fetchBookings = async () => {
     if (!userId) return;
     try {
@@ -85,14 +85,14 @@ export default function UserDashboard() {
 
   useEffect(() => { fetchBookings(); }, [userId]);
 
-  // ── scroll thread to bottom when negotiation updates ──
+  // â”€â”€ scroll thread to bottom when negotiation updates â”€â”€
   useEffect(() => {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
   }, [selected?.negotiation?.length]);
 
-  // ── socket ──
+  // â”€â”€ socket â”€â”€
   useEffect(() => {
     if (!userId) return;
     socket.emit("join_user_room", userId);
@@ -144,14 +144,14 @@ export default function UserDashboard() {
     };
   }, [userId]);
 
-  // ── select a booking ──
+  // â”€â”€ select a booking â”€â”€
   const openBooking = (b) => {
     setSelected(b);
     setErr(""); setPayErr("");
     setCounterPrice(""); setCounterMsg("");
   };
 
-  // ── accept artist offer ──
+  // â”€â”€ accept artist offer â”€â”€
   const acceptOffer = async (price) => {
     setSending(true); setErr("");
     try {
@@ -163,7 +163,7 @@ export default function UserDashboard() {
     finally { setSending(false); }
   };
 
-  // ── send counter offer ──
+  // â”€â”€ send counter offer â”€â”€
   const sendCounter = async () => {
     const price = parseInt(counterPrice, 10);
     if (!price || price <= 0) { setErr("Enter a valid price."); return; }
@@ -181,7 +181,7 @@ export default function UserDashboard() {
     finally { setSending(false); }
   };
 
-  // ── pay ──
+  // â”€â”€ pay â”€â”€
   const payNow = async () => {
     setPaying(true); setPayErr("");
     try {
@@ -236,7 +236,7 @@ export default function UserDashboard() {
     } finally { setPaying(false); }
   };
 
-  // ── cancel ──
+  // â”€â”€ cancel â”€â”€
   const cancelBooking = async () => {
     if (!window.confirm("Cancel this booking?")) return;
     try {
@@ -247,7 +247,7 @@ export default function UserDashboard() {
     } catch { setErr("Could not cancel. Try again."); }
   };
 
-  // ── derived data ──
+  // â”€â”€ derived data â”€â”€
   const activeBookings  = bookings.filter((b) => !["confirmed", "cancelled"].includes(b.status));
   const list            = tab === "active" ? activeBookings : bookings;
   const lastArtistOffer = selected
@@ -257,10 +257,10 @@ export default function UserDashboard() {
     ["pending_approval", "negotiating"].includes(selected.status) &&
     lastArtistOffer;
 
-  // ── render ──
+  // â”€â”€ render â”€â”€
   return (
     <div style={styles.page}>
-      {/* ── LEFT PANEL ── */}
+      {/* â”€â”€ LEFT PANEL â”€â”€ */}
       <div style={styles.left}>
 
         {/* Header */}
@@ -268,7 +268,7 @@ export default function UserDashboard() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
             <h2 style={styles.pageTitle}>My Bookings</h2>
 
-            {/* ✅ Messages button */}
+            {/* âœ… Messages button */}
             <button
               onClick={() => navigate("/user-chat")}
               style={{
@@ -287,7 +287,7 @@ export default function UserDashboard() {
                 whiteSpace:  "nowrap",
               }}
             >
-              💬 Messages
+              ðŸ’¬ Messages
             </button>
           </div>
 
@@ -309,10 +309,10 @@ export default function UserDashboard() {
         {/* List */}
         <div style={styles.list}>
           {loading ? (
-            <div style={styles.empty}>Loading your bookings…</div>
+            <div style={styles.empty}>Loading your bookingsâ€¦</div>
           ) : list.length === 0 ? (
             <div style={styles.empty}>
-              <div style={{ fontSize: 40, marginBottom: 8 }}>🎨</div>
+              <div style={{ fontSize: 40, marginBottom: 8 }}>ðŸŽ¨</div>
               <div>{tab === "active" ? "No active bookings." : "No bookings yet."}</div>
               <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
                 Find an artist and send a booking request!
@@ -331,11 +331,11 @@ export default function UserDashboard() {
         </div>
       </div>
 
-      {/* ── RIGHT PANEL (detail) ── */}
+      {/* â”€â”€ RIGHT PANEL (detail) â”€â”€ */}
       <div style={styles.right}>
         {!selected ? (
           <div style={styles.placeholder}>
-            <div style={{ fontSize: 52 }}>📋</div>
+            <div style={{ fontSize: 52 }}>ðŸ“‹</div>
             <div style={{ fontSize: 15, color: "#64748b", marginTop: 8 }}>
               Select a booking to view details
             </div>
@@ -343,12 +343,20 @@ export default function UserDashboard() {
         ) : (
           <div style={styles.detail}>
 
-            {/* Status badge */}
+            {/* Status badge + actions */}
             <div style={styles.statusRow}>
               <StatusBadge status={selected.status} />
-              {!["confirmed", "cancelled"].includes(selected.status) && (
-                <button onClick={cancelBooking} style={styles.cancelBtn}>Cancel</button>
-              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => navigate(`/chat/${selected.artistId}`)}
+                  style={styles.messageBtn}
+                >
+                  ðŸ’¬ Message Artist
+                </button>
+                {!["confirmed", "cancelled"].includes(selected.status) && (
+                  <button onClick={cancelBooking} style={styles.cancelBtn}>Cancel</button>
+                )}
+              </div>
             </div>
 
             {/* Progress stepper */}
@@ -366,15 +374,15 @@ export default function UserDashboard() {
               threadRef={threadRef}
             />
 
-            {/* ── ACTION AREA ── */}
+            {/* â”€â”€ ACTION AREA â”€â”€ */}
             {err && <div style={styles.errorBox}>{err}</div>}
 
-            {/* ARTIST sent an offer → user can accept or counter */}
+            {/* ARTIST sent an offer â†’ user can accept or counter */}
             {canCounter && selected.status !== "price_agreed" && (
               <div style={styles.actionCard}>
                 <div style={styles.actionTitle}>
                   Artist's offer:{" "}
-                  <strong style={{ color: "#1e3a8a" }}>₹{fmt(lastArtistOffer.price)}</strong>
+                  <strong style={{ color: "#1e3a8a" }}>â‚¹{fmt(lastArtistOffer.price)}</strong>
                 </div>
                 <div style={styles.actionRow}>
                   <button
@@ -382,14 +390,14 @@ export default function UserDashboard() {
                     disabled={sending}
                     style={styles.acceptBtn}
                   >
-                    {sending ? "…" : `✓ Accept ₹${fmt(lastArtistOffer.price)}`}
+                    {sending ? "â€¦" : `âœ“ Accept â‚¹${fmt(lastArtistOffer.price)}`}
                   </button>
                 </div>
                 <div style={styles.divider}><span>or send a counter offer</span></div>
                 <div style={styles.counterRow}>
                   <input
                     type="number"
-                    placeholder="Your price (₹)"
+                    placeholder="Your price (â‚¹)"
                     value={counterPrice}
                     onChange={(e) => setCounterPrice(e.target.value)}
                     style={styles.priceInput}
@@ -402,7 +410,7 @@ export default function UserDashboard() {
                     style={styles.msgInput}
                   />
                   <button onClick={sendCounter} disabled={sending} style={styles.sendBtn}>
-                    {sending ? "…" : "Send →"}
+                    {sending ? "â€¦" : "Send â†’"}
                   </button>
                 </div>
               </div>
@@ -411,25 +419,25 @@ export default function UserDashboard() {
             {/* Waiting for artist to respond */}
             {selected.status === "negotiating" && !canCounter && (
               <div style={styles.waitingBox}>
-                ⏳ Waiting for artist to respond to your offer…
+                â³ Waiting for artist to respond to your offerâ€¦
               </div>
             )}
 
             {/* Pending approval */}
             {selected.status === "pending_approval" && !lastArtistOffer && (
               <div style={styles.waitingBox}>
-                📤 Request sent! Waiting for the artist to review and send a price.
+                ðŸ“¤ Request sent! Waiting for the artist to review and send a price.
               </div>
             )}
 
-            {/* Price agreed → pay */}
+            {/* Price agreed â†’ pay */}
             {selected.status === "price_agreed" && (
               <div style={styles.payCard}>
-                <div style={styles.payTitle}>🎉 Price agreed — ₹{fmt(selected.agreedPrice)}</div>
+                <div style={styles.payTitle}>ðŸŽ‰ Price agreed â€” â‚¹{fmt(selected.agreedPrice)}</div>
                 <div style={styles.paySubtitle}>Complete payment to confirm your booking.</div>
                 {payErr && <div style={styles.errorBox}>{payErr}</div>}
                 <button onClick={payNow} disabled={paying} style={styles.payBtn}>
-                  {paying ? "Processing…" : `Pay ₹${fmt(selected.agreedPrice)}`}
+                  {paying ? "Processingâ€¦" : `Pay â‚¹${fmt(selected.agreedPrice)}`}
                 </button>
               </div>
             )}
@@ -437,10 +445,10 @@ export default function UserDashboard() {
             {/* Payment pending */}
             {selected.status === "payment_pending" && (
               <div style={styles.waitingBox}>
-                💳 Payment window was opened. If it closed, click below to retry.
+                ðŸ’³ Payment window was opened. If it closed, click below to retry.
                 {payErr && <div style={{ ...styles.errorBox, marginTop: 8 }}>{payErr}</div>}
                 <button onClick={payNow} disabled={paying} style={{ ...styles.payBtn, marginTop: 10 }}>
-                  {paying ? "Processing…" : "Retry Payment"}
+                  {paying ? "Processingâ€¦" : "Retry Payment"}
                 </button>
               </div>
             )}
@@ -448,10 +456,10 @@ export default function UserDashboard() {
             {/* Confirmed */}
             {selected.status === "confirmed" && (
               <div style={styles.confirmedBox}>
-                <div style={{ fontSize: 32 }}>🎊</div>
+                <div style={{ fontSize: 32 }}>ðŸŽŠ</div>
                 <div style={styles.confirmedTitle}>Booking Confirmed!</div>
                 <div style={styles.confirmedSub}>
-                  Paid ₹{fmt(selected.paidAmount || selected.agreedPrice)} · The artist will contact you soon.
+                  Paid â‚¹{fmt(selected.paidAmount || selected.agreedPrice)} Â· The artist will contact you soon.
                 </div>
               </div>
             )}
@@ -459,7 +467,7 @@ export default function UserDashboard() {
             {/* Cancelled */}
             {selected.status === "cancelled" && (
               <div style={{ ...styles.waitingBox, background: "#fef2f2", color: "#7f1d1d", borderColor: "#fecaca" }}>
-                ❌ This booking was cancelled.
+                âŒ This booking was cancelled.
               </div>
             )}
           </div>
@@ -469,7 +477,7 @@ export default function UserDashboard() {
   );
 }
 
-// ── sub-components ────────────────────────────────────────────────────────────
+// â”€â”€ sub-components â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function BookingCard({ booking, selected, onClick }) {
   const meta = STATUS_META[booking.status] || {};
@@ -482,10 +490,10 @@ function BookingCard({ booking, selected, onClick }) {
           {meta.label}
         </span>
       </div>
-      <div style={styles.cardEvent}>{booking.eventType} · {booking.eventDate}</div>
-      <div style={styles.cardLocation}>📍 {booking.location}</div>
+      <div style={styles.cardEvent}>{booking.eventType} Â· {booking.eventDate}</div>
+      <div style={styles.cardLocation}>ðŸ“ {booking.location}</div>
       {booking.agreedPrice && (
-        <div style={styles.cardPrice}>₹{fmt(booking.agreedPrice)}</div>
+        <div style={styles.cardPrice}>â‚¹{fmt(booking.agreedPrice)}</div>
       )}
     </div>
   );
@@ -517,7 +525,7 @@ function Stepper({ currentStatus }) {
                 color:      done || active ? "#fff" : "#94a3b8",
                 fontSize:   done ? 12 : 14,
               }}>
-                {done ? "✓" : step.icon}
+                {done ? "âœ“" : step.icon}
               </div>
               <div style={{
                 ...styles.stepLabel,
@@ -545,9 +553,9 @@ function BookingInfo({ booking }) {
     booking.eventTime && ["Time",     booking.eventTime],
     ["Location",  booking.location],
     booking.duration && ["Duration", booking.duration],
-    ["Base Price", `₹${fmt(booking.basePrice)}`],
-    booking.agreedPrice && ["Agreed Price", `₹${fmt(booking.agreedPrice)}`],
-    booking.paidAmount  && ["Paid",         `₹${fmt(booking.paidAmount)}`],
+    ["Base Price", `â‚¹${fmt(booking.basePrice)}`],
+    booking.agreedPrice && ["Agreed Price", `â‚¹${fmt(booking.agreedPrice)}`],
+    booking.paidAmount  && ["Paid",         `â‚¹${fmt(booking.paidAmount)}`],
   ].filter(Boolean);
 
   return (
@@ -592,7 +600,7 @@ function NegThread({ negotiation, userName, threadRef }) {
                     fontSize:     13,
                     fontWeight:   700,
                   }}>
-                    ₹{fmt(msg.price)}
+                    â‚¹{fmt(msg.price)}
                   </span>
                 )}
               </div>
@@ -604,7 +612,7 @@ function NegThread({ negotiation, userName, threadRef }) {
   );
 }
 
-// ── styles ────────────────────────────────────────────────────────────────────
+// â”€â”€ styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const styles = {
   page: {
     display:       "flex",
@@ -760,6 +768,17 @@ const styles = {
     color:        "#dc2626",
     fontSize:     12,
     fontWeight:   700,
+    cursor:       "pointer",
+    fontFamily:   "'Nunito', sans-serif",
+  },
+  messageBtn: {
+    padding:      "5px 14px",
+    borderRadius: 8,
+    border:       "1.5px solid #1e3a8a",
+    background:   "#eff6ff",
+    color:        "#1e3a8a",
+    fontSize:     12,
+    fontWeight:   800,
     cursor:       "pointer",
     fontFamily:   "'Nunito', sans-serif",
   },

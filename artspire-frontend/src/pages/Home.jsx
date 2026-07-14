@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Heart,
-  MessageCircle,
+  Palette,
   Send,
   Bookmark,
   MoreHorizontal,
@@ -11,12 +11,27 @@ import {
   Bell,
   LogIn,
   LogOut,
+  Home as HomeIcon,
+  Compass,
+  User,
+  Star,
 } from "lucide-react";
-import BottomNav from "../components/BottomNav";
-import CreateSheet from "../components/CreateSheet";
 
-// Adjust this if your env var / dev proxy setup is different
-const API_BASE = import.meta.env.VITE_API_URL || "";
+// Falls back to your live Render backend if VITE_API_URL isn't set —
+// matches the same fallback pattern already used in src/socket.js
+const API_BASE = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
+
+const CATEGORY_CHIPS = ["For You", "Watercolor", "Illustration", "Portraits", "Landscapes"];
+
+// Maps a chip label to the substrings we look for inside an artist's
+// `categories` array (e.g. an artist with categories ["Portrait Artist"]
+// should match the "Portraits" chip).
+const CATEGORY_MATCH = {
+  Watercolor: ["watercolor", "water colour", "watercolour"],
+  Illustration: ["illustrat"],
+  Portraits: ["portrait"],
+  Landscapes: ["landscape"],
+};
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -34,7 +49,6 @@ function timeAgo(dateStr) {
 export default function Home() {
   const navigate = useNavigate();
 
-  const [createOpen, setCreateOpen] = useState(false);
   const [liked, setLiked] = useState({});
   const [saved, setSaved] = useState({});
 
@@ -42,13 +56,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [stories, setStories] = useState([]);
-  const [storiesLoading, setStoriesLoading] = useState(true);
+  // artistId -> lowercased categories array, used to power the filter chips
+  const [artistCategoryMap, setArtistCategoryMap] = useState({});
+  const [activeChip, setActiveChip] = useState("For You");
 
-  // ── Auth state (adjust to match however you actually store the session) ──
+  // â”€â”€ Auth state â€” same pattern as your existing utils/auth.js â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const currentUser = (() => {
     try {
-      return JSON.parse(localStorage.getItem("user") || "null");
+      return JSON.parse(localStorage.getItem("user") || localStorage.getItem("artist") || "null");
     } catch {
       return null;
     }
@@ -58,10 +73,11 @@ export default function Home() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("artist");
     navigate("/login");
   };
 
-  // ── Load real feed data ───────────────────────────────────────────────────
+  // â”€â”€ Load real feed + artist categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     let cancelled = false;
 
@@ -69,26 +85,21 @@ export default function Home() {
       try {
         setLoading(true);
         setError("");
-        const res = await fetch(`${API_BASE}/api/posts/feed?page=1&limit=10`);
+        const res = await fetch(`${API_BASE}/api/posts/feed?page=1&limit=20`);
         if (!res.ok) throw new Error("Failed to load feed");
         const data = await res.json();
-        if (!cancelled) {
-          const feedPosts = data.posts || [];
-          setPosts(feedPosts);
+        if (cancelled) return;
 
-          // seed "liked" state from server data if we know who's viewing
-          if (currentUser?._id || currentUser?.id) {
-            const uid = currentUser._id || currentUser.id;
-            const likedMap = {};
-            feedPosts.forEach((p) => {
-              if (Array.isArray(p.likes) && p.likes.includes(uid)) likedMap[p._id] = true;
-            });
-            setLiked(likedMap);
-          }
+        const feedPosts = data.posts || [];
+        setPosts(feedPosts);
 
-          // Fallback stories: derive from distinct authors in the real feed,
-          // used only if /api/stories isn't available yet (see loadStories below).
-          window.__feedAuthorsFallback = dedupeAuthors(feedPosts);
+        const uid = currentUser?._id || currentUser?.id;
+        if (uid) {
+          const likedMap = {};
+          feedPosts.forEach((p) => {
+            if (Array.isArray(p.likes) && p.likes.includes(uid)) likedMap[p._id] = true;
+          });
+          setLiked(likedMap);
         }
       } catch (err) {
         console.error("Feed load error:", err);
@@ -98,42 +109,25 @@ export default function Home() {
       }
     }
 
-    function dedupeAuthors(feedPosts) {
-      const seen = new Set();
-      const out = [];
-      for (const p of feedPosts) {
-        const key = p.artistId || p.artistName;
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        out.push({
-          id: p.artistId || p._id,
-          name: p.artistName,
-          avatar: p.artistAvatar,
-          hasStory: true,
-        });
-      }
-      return out;
-    }
-
-    // ── Load real stories, falling back to feed authors if the endpoint
-    // doesn't exist yet on the backend ─────────────────────────────────────
-    async function loadStories() {
+    async function loadArtistCategories() {
       try {
-        setStoriesLoading(true);
-        const res = await fetch(`${API_BASE}/api/stories`);
-        if (!res.ok) throw new Error("no stories endpoint");
-        const data = await res.json();
-        if (!cancelled) setStories(data.stories || []);
+        const res = await fetch(`${API_BASE}/api/artists/only-artists`);
+        if (!res.ok) throw new Error("Failed to load artists");
+        const artists = await res.json();
+        if (cancelled) return;
+        const map = {};
+        artists.forEach((a) => {
+          map[a._id] = (a.categories || []).map((c) => String(c).toLowerCase());
+        });
+        setArtistCategoryMap(map);
       } catch (err) {
-        // Backend doesn't have a stories endpoint yet — fall back to
-        // real authors pulled from the feed instead of fake placeholder data.
-        if (!cancelled) setStories(window.__feedAuthorsFallback || []);
-      } finally {
-        if (!cancelled) setStoriesLoading(false);
+        // Non-fatal â€” chips just won't be able to filter, "For You" still works
+        console.error("Artist categories load error:", err);
       }
     }
 
-    loadFeed().then(loadStories);
+    loadFeed();
+    loadArtistCategories();
     return () => {
       cancelled = true;
     };
@@ -148,7 +142,6 @@ export default function Home() {
     }
 
     const wasLiked = Boolean(liked[post._id]);
-    // optimistic update
     setLiked((s) => ({ ...s, [post._id]: !wasLiked }));
     setPosts((prev) =>
       prev.map((p) => {
@@ -169,7 +162,6 @@ export default function Home() {
       setPosts((prev) => prev.map((p) => (p._id === post._id ? { ...p, likes: data.likes } : p)));
     } catch (err) {
       console.error("Like error:", err);
-      // revert on failure
       setLiked((s) => ({ ...s, [post._id]: wasLiked }));
       setPosts((prev) => prev.map((p) => (p._id === post._id ? post : p)));
     }
@@ -177,183 +169,263 @@ export default function Home() {
 
   const toggleSave = (id) => setSaved((s) => ({ ...s, [id]: !s[id] }));
 
+  // â”€â”€ Filtered posts, driven by real artist category data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const filteredPosts = useMemo(() => {
+    if (activeChip === "For You") return posts;
+    const needles = CATEGORY_MATCH[activeChip] || [];
+    return posts.filter((p) => {
+      const cats = artistCategoryMap[p.artistId] || [];
+      return cats.some((c) => needles.some((n) => c.includes(n)));
+    });
+  }, [posts, activeChip, artistCategoryMap]);
+
+  // â”€â”€ Cover image per chip â€” first matching post's image, real data â”€â”€â”€â”€â”€â”€â”€
+  const chipCover = (label) => {
+    if (label === "For You") return posts[0]?.mediaUrl || null;
+    const needles = CATEGORY_MATCH[label] || [];
+    const match = posts.find((p) => {
+      const cats = artistCategoryMap[p.artistId] || [];
+      return cats.some((c) => needles.some((n) => c.includes(n)));
+    });
+    return match?.mediaUrl || null;
+  };
+
   return (
-    <div className="min-h-screen bg-[#FBF7F2] pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-stone-100 bg-[#FBF7F2]/95 px-5 py-4 backdrop-blur">
-        <button
-          aria-label="Search"
-          onClick={() => navigate("/search")}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100"
-        >
-          <Search size={20} strokeWidth={1.8} />
-        </button>
-
-        <h1 className="font-serif text-xl font-semibold tracking-tight text-stone-900">
-          ArtSpire
-        </h1>
-
-        <div className="flex items-center gap-2">
-          {isLoggedIn ? (
-            <>
-              <button
-                aria-label="Notifications"
-                onClick={() => navigate("/notifications")}
-                className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100"
-              >
-                <Bell size={20} strokeWidth={1.8} />
-              </button>
-              <button
-                onClick={handleLogout}
-                aria-label="Logout"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-stone-100"
-              >
-                <LogOut size={18} strokeWidth={1.8} />
-              </button>
-            </>
-          ) : (
-            <button
-              onClick={() => navigate("/login")}
-              className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-violet-700"
-            >
-              <LogIn size={16} strokeWidth={1.8} />
-              Login
-            </button>
-          )}
-        </div>
-      </header>
-
-      {/* Stories */}
-      <div className="flex gap-4 overflow-x-auto px-5 py-4 [scrollbar-width:none]">
-        <div className="flex shrink-0 flex-col items-center gap-1.5">
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-violet-100 text-violet-600 ring-1 ring-dashed ring-violet-300"
-          >
-            <Plus size={22} />
-          </button>
-          <span className="text-[11px] text-stone-500">Your Story</span>
-        </div>
-
-        {storiesLoading &&
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex shrink-0 flex-col items-center gap-1.5">
-              <div className="h-14 w-14 animate-pulse rounded-full bg-stone-200" />
-              <div className="h-2.5 w-10 animate-pulse rounded bg-stone-200" />
-            </div>
-          ))}
-
-        {!storiesLoading &&
-          stories.map((s) => (
-            <div key={s.id} className="flex shrink-0 flex-col items-center gap-1.5">
-              <img
-                src={s.avatar}
-                alt={s.name}
-                className="h-14 w-14 rounded-full object-cover ring-2 ring-offset-2 ring-offset-[#FBF7F2] ring-violet-300"
-              />
-              <span className="max-w-[64px] truncate text-[11px] text-stone-500">{s.name}</span>
-            </div>
-          ))}
-
-        {!storiesLoading && stories.length === 0 && (
-          <div className="flex shrink-0 items-center text-[11px] text-stone-400">
-            No stories yet
-          </div>
-        )}
+    <div className="relative min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28">
+      {/* â”€â”€ Watercolor background wash â”€â”€ */}
+      <div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
+        <div className="absolute -top-16 -right-10 h-64 w-64 rounded-full bg-orange-200/40 blur-3xl" />
+        <div className="absolute top-1/3 -left-16 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
+        <div className="absolute bottom-24 -right-16 h-72 w-72 rounded-full bg-violet-200/40 blur-3xl" />
+        <div className="absolute bottom-0 left-1/4 h-56 w-56 rounded-full bg-sky-100/50 blur-3xl" />
+        <Star className="absolute top-24 right-10 h-4 w-4 text-stone-300" strokeWidth={1.5} />
+        <Star className="absolute top-48 left-8 h-3 w-3 text-stone-300" strokeWidth={1.5} />
+        <Star className="absolute bottom-40 right-6 h-3 w-3 text-stone-300" strokeWidth={1.5} />
       </div>
 
-      {/* Feed states */}
-      {loading && (
-        <p className="px-5 py-10 text-center text-sm text-stone-400">Loading posts…</p>
-      )}
-      {!loading && error && (
-        <p className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>
-      )}
-      {!loading && !error && posts.length === 0 && (
-        <p className="px-5 py-10 text-center text-sm text-stone-400">
-          No posts yet. Be the first to share your art!
-        </p>
-      )}
-
-      {/* Feed */}
-      <div className="flex flex-col gap-6 px-5">
-        {posts.map((post) => (
-          <article
-            key={post._id}
-            className="overflow-hidden rounded-3xl border border-stone-100 bg-white shadow-sm shadow-stone-200/50"
+      <div className="relative z-10">
+        {/* Header */}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-stone-200/60 bg-[#FBF3E7]/90 px-5 py-4 backdrop-blur">
+          <button
+            aria-label="Search"
+            onClick={() => navigate("/search")}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/70"
           >
-            {/* Author row */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3">
-                <img
-                  src={post.artistAvatar || "https://i.pravatar.cc/150"}
-                  alt={post.artistName}
-                  className="h-9 w-9 rounded-full object-cover"
-                />
-                <div className="leading-tight">
-                  <p className="text-sm font-semibold text-stone-900">{post.artistName}</p>
-                  <p className="text-xs text-stone-400">{timeAgo(post.createdAt)}</p>
+            <Search size={20} strokeWidth={1.8} />
+          </button>
+
+          <div className="flex flex-col items-center leading-none">
+            <h1 className="font-serif text-2xl italic tracking-tight text-stone-900">
+              Art<span className="text-violet-600">Spire</span>
+            </h1>
+            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-400">
+              Inspire Today <Star size={10} className="fill-stone-300 text-stone-300" />
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isLoggedIn ? (
+              <>
+                <button
+                  aria-label="Notifications"
+                  onClick={() => navigate("/activity")}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/70"
+                >
+                  <Bell size={20} strokeWidth={1.8} />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  aria-label="Logout"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/70"
+                >
+                  <LogOut size={18} strokeWidth={1.8} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => navigate("/login")}
+                className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-violet-700"
+              >
+                <LogIn size={16} strokeWidth={1.8} />
+                Login
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* Category chips â€” real data: filters posts by artist categories */}
+        <div className="flex gap-4 overflow-x-auto px-5 py-5 [scrollbar-width:none]">
+          {CATEGORY_CHIPS.map((label) => {
+            const active = activeChip === label;
+            const cover = chipCover(label);
+            return (
+              <button
+                key={label}
+                onClick={() => setActiveChip(label)}
+                className="flex shrink-0 flex-col items-center gap-1.5"
+              >
+                <div
+                  className={`relative h-16 w-14 overflow-hidden rounded-t-full rounded-b-2xl border-2 transition ${
+                    active ? "border-violet-400 shadow-md shadow-violet-200" : "border-white"
+                  }`}
+                >
+                  {cover ? (
+                    <img src={cover} alt={label} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-b from-violet-100 to-orange-100" />
+                  )}
+                </div>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] ${
+                    active ? "bg-violet-100 font-semibold text-violet-700" : "text-stone-500"
+                  }`}
+                >
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Feed states */}
+        {loading && <p className="px-5 py-10 text-center text-sm text-stone-400">Loading postsâ€¦</p>}
+        {!loading && error && <p className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>}
+        {!loading && !error && filteredPosts.length === 0 && (
+          <p className="px-5 py-10 text-center text-sm text-stone-400">
+            {activeChip === "For You" ? "No posts yet. Be the first to share your art!" : `No ${activeChip.toLowerCase()} posts yet.`}
+          </p>
+        )}
+
+        {/* Feed */}
+        <div className="flex flex-col gap-5 px-5">
+          {filteredPosts.map((post) => (
+            <article
+              key={post._id}
+              className="overflow-hidden rounded-3xl border border-stone-200/70 bg-white/90 shadow-sm shadow-stone-300/30 backdrop-blur-sm"
+            >
+              {/* Author row */}
+              <div className="flex items-center justify-between px-4 pt-3.5">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={post.artistAvatar || "https://i.pravatar.cc/150"}
+                    alt={post.artistName}
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-orange-100"
+                  />
+                  <div className="leading-tight">
+                    <p className="font-serif text-[15px] font-semibold text-stone-900">{post.artistName}</p>
+                    <p className="text-xs text-violet-500">
+                      {(artistCategoryMap[post.artistId] || [])[0] || "Artist"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-stone-400">
+                  <span className="text-xs">{timeAgo(post.createdAt)}</span>
+                  <button aria-label="More options">
+                    <MoreHorizontal size={18} />
+                  </button>
                 </div>
               </div>
-              <button aria-label="More options" className="text-stone-400">
-                <MoreHorizontal size={18} />
-              </button>
-            </div>
 
-            {/* Caption sits above the media */}
-            {post.caption && (
-              <p className="px-4 pb-3 text-sm text-stone-700">{post.caption}</p>
-            )}
+              {post.caption && (
+                <p className="px-4 pb-3 pt-2 text-sm text-stone-700">{post.caption}</p>
+              )}
 
-            {post.mediaType === "video" ? (
-              <video
-                src={post.mediaUrl}
-                className="aspect-square w-full object-cover"
-                controls
-                playsInline
-              />
-            ) : (
-              <img
-                src={post.mediaUrl}
-                alt={post.caption || "Post"}
-                className="aspect-square w-full object-cover"
-              />
-            )}
+              {post.mediaType === "video" ? (
+                <video src={post.mediaUrl} className="aspect-square w-full object-cover" controls playsInline />
+              ) : (
+                <img src={post.mediaUrl} alt={post.caption || "Post"} className="aspect-square w-full object-cover" />
+              )}
 
-            {/* Inline like / comment / share counts + save */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-5">
-                <button onClick={() => toggleLike(post)} aria-label="Like" className="flex items-center gap-1.5">
-                  <Heart
-                    size={22}
-                    strokeWidth={1.8}
-                    className={liked[post._id] ? "fill-rose-500 text-rose-500" : "text-stone-700"}
-                  />
-                  <span className="text-sm text-stone-600">{(post.likes?.length ?? 0).toLocaleString()}</span>
-                </button>
-                <button aria-label="Comment" className="flex items-center gap-1.5">
-                  <MessageCircle size={21} strokeWidth={1.8} className="text-stone-700" />
-                  <span className="text-sm text-stone-600">{post.comments?.length ?? 0}</span>
-                </button>
-                <button aria-label="Share" className="flex items-center gap-1.5">
-                  <Send size={20} strokeWidth={1.8} className="text-stone-700" />
-                  <span className="text-sm text-stone-600">{post.shares?.length ?? 0}</span>
-                </button>
+              {/* Footer â€” heart / palette (comments) / bookmark / send */}
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-5">
+                  <button onClick={() => toggleLike(post)} aria-label="Like" className="flex items-center gap-1.5">
+                    <Heart
+                      size={21}
+                      strokeWidth={1.8}
+                      className={liked[post._id] ? "fill-rose-500 text-rose-500" : "text-stone-700"}
+                    />
+                    <span className="text-sm text-stone-600">{(post.likes?.length ?? 0).toLocaleString()}</span>
+                  </button>
+                  <button aria-label="Comments" className="flex items-center gap-1.5">
+                    <Palette size={20} strokeWidth={1.8} className="text-stone-700" />
+                    <span className="text-sm text-stone-600">{post.comments?.length ?? 0}</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-4">
+                  <button onClick={() => toggleSave(post._id)} aria-label="Save">
+                    <Bookmark
+                      size={19}
+                      strokeWidth={1.8}
+                      className={saved[post._id] ? "fill-stone-800 text-stone-800" : "text-stone-700"}
+                    />
+                  </button>
+                  <button aria-label="Share">
+                    <Send size={19} strokeWidth={1.8} className="text-stone-700" />
+                  </button>
+                </div>
               </div>
-              <button onClick={() => toggleSave(post._id)} aria-label="Save">
-                <Bookmark
-                  size={20}
-                  strokeWidth={1.8}
-                  className={saved[post._id] ? "fill-stone-800 text-stone-800" : "text-stone-700"}
-                />
-              </button>
-            </div>
-          </article>
-        ))}
+            </article>
+          ))}
+        </div>
       </div>
 
-      <BottomNav onCreateClick={() => setCreateOpen(true)} />
-      {createOpen && <CreateSheet onClose={() => setCreateOpen(false)} />}
+      <HomeBottomNav />
     </div>
+  );
+}
+
+/**
+ * Self-contained bottom nav matching the mockup's soft-colored circular
+ * icons. Swap this out for your real src/BottomNav.jsx once its import
+ * path is fixed â€” Home.jsx currently expects it at "../components/BottomNav"
+ * but the file lives at src/BottomNav.jsx.
+ */
+function HomeBottomNav() {
+  const navigate = useNavigate();
+
+  const tabs = [
+    { key: "home", label: "Home", icon: HomeIcon, path: "/", bg: "bg-violet-100", fg: "text-violet-600" },
+    { key: "explore", label: "Explore", icon: Compass, path: "/explore", bg: "bg-teal-100", fg: "text-teal-600" },
+    { key: "activity", label: "Activity", icon: Bell, path: "/activity", bg: "bg-amber-100", fg: "text-amber-600" },
+    { key: "profile", label: "Profile", icon: User, path: "/profile", bg: "bg-stone-200", fg: "text-stone-600" },
+  ];
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200/70 bg-white/95 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+      <div className="mx-auto flex max-w-md items-center justify-between">
+        {tabs.slice(0, 2).map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button key={tab.key} onClick={() => navigate(tab.path)} className="flex flex-col items-center gap-1">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tab.bg}`}>
+                <Icon size={18} strokeWidth={2} className={tab.fg} />
+              </span>
+              <span className="text-[11px] text-stone-500">{tab.label}</span>
+            </button>
+          );
+        })}
+
+        <button
+          onClick={() => alert("Hook this up to your real CreateSheet / upload modal")}
+          aria-label="Create"
+          className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-300/60 transition active:scale-95"
+        >
+          <Plus size={26} strokeWidth={2.5} />
+        </button>
+
+        {tabs.slice(2).map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button key={tab.key} onClick={() => navigate(tab.path)} className="flex flex-col items-center gap-1">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tab.bg}`}>
+                <Icon size={18} strokeWidth={2} className={tab.fg} />
+              </span>
+              <span className="text-[11px] text-stone-500">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

@@ -1,26 +1,14 @@
 // artspire-frontend/src/pages/Explore.jsx
 //
-// "Near You" map — matches the Explore Artists mockup (purple pill filters,
-// avatar pins with distance badges, Nearby Artists list below the map).
-// Real data only: pins + list come from
-//   GET /api/artists/nearby?lat=&lng=&radius=&category=&onlineOnly=true
-// tapping a pin opens the booking sheet, which POSTs to /api/bookings.
-// "View Profile" in the list navigates to /dashboard/:artistId.
+// Two tabs:
+//   POSTS   â€” grid browse of approved posts (GET /api/posts/feed), filterable
+//             by category via real artist categories (GET /api/artists/only-artists)
+//   ARTISTS â€” the existing "Near You" map (GET /api/artists/nearby), unchanged
+//             logic: pins + list + live booking sheet (POST /api/bookings)
 //
-// REQUIRES ON THE BACKEND (if the map looks empty, check these first):
-//   1. bookingRoutes mounted in server.js:
-//        const bookingRoutes = require("./routes/bookingRoutes");
-//        app.use("/api/bookings", bookingRoutes);
-//   2. Artist schema has a 2dsphere index:
-//        ArtistSchema.index({ location: "2dsphere" });
-//   3. Artists actually have `location.coordinates` set AND `locationUpdatedAt`
-//      refreshed within the last 20 minutes — otherwise onlineOnly=true
-//      returns an empty array (that's correct behavior, not a bug).
-//   4. /nearby route accepts ?category= and ?onlineOnly=.
-//
-// Install once:  npm install leaflet react-leaflet
-//
-// Paths marked ADJUST-ME assume your project structure — fix if it differs.
+// Everything from your original Explore.jsx map/booking flow is preserved as-is
+// inside the Artists tab. The Posts tab is new but follows the same real-data
+// pattern already used on Home.jsx.
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -28,9 +16,10 @@ import axios from "axios";
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { getCurrentAccount, isArtist } from "../utils/auth"; // ADJUST-ME if path differs
-import BottomNav from "../BottomNav";                          // ADJUST-ME if path differs
-import socket from "../socket";                                  // ADJUST-ME if path differs
+import { Heart, Grid3x3 } from "lucide-react";
+import { getCurrentAccount, isArtist } from "../utils/auth";
+import BottomNav from "../BottomNav";
+import socket from "../socket";
 
 const API = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
@@ -38,7 +27,7 @@ const TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
 const TILE_ATTR =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-const FALLBACK_CENTER = { lat: 12.9716, lng: 77.5946 }; // Bengaluru — used if geolocation is denied
+const FALLBACK_CENTER = { lat: 12.9716, lng: 77.5946 }; // Bengaluru â€” used if geolocation is denied
 
 const CATEGORIES = [
   "All Categories",
@@ -95,8 +84,6 @@ function escapeHtml(str = "") {
     .replace(/"/g, "&quot;");
 }
 
-// Haversine — straight-line km between two lat/lng points, used for the
-// distance badges on pins and in the Nearby Artists list.
 function distanceKm(a, b) {
   if (!a || !b) return null;
   const R = 6371;
@@ -108,7 +95,6 @@ function distanceKm(a, b) {
   return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
 }
 
-// ── "You" marker: purple dot with a soft pulse ring, matches mockup ─────
 const youIcon = L.divIcon({
   className: "you-pin",
   html: `<div class="you-pulse"><div class="you-dot"></div></div>`,
@@ -116,7 +102,6 @@ const youIcon = L.divIcon({
   iconAnchor: [20, 20],
 });
 
-// ── Artist marker: round avatar with colored ring + distance pill below ──
 function createArtistIcon(artist, ringColor, km) {
   const thumb = artist.portfolioPreview || artist.avatar || artist.profileImage || artist.image;
   const initial = (artist.name || "?").trim()[0]?.toUpperCase() || "?";
@@ -147,6 +132,50 @@ export default function Explore() {
   const actor = getActor();
   const mapRef = useRef(null);
 
+  const [activeTab, setActiveTab] = useState("posts"); // "posts" | "artists"
+
+  // â”€â”€ POSTS TAB â”€â”€
+  const [posts, setPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+  const [postsError, setPostsError] = useState("");
+  const [postsLoaded, setPostsLoaded] = useState(false);
+  const [postCategory, setPostCategory] = useState("All Categories");
+  const [artistCategoryMap, setArtistCategoryMap] = useState({});
+
+  const loadPosts = useCallback(async () => {
+    setPostsLoading(true);
+    setPostsError("");
+    try {
+      const [feedRes, artistsRes] = await Promise.all([
+        axios.get(`${API}/api/posts/feed`, { params: { page: 1, limit: 40 } }),
+        axios.get(`${API}/api/artists/only-artists`),
+      ]);
+      setPosts(feedRes.data?.posts || []);
+      const map = {};
+      (artistsRes.data || []).forEach((a) => {
+        map[a._id] = (a.categories || []).map((c) => String(c).toLowerCase());
+      });
+      setArtistCategoryMap(map);
+    } catch (e) {
+      console.error("Failed to load posts:", e);
+      setPostsError("Couldn't load posts. Pull to retry.");
+    } finally {
+      setPostsLoading(false);
+      setPostsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "posts" && !postsLoaded) loadPosts();
+  }, [activeTab, postsLoaded, loadPosts]);
+
+  const filteredPosts = useMemo(() => {
+    if (postCategory === "All Categories") return posts;
+    const needle = postCategory.toLowerCase();
+    return posts.filter((p) => (artistCategoryMap[p.artistId] || []).includes(needle));
+  }, [posts, postCategory, artistCategoryMap]);
+
+  // â”€â”€ ARTISTS TAB â”€â”€ unchanged real map/booking logic
   const [center, setCenter] = useState(FALLBACK_CENTER);
   const [youLocation, setYouLocation] = useState(null);
   const [locating, setLocating] = useState(true);
@@ -195,7 +224,7 @@ export default function Explore() {
       console.error("Failed to load nearby artists:", e);
       setLoadError(
         e.response?.status === 404
-          ? "Nearby endpoint not found — check the backend route is deployed."
+          ? "Nearby endpoint not found â€” check the backend route is deployed."
           : "Couldn't load nearby artists. Pull to retry."
       );
       setArtists([]);
@@ -245,7 +274,6 @@ export default function Explore() {
     mapRef.current = map;
   }, []);
 
-  // ── Nearby Artists list — same data as the pins, sorted closest-first ───
   const nearbyList = useMemo(() => {
     const origin = youLocation || center;
     return artists
@@ -265,7 +293,7 @@ export default function Explore() {
     setEventTime("");
     setDuration(DURATIONS[1]);
     setNotes("");
-    setBookLocation("Locating…");
+    setBookLocation("Locatingâ€¦");
     setLoadingDetail(true);
 
     try {
@@ -335,129 +363,192 @@ export default function Explore() {
 
       {bookedToast && (
         <div style={styles.toast} onClick={() => navigate("/bookings")}>
-          Request sent — tap to view in My Bookings
+          Request sent â€” tap to view in My Bookings
         </div>
       )}
 
-      {/* ══ Header ══ */}
       <div style={styles.topBar}>
-        <h1 style={styles.title}>Explore Artists</h1>
+        <h1 style={styles.title}>Explore</h1>
         <div style={styles.topBarIcons}>
           <button style={styles.iconBtn} onClick={() => navigate("/search")} aria-label="Search">
             <SearchIcon size={17} stroke="#1F2937" />
           </button>
-          <button style={styles.iconBtn} onClick={handleRecenter} aria-label="Filter">
-            <FilterIcon size={17} stroke="#1F2937" />
-          </button>
+          {activeTab === "artists" && (
+            <button style={styles.iconBtn} onClick={handleRecenter} aria-label="Recenter">
+              <FilterIcon size={17} stroke="#1F2937" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* ══ Filter row ══ */}
-      <div style={styles.filterRow}>
-        <button style={styles.nearYouChip} onClick={handleRecenter}>
-          <PinIcon size={13} /> Near You
+      <div style={styles.tabRow}>
+        <button
+          style={{ ...styles.tabBtn, ...(activeTab === "posts" ? styles.tabBtnActive : {}) }}
+          onClick={() => setActiveTab("posts")}
+        >
+          <Grid3x3 size={15} strokeWidth={2} /> Posts
         </button>
-
-        <select
-          style={styles.filterSelect}
-          value={category}
-          onChange={(e) => handleCategoryChange(e.target.value)}
+        <button
+          style={{ ...styles.tabBtn, ...(activeTab === "artists" ? styles.tabBtnActive : {}) }}
+          onClick={() => setActiveTab("artists")}
         >
-          {CATEGORIES.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-
-        <select
-          style={styles.filterSelect}
-          value={distanceKmFilter}
-          onChange={(e) => handleDistanceChange(Number(e.target.value))}
-        >
-          {DISTANCES.map((d) => (
-            <option key={d.label} value={d.km}>{d.label}</option>
-          ))}
-        </select>
+          <PinIcon size={13} /> Artists
+        </button>
       </div>
 
-      {/* ══ Map ══ */}
-      <div style={styles.mapWrap}>
-        {locating && <div style={styles.mapOverlayMsg}>Finding your location…</div>}
-        {!locating && !loading && loadError && <div style={styles.mapOverlayMsg}>{loadError}</div>}
-        {!locating && !loading && !loadError && artists.length === 0 && (
-          <div style={styles.mapOverlayMsg}>
-            No {category !== "All Categories" ? category.toLowerCase() + " " : ""}artists online near here yet.
+      {activeTab === "posts" && (
+        <>
+          <div style={styles.filterRow}>
+            {CATEGORIES.map((c) => (
+              <button
+                key={c}
+                onClick={() => setPostCategory(c)}
+                style={{
+                  ...styles.catPill,
+                  ...(postCategory === c ? styles.catPillActive : {}),
+                }}
+              >
+                {c === "All Categories" ? "All" : c}
+              </button>
+            ))}
           </div>
-        )}
 
-        <MapContainer
-          center={[center.lat, center.lng]}
-          zoom={13}
-          style={styles.map}
-          zoomControl={false}
-          attributionControl={false}
-          ref={(instance) => {
-            if (instance) mapRef.current = instance;
-          }}
-        >
-          <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
-          <MapWatcher onMoved={handleMapMoved} />
+          {postsLoading && <p style={styles.listMsg}>Loading postsâ€¦</p>}
+          {!postsLoading && postsError && <p style={{ ...styles.listMsg, color: "#B91C1C" }}>{postsError}</p>}
+          {!postsLoading && !postsError && filteredPosts.length === 0 && (
+            <p style={styles.listMsg}>
+              {postCategory === "All Categories" ? "No posts yet." : `No ${postCategory.toLowerCase()} posts yet.`}
+            </p>
+          )}
 
-          {youLocation && <Marker position={[youLocation.lat, youLocation.lng]} icon={youIcon} />}
+          <div style={styles.postGrid}>
+            {filteredPosts.map((p) => (
+              <button
+                key={p._id}
+                style={styles.postTile}
+                onClick={() => navigate(`/artist-profile/${p.artistId}`)}
+              >
+                {p.mediaType === "video" ? (
+                  <video src={p.mediaUrl} style={styles.postTileMedia} muted />
+                ) : (
+                  <img src={p.mediaUrl} alt={p.caption || ""} style={styles.postTileMedia} />
+                )}
+                <div style={styles.postTileOverlay}>
+                  <Heart size={13} strokeWidth={2} fill="#fff" color="#fff" />
+                  <span>{(p.likes?.length ?? 0).toLocaleString()}</span>
+                </div>
+              </button>
+            ))}
+          </div>
 
-          {nearbyList.map((a, i) => (
-            <Marker
-              key={a._id}
-              position={[a.location.coordinates[1], a.location.coordinates[0]]}
-              icon={createArtistIcon(a, PIN_RINGS[i % PIN_RINGS.length], a.km)}
-              eventHandlers={{ click: () => openArtist(a) }}
-            />
-          ))}
-        </MapContainer>
-      </div>
+          <div style={{ height: 90 }} />
+        </>
+      )}
 
-      {/* ══ Nearby Artists list ══ */}
-      <div style={styles.listSection}>
-        <h2 style={styles.listHeading}>Nearby Artists</h2>
+      {activeTab === "artists" && (
+        <>
+          <div style={styles.filterRow}>
+            <button style={styles.nearYouChip} onClick={handleRecenter}>
+              <PinIcon size={13} /> Near You
+            </button>
 
-        {loading && (
-          <p style={styles.listMsg}>Loading artists…</p>
-        )}
-        {!loading && nearbyList.length === 0 && !loadError && (
-          <p style={styles.listMsg}>No artists online nearby right now.</p>
-        )}
+            <select
+              style={styles.filterSelect}
+              value={category}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
 
-        {nearbyList.map((a) => (
-          <div key={a._id} style={styles.artistRow} onClick={() => openArtist(a)}>
-            {a.avatar || a.profileImage || a.image ? (
-              <img src={a.avatar || a.profileImage || a.image} alt="" style={styles.rowAvatar} />
-            ) : (
-              <div style={styles.rowAvatarFallback}>{(a.name || "?")[0]?.toUpperCase()}</div>
+            <select
+              style={styles.filterSelect}
+              value={distanceKmFilter}
+              onChange={(e) => handleDistanceChange(Number(e.target.value))}
+            >
+              {DISTANCES.map((d) => (
+                <option key={d.label} value={d.km}>{d.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={styles.mapWrap}>
+            {locating && <div style={styles.mapOverlayMsg}>Finding your locationâ€¦</div>}
+            {!locating && !loading && loadError && <div style={styles.mapOverlayMsg}>{loadError}</div>}
+            {!locating && !loading && !loadError && artists.length === 0 && (
+              <div style={styles.mapOverlayMsg}>
+                No {category !== "All Categories" ? category.toLowerCase() + " " : ""}artists online near here yet.
+              </div>
             )}
 
-            <div style={styles.rowInfo}>
-              <p style={styles.rowName}>{a.name}</p>
-              <p style={styles.rowMeta}>
-                <span style={styles.onlineDot} />
-                {a.km != null ? `${a.km.toFixed(1)} km away` : "Nearby"}
-              </p>
-            </div>
-
-            <button
-              style={styles.viewProfileBtn}
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/dashboard/${a._id}`);
+            <MapContainer
+              center={[center.lat, center.lng]}
+              zoom={13}
+              style={styles.map}
+              zoomControl={false}
+              attributionControl={false}
+              ref={(instance) => {
+                if (instance) mapRef.current = instance;
               }}
             >
-              View Profile
-            </button>
+              <TileLayer url={TILE_URL} attribution={TILE_ATTR} />
+              <MapWatcher onMoved={handleMapMoved} />
+
+              {youLocation && <Marker position={[youLocation.lat, youLocation.lng]} icon={youIcon} />}
+
+              {nearbyList.map((a, i) => (
+                <Marker
+                  key={a._id}
+                  position={[a.location.coordinates[1], a.location.coordinates[0]]}
+                  icon={createArtistIcon(a, PIN_RINGS[i % PIN_RINGS.length], a.km)}
+                  eventHandlers={{ click: () => openArtist(a) }}
+                />
+              ))}
+            </MapContainer>
           </div>
-        ))}
-      </div>
+
+          <div style={styles.listSection}>
+            <h2 style={styles.listHeading}>Nearby Artists</h2>
+
+            {loading && <p style={styles.listMsg}>Loading artistsâ€¦</p>}
+            {!loading && nearbyList.length === 0 && !loadError && (
+              <p style={styles.listMsg}>No artists online nearby right now.</p>
+            )}
+
+            {nearbyList.map((a) => (
+              <div key={a._id} style={styles.artistRow} onClick={() => openArtist(a)}>
+                {a.avatar || a.profileImage || a.image ? (
+                  <img src={a.avatar || a.profileImage || a.image} alt="" style={styles.rowAvatar} />
+                ) : (
+                  <div style={styles.rowAvatarFallback}>{(a.name || "?")[0]?.toUpperCase()}</div>
+                )}
+
+                <div style={styles.rowInfo}>
+                  <p style={styles.rowName}>{a.name}</p>
+                  <p style={styles.rowMeta}>
+                    <span style={styles.onlineDot} />
+                    {a.km != null ? `${a.km.toFixed(1)} km away` : "Nearby"}
+                  </p>
+                </div>
+
+                <button
+                  style={styles.viewProfileBtn}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/dashboard/${a._id}`);
+                  }}
+                >
+                  View Profile
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <BottomNav activeTab="explore" />
 
-      {/* ══ Booking sheet ══ */}
       {selectedArtist && (
         <div style={styles.sheetBackdrop} onClick={closeSheet}>
           <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
@@ -475,8 +566,8 @@ export default function Explore() {
               <div>
                 <div style={styles.sheetName}>{selectedArtist.name}</div>
                 <div style={styles.sheetMeta}>
-                  <span style={styles.onlineDot} /> Online now · {(selectedArtist.categories || []).join(", ") || "Artist"}
-                  {artistDetail?.basePrice ? ` · from ₹${Number(artistDetail.basePrice).toLocaleString()}` : ""}
+                  <span style={styles.onlineDot} /> Online now Â· {(selectedArtist.categories || []).join(", ") || "Artist"}
+                  {artistDetail?.basePrice ? ` Â· from â‚¹${Number(artistDetail.basePrice).toLocaleString()}` : ""}
                 </div>
               </div>
             </div>
@@ -521,7 +612,7 @@ export default function Explore() {
             </div>
 
             <button style={styles.bookBtn} onClick={handleSubmitBooking} disabled={booking || loadingDetail}>
-              {booking ? "Sending…" : `Request Booking${artistDetail?.basePrice ? ` · from ₹${Number(artistDetail.basePrice).toLocaleString()}` : ""}`}
+              {booking ? "Sendingâ€¦" : `Request Booking${artistDetail?.basePrice ? ` Â· from â‚¹${Number(artistDetail.basePrice).toLocaleString()}` : ""}`}
             </button>
             <button style={styles.viewProfileBtnFull} onClick={() => navigate(`/dashboard/${selectedArtist._id}`)}>
               View full profile
@@ -533,7 +624,6 @@ export default function Explore() {
   );
 }
 
-/* ── icons ────────────────────────────────────────────────────────────── */
 function SearchIcon({ size = 18, stroke = "#1a1a1a" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round">
@@ -605,7 +695,6 @@ function GlobalStyles() {
 }
 
 const PURPLE = "#7C3AED";
-const PURPLE_DARK = "#6D28D9";
 const CREAM = "#FBF7F2";
 const INK = "#1F2937";
 const MUTE = "#6B7280";
@@ -621,7 +710,7 @@ const styles = {
     maxWidth: "88vw", textAlign: "center",
   },
 
-  topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 18px 10px" },
+  topBar: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 18px 6px" },
   title: { fontSize: 21, fontWeight: 800, color: INK, margin: 0 },
   topBarIcons: { display: "flex", gap: 8 },
   iconBtn: {
@@ -629,7 +718,21 @@ const styles = {
     borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
   },
 
+  tabRow: { display: "flex", gap: 8, padding: "6px 16px 12px" },
+  tabBtn: {
+    flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    background: "#fff", color: MUTE, border: "1px solid #ECEAF5", borderRadius: 12,
+    padding: "9px 0", fontSize: 13, fontWeight: 700, cursor: "pointer",
+  },
+  tabBtnActive: { background: PURPLE, color: "#fff", border: `1px solid ${PURPLE}` },
+
   filterRow: { display: "flex", gap: 8, padding: "4px 16px 12px", overflowX: "auto" },
+  catPill: {
+    flexShrink: 0, background: "#fff", color: INK, border: "1px solid #ECEAF5", borderRadius: 999,
+    padding: "8px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif",
+  },
+  catPillActive: { background: PURPLE, color: "#fff", border: `1px solid ${PURPLE}` },
+
   nearYouChip: {
     flexShrink: 0, display: "flex", alignItems: "center", gap: 5, background: PURPLE, color: "#fff",
     border: "none", borderRadius: 999, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer",
@@ -637,6 +740,20 @@ const styles = {
   filterSelect: {
     flexShrink: 0, background: "#fff", color: INK, border: "1px solid #ECEAF5", borderRadius: 999,
     padding: "8px 12px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "'Inter', sans-serif",
+  },
+
+  postGrid: {
+    display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 3, padding: "0 3px",
+  },
+  postTile: {
+    position: "relative", aspectRatio: "1 / 1", overflow: "hidden", border: "none", padding: 0,
+    borderRadius: 4, cursor: "pointer", background: "#eee",
+  },
+  postTileMedia: { width: "100%", height: "100%", objectFit: "cover", display: "block" },
+  postTileOverlay: {
+    position: "absolute", bottom: 4, left: 4, display: "flex", alignItems: "center", gap: 3,
+    background: "rgba(0,0,0,0.45)", color: "#fff", fontSize: 10, fontWeight: 700,
+    padding: "2px 6px", borderRadius: 999,
   },
 
   mapWrap: { position: "relative", width: "100%", height: "40vh", minHeight: 280, margin: "0 16px", borderRadius: 20, overflow: "hidden" },
@@ -649,7 +766,7 @@ const styles = {
 
   listSection: { padding: "18px 16px 4px" },
   listHeading: { fontSize: 15, fontWeight: 800, color: INK, margin: "0 0 12px" },
-  listMsg: { fontSize: 13, color: MUTE, padding: "8px 0" },
+  listMsg: { fontSize: 13, color: MUTE, padding: "16px" },
 
   artistRow: {
     display: "flex", alignItems: "center", gap: 12, background: "#fff", borderRadius: 14,

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import socket from "../socket";
 import { getCurrentAccount } from "../utils/auth";
@@ -28,6 +29,7 @@ function loadRazorpayScript() {
 export default function BookingPageMobile() {
   const account = getCurrentAccount();
   const userId  = account?._id;
+  const navigate = useNavigate();
 
   const [bookings,   setBookings]   = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -47,7 +49,7 @@ export default function BookingPageMobile() {
   const [paying,   setPaying]   = useState(false);
   const [payError, setPayError] = useState("");
 
-  /* ── Data fetching ── */
+  /* â”€â”€ Data fetching â”€â”€ */
   const fetchBookings = async () => {
     if (!userId) return;
     try {
@@ -59,7 +61,7 @@ export default function BookingPageMobile() {
 
   useEffect(() => { fetchBookings(); }, [userId]);
 
-  /* ── Sockets ── */
+  /* â”€â”€ Sockets â”€â”€ */
  useEffect(() => {
     if (!userId) return;
     socket.emit("join_room", `user_${userId}`);
@@ -91,7 +93,7 @@ export default function BookingPageMobile() {
     };
   }, [userId]);
 
-  /* ── Open booking detail ── */
+  /* â”€â”€ Open booking detail â”€â”€ */
   const openBooking = (b) => {
     setSelected(b);
     setError(""); setPayError("");
@@ -102,7 +104,7 @@ export default function BookingPageMobile() {
     setView("detail");
   };
 
-  /* ── Negotiation ── */
+  /* â”€â”€ Negotiation â”€â”€ */
  const acceptOffer = async (price) => {
     setSending(true);
     try {
@@ -128,7 +130,7 @@ export default function BookingPageMobile() {
     finally { setSending(false); }
   };
 
-  /* ── Coupon ── */
+  /* â”€â”€ Coupon â”€â”€ */
   const applyCoupon = async () => {
     if (!couponCode.trim()) return;
     setCheckingCoupon(true);
@@ -145,7 +147,7 @@ export default function BookingPageMobile() {
 
   const removeCoupon = () => { setCouponCode(""); setCouponResult(null); };
 
-  /* ── Payment ── */
+  /* â”€â”€ Payment â”€â”€ */
   const payNow = async () => {
     setPaying(true); setPayError("");
     try {
@@ -171,7 +173,7 @@ export default function BookingPageMobile() {
         amount,
         currency: "INR",
         name: "Artspire",
-        description: `Booking — ${selected.eventType}`,
+        description: `Booking â€” ${selected.eventType}`,
         order_id: orderId,
         prefill: {
           name:    account?.name  || "",
@@ -208,7 +210,7 @@ export default function BookingPageMobile() {
     } finally { setPaying(false); }
   };
 
-  /* ── Derived ── */
+  /* â”€â”€ Derived â”€â”€ */
   const activeBookings  = bookings.filter(b => !["confirmed", "cancelled"].includes(b.status));
   const displayList     = filter === "active" ? activeBookings : bookings;
   const lastArtistOffer = selected ? [...(selected.negotiation || [])].reverse().find(m => m.from === "artist") : null;
@@ -218,15 +220,15 @@ export default function BookingPageMobile() {
   if (!userId) {
     return (
       <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100dvh", flexDirection:"column", gap:10, color:"#94a3b8", fontFamily:"'Nunito',sans-serif" }}>
-        <div style={{ fontSize:40 }}>🔒</div>
+        <div style={{ fontSize:40 }}>ðŸ”’</div>
         <div style={{ fontSize:14 }}>Please log in to view your bookings.</div>
       </div>
     );
   }
 
-  /* ══════════════════════════════
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      LIST VIEW
-  ══════════════════════════════ */
+  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
   if (view === "list") {
     return (
       <div style={{ height:"100dvh", display:"flex", flexDirection:"column", background:"#f8fafc", fontFamily:"'Nunito',sans-serif" }}>
@@ -248,7 +250,7 @@ export default function BookingPageMobile() {
         {/* List */}
         <div style={{ flex:1, overflowY:"auto", WebkitOverflowScrolling:"touch" }}>
           {loading
-            ? <div style={s.emptyMsg}>Loading…</div>
+            ? <div style={s.emptyMsg}>Loadingâ€¦</div>
             : displayList.length === 0
               ? <div style={s.emptyMsg}>No bookings yet. Visit an artist's profile to request one.</div>
               : displayList.map(b => (
@@ -260,19 +262,26 @@ export default function BookingPageMobile() {
     );
   }
 
-  /* ══════════════════════════════
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
      DETAIL VIEW
-  ══════════════════════════════ */
+  â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
   return (
     <div style={{ height:"100dvh", display:"flex", flexDirection:"column", background:"#f8fafc", fontFamily:"'Nunito',sans-serif" }}>
       <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
 
       {/* Sticky top bar */}
       <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:"#fff", borderBottom:"1px solid #e2e8f0", flexShrink:0 }}>
-        <button onClick={() => setView("list")} style={s.backBtn}>← Back</button>
+        <button onClick={() => setView("list")} style={s.backBtn}>â† Back</button>
         <span style={{ ...s.badge, background: STATUS_LABELS[selected?.status]?.bg, color: STATUS_LABELS[selected?.status]?.color, fontSize:11 }}>
           {STATUS_LABELS[selected?.status]?.label}
         </span>
+        {/* Real: opens the actual real-data chat page for this artist */}
+        <button
+          onClick={() => navigate(`/chat/${selected.artistId}`)}
+          style={{ ...s.quickChip, marginLeft: "auto" }}
+        >
+          ðŸ’¬ Message Artist
+        </button>
       </div>
 
       {/* Scrollable detail body */}
@@ -291,11 +300,11 @@ export default function BookingPageMobile() {
             ["Time",     selected.eventTime || "TBD"],
             ["Duration", selected.duration],
             ["Location", selected.location],
-            ["Base",     `₹${selected.basePrice?.toLocaleString()}`],
-            selected.agreedPrice   && ["Agreed",   `₹${selected.agreedPrice?.toLocaleString()}`],
-            selected.discountAmount > 0 && ["Coupon", `− ₹${selected.discountAmount?.toLocaleString()}`],
-            selected.finalAmount && selected.status !== "confirmed" && ["To Pay", `₹${selected.finalAmount?.toLocaleString()}`],
-            selected.paidAmount  && ["Paid",     `₹${selected.paidAmount?.toLocaleString()}`],
+            ["Base",     `â‚¹${selected.basePrice?.toLocaleString()}`],
+            selected.agreedPrice   && ["Agreed",   `â‚¹${selected.agreedPrice?.toLocaleString()}`],
+            selected.discountAmount > 0 && ["Coupon", `âˆ’ â‚¹${selected.discountAmount?.toLocaleString()}`],
+            selected.finalAmount && selected.status !== "confirmed" && ["To Pay", `â‚¹${selected.finalAmount?.toLocaleString()}`],
+            selected.paidAmount  && ["Paid",     `â‚¹${selected.paidAmount?.toLocaleString()}`],
           ].filter(Boolean).map(([k, v]) => (
             <div key={k} style={s.infoRow}>
               <span style={{ color:"#64748b" }}>{k}</span>
@@ -325,7 +334,7 @@ export default function BookingPageMobile() {
                     {msg.message && <div style={{ marginBottom: msg.price ? 5 : 0 }}>{msg.message}</div>}
                     {msg.price && (
                       <span style={{ display:"inline-flex", background: msg.from === "user" ? "rgba(255,255,255,0.18)" : "#f0fdf4", color: msg.from === "user" ? "#fff" : "#15803d", padding:"2px 10px", borderRadius:20, fontSize:13, fontWeight:800, fontFamily:"'Bebas Neue',sans-serif" }}>
-                        ₹{msg.price?.toLocaleString()}
+                        â‚¹{msg.price?.toLocaleString()}
                       </span>
                     )}
                   </div>
@@ -344,28 +353,28 @@ export default function BookingPageMobile() {
           </div>
         )}
 
-        {/* Artist sent offer — accept or counter */}
+        {/* Artist sent offer â€” accept or counter */}
         {selected.status === "negotiating" && lastArtistOffer && lastArtistOffer !== lastUserOffer && (
           <>
             <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:12, padding:"12px 14px" }}>
               <div style={{ fontSize:13, fontWeight:800, color:"#1d4ed8", fontFamily:"'Nunito',sans-serif", marginBottom:4 }}>
-                {selected.artistName} offered ₹{lastArtistOffer.price?.toLocaleString()}
+                {selected.artistName} offered â‚¹{lastArtistOffer.price?.toLocaleString()}
               </div>
               <div style={{ fontSize:12, color:"#3b82f6", fontFamily:"'Nunito',sans-serif", marginBottom:10 }}>Accept to lock this price</div>
               <button onClick={() => acceptOffer(lastArtistOffer.price)} disabled={sending} style={{ ...s.acceptBtn, width:"100%" }}>
-                Accept ₹{lastArtistOffer.price?.toLocaleString()}
+                Accept â‚¹{lastArtistOffer.price?.toLocaleString()}
               </button>
             </div>
 
             <div style={{ background:"#fff", border:"1px solid #e2e8f0", borderRadius:14, padding:"14px 16px" }}>
               <div style={s.sectionLabel}>Or Send a Counter Price</div>
-              <label style={s.miniLabel}>Your price (₹)</label>
+              <label style={s.miniLabel}>Your price (â‚¹)</label>
               <input type="number" value={counterPrice} onChange={e => setCounterPrice(e.target.value)} style={{ ...s.input, marginBottom:10 }} placeholder="Enter price" />
               <label style={s.miniLabel}>Message</label>
-              <textarea value={counterMsg} onChange={e => setCounterMsg(e.target.value)} placeholder="Explain your offer…" rows={3} style={{ ...s.input, resize:"none", marginBottom:10 }} />
+              <textarea value={counterMsg} onChange={e => setCounterMsg(e.target.value)} placeholder="Explain your offerâ€¦" rows={3} style={{ ...s.input, resize:"none", marginBottom:10 }} />
               {error && <div style={s.errorBox}>{error}</div>}
               <button onClick={sendCounter} disabled={sending} style={{ ...s.primaryBtn, width:"100%", opacity: sending ? 0.7 : 1 }}>
-                {sending ? "Sending…" : "Send Counter Price →"}
+                {sending ? "Sendingâ€¦" : "Send Counter Price â†’"}
               </button>
             </div>
           </>
@@ -384,7 +393,7 @@ export default function BookingPageMobile() {
         {["price_agreed", "payment_pending"].includes(selected.status) && (
           <div style={{ background:"#f0fdf4", border:"1px solid #86efac", borderRadius:14, padding:"16px" }}>
             <div style={{ fontWeight:800, color:"#15803d", fontFamily:"'Nunito',sans-serif", fontSize:14, marginBottom:12 }}>
-              🤝 Price agreed at ₹{selected.agreedPrice?.toLocaleString()}
+              ðŸ¤ Price agreed at â‚¹{selected.agreedPrice?.toLocaleString()}
             </div>
 
             {/* Coupon */}
@@ -401,7 +410,7 @@ export default function BookingPageMobile() {
                 {couponResult?.valid
                   ? <button onClick={removeCoupon} style={s.quickChip}>Remove</button>
                   : <button onClick={applyCoupon} disabled={checkingCoupon || !couponCode.trim()} style={s.quickChip}>
-                      {checkingCoupon ? "…" : "Apply"}
+                      {checkingCoupon ? "â€¦" : "Apply"}
                     </button>
                 }
               </div>
@@ -415,24 +424,24 @@ export default function BookingPageMobile() {
             {/* Total */}
             <div style={{ display:"flex", justifyContent:"space-between", padding:"10px 0", borderTop:"1px solid #bbf7d0", marginBottom:14 }}>
               <span style={{ fontFamily:"'Nunito',sans-serif", fontWeight:700, color:"#15803d" }}>Total to pay</span>
-              <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#15803d" }}>₹{checkoutAmount?.toLocaleString()}</span>
+              <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#15803d" }}>â‚¹{checkoutAmount?.toLocaleString()}</span>
             </div>
 
             {payError && <div style={s.errorBox}>{payError}</div>}
 
             <button onClick={payNow} disabled={paying} style={{ ...s.primaryBtn, width:"100%", background:"#15803d", opacity: paying ? 0.7 : 1 }}>
-              {paying ? "Processing…" : `Pay ₹${checkoutAmount?.toLocaleString()} →`}
+              {paying ? "Processingâ€¦" : `Pay â‚¹${checkoutAmount?.toLocaleString()} â†’`}
             </button>
           </div>
         )}
 
         {selected.status === "confirmed" && (
           <div style={{ background:"#dcfce7", border:"1px solid #86efac", borderRadius:12, padding:"16px", textAlign:"center" }}>
-            <div style={{ fontSize:28, marginBottom:6 }}>🎉</div>
+            <div style={{ fontSize:28, marginBottom:6 }}>ðŸŽ‰</div>
             <div style={{ fontWeight:800, color:"#15803d", fontFamily:"'Nunito',sans-serif", fontSize:15 }}>Booking Confirmed!</div>
             <div style={{ fontSize:12, color:"#16a34a", fontFamily:"'Nunito',sans-serif", marginTop:4 }}>
-              ₹{selected.paidAmount?.toLocaleString()} paid
-              {selected.discountAmount > 0 ? ` (₹${selected.discountAmount.toLocaleString()} off with ${selected.couponCode})` : ""}
+              â‚¹{selected.paidAmount?.toLocaleString()} paid
+              {selected.discountAmount > 0 ? ` (â‚¹${selected.discountAmount.toLocaleString()} off with ${selected.couponCode})` : ""}
             </div>
           </div>
         )}
@@ -450,7 +459,7 @@ export default function BookingPageMobile() {
   );
 }
 
-/* ── Booking list card ──────────────────────────────────────────────────────*/
+/* â”€â”€ Booking list card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€*/
 function BookingCard({ b, selected, onClick }) {
   const st = STATUS_LABELS[b.status] || {};
   return (
@@ -465,21 +474,21 @@ function BookingCard({ b, selected, onClick }) {
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
         <div>
           <div style={{ fontWeight:800, fontSize:14, color:"#1e293b", fontFamily:"'Nunito',sans-serif" }}>{b.artistName}</div>
-          <div style={{ fontSize:12, color:"#64748b", fontFamily:"'Nunito',sans-serif", marginTop:1 }}>{b.eventType} · {b.eventDate}</div>
+          <div style={{ fontSize:12, color:"#64748b", fontFamily:"'Nunito',sans-serif", marginTop:1 }}>{b.eventType} Â· {b.eventDate}</div>
         </div>
         <span style={{ ...s.badge, background:st.bg, color:st.color }}>{st.label}</span>
       </div>
       <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, fontFamily:"'Nunito',sans-serif" }}>
         <span style={{ color:"#94a3b8" }}>{b.location}</span>
         <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:"#1e3a8a" }}>
-          ₹{(b.finalAmount || b.agreedPrice || b.basePrice || 0).toLocaleString()}
+          â‚¹{(b.finalAmount || b.agreedPrice || b.basePrice || 0).toLocaleString()}
         </span>
       </div>
     </div>
   );
 }
 
-/* ── Shared style tokens ─────────────────────────────────────────────────── */
+/* â”€â”€ Shared style tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 const s = {
   displayText: { fontFamily:"'Bebas Neue',sans-serif", fontSize:22, color:"#1e3a8a", letterSpacing:1 },
   filterBtn:   { padding:"6px 14px", borderRadius:20, border:"1.5px solid", fontSize:12, fontWeight:700, fontFamily:"'Nunito',sans-serif", cursor:"pointer" },
