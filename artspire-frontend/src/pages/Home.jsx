@@ -207,9 +207,11 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28">
-      {/* ── Watercolor background wash (and optional looping video) ── */}
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    // NOTE: no bg color here anymore — a solid background on this wrapper
+    // was painting over the fixed video layer. Keep this transparent.
+    <div className="relative min-h-screen overflow-x-hidden pb-28">
+      {/* ── Video background, fully visible, sits behind everything ── */}
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         {BG_VIDEO_SRC && (
           <>
             <video
@@ -218,10 +220,11 @@ export default function Home() {
               loop
               muted
               playsInline
-              className="absolute inset-0 h-full w-full object-cover opacity-25"
+              className="absolute inset-0 h-full w-full object-cover"
             />
-            {/* Cream wash over the video so text stays readable */}
-            <div className="absolute inset-0 bg-[#FBF3E7]/70" />
+            {/* Very light wash, just enough to keep icons/text readable —
+                tweak this opacity (try 10–25) to taste */}
+            <div className="absolute inset-0 bg-[#FBF3E7]/15" />
           </>
         )}
         <div className="absolute -top-16 -right-10 h-64 w-64 rounded-full bg-orange-200/40 blur-3xl" />

@@ -1,3 +1,25 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* Add this block to your existing src/index.css (or wherever your
+   Tailwind @layer directives already live). These two classes are what
+   Home.jsx now uses everywhere it used to have a solid white/cream
+   background — reuse them on Explore, Activity, Profile, modals, etc. */
+
+@layer components {
+  /* Very see-through — chips, floating pills, small UI bits.
+     Background is nearly gone; blur + border do the work. */
+  .glass {
+    @apply bg-white/10 backdrop-blur-xl border border-white/40
+           shadow-lg shadow-violet-200/20;
+    -webkit-backdrop-filter: blur(24px); /* Safari/iOS fallback */
+  }
+
+  /* Posts, nav, header — still frosted-glass-over-video, just enough
+     tint to keep text/icons legible over a moving video background. */
+  .glass-strong {
+    @apply bg-white/20 backdrop-blur-md border border-white/40
+           shadow-md shadow-stone-300/20;
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
