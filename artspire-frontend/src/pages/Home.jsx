@@ -23,6 +23,22 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.
 
 const CATEGORY_CHIPS = ["For You", "Watercolor", "Illustration", "Portraits", "Landscapes"];
 
+// â”€â”€ PASTE YOUR VIDEO FILE PATH HERE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// 1. Drop your video file into: artspire-frontend/public/
+// 2. Put its filename below (must start with "/"), e.g. "/home-bg.mp4"
+// Leave as null to keep the plain watercolor-blob background instead.
+const BG_VIDEO_SRC = "/bg.mp4";
+
+// Each chip gets a visually distinct shape instead of all five looking
+// identical â€” cycles through this list by index.
+const CHIP_SHAPES = [
+  "rounded-t-full rounded-b-2xl",              // arch
+  "rounded-2xl",                                // soft square
+  "rounded-full",                                // circle
+  "rounded-tl-3xl rounded-br-3xl rounded-tr-md rounded-bl-md", // diagonal cut
+  "rounded-b-full rounded-t-2xl",               // inverted arch
+];
+
 // Maps a chip label to the substrings we look for inside an artist's
 // `categories` array (e.g. an artist with categories ["Portrait Artist"]
 // should match the "Portraits" chip).
@@ -192,8 +208,22 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28">
-      {/* â”€â”€ Watercolor background wash â”€â”€ */}
+      {/* â”€â”€ Watercolor background wash (and optional looping video) â”€â”€ */}
       <div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
+        {BG_VIDEO_SRC && (
+          <>
+            <video
+              src={BG_VIDEO_SRC}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 h-full w-full object-cover opacity-25"
+            />
+            {/* Cream wash over the video so text stays readable */}
+            <div className="absolute inset-0 bg-[#FBF3E7]/70" />
+          </>
+        )}
         <div className="absolute -top-16 -right-10 h-64 w-64 rounded-full bg-orange-200/40 blur-3xl" />
         <div className="absolute top-1/3 -left-16 h-72 w-72 rounded-full bg-indigo-200/40 blur-3xl" />
         <div className="absolute bottom-24 -right-16 h-72 w-72 rounded-full bg-violet-200/40 blur-3xl" />
@@ -255,9 +285,10 @@ export default function Home() {
 
         {/* Category chips â€” real data: filters posts by artist categories */}
         <div className="flex gap-4 overflow-x-auto px-5 py-5 [scrollbar-width:none]">
-          {CATEGORY_CHIPS.map((label) => {
+          {CATEGORY_CHIPS.map((label, i) => {
             const active = activeChip === label;
             const cover = chipCover(label);
+            const shape = CHIP_SHAPES[i % CHIP_SHAPES.length];
             return (
               <button
                 key={label}
@@ -265,7 +296,7 @@ export default function Home() {
                 className="flex shrink-0 flex-col items-center gap-1.5"
               >
                 <div
-                  className={`relative h-16 w-14 overflow-hidden rounded-t-full rounded-b-2xl border-2 transition ${
+                  className={`relative h-16 w-14 overflow-hidden border-2 transition ${shape} ${
                     active ? "border-violet-400 shadow-md shadow-violet-200" : "border-white"
                   }`}
                 >

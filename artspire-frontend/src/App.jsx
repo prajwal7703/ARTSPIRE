@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getToken, getArtist } from "./utils/auth";
 import Explore from "./pages/Explore";
+import Entry from "./pages/Entry";
 import Home from "./pages/Home";
 import Register from "./pages/Register";
 import Artists from "./pages/Artists";
@@ -64,7 +65,7 @@ function App() {
       <Routes>
 
         {/* Public */}
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Entry />} />
         <Route path="/search" element={<SearchLanding />} />
         <Route path="/artists" element={<Artists />} />
         <Route path="/explore" element={<Explore />} />
