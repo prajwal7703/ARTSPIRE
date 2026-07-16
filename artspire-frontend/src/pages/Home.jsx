@@ -23,14 +23,14 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.
 
 const CATEGORY_CHIPS = ["For You", "Watercolor", "Illustration", "Portraits", "Landscapes"];
 
-// â”€â”€ PASTE YOUR VIDEO FILE PATH HERE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── PASTE YOUR VIDEO FILE PATH HERE ─────────────────────────────────────
 // 1. Drop your video file into: artspire-frontend/public/
 // 2. Put its filename below (must start with "/"), e.g. "/home-bg.mp4"
 // Leave as null to keep the plain watercolor-blob background instead.
 const BG_VIDEO_SRC = "/bg.mp4";
 
 // Each chip gets a visually distinct shape instead of all five looking
-// identical â€” cycles through this list by index.
+// identical — cycles through this list by index.
 const CHIP_SHAPES = [
   "rounded-t-full rounded-b-2xl",              // arch
   "rounded-2xl",                                // soft square
@@ -76,7 +76,7 @@ export default function Home() {
   const [artistCategoryMap, setArtistCategoryMap] = useState({});
   const [activeChip, setActiveChip] = useState("For You");
 
-  // â”€â”€ Auth state â€” same pattern as your existing utils/auth.js â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Auth state — same pattern as your existing utils/auth.js ──────────
   const currentUser = (() => {
     try {
       return JSON.parse(localStorage.getItem("user") || localStorage.getItem("artist") || "null");
@@ -93,7 +93,7 @@ export default function Home() {
     navigate("/login");
   };
 
-  // â”€â”€ Load real feed + artist categories â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Load real feed + artist categories ─────────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -137,7 +137,7 @@ export default function Home() {
         });
         setArtistCategoryMap(map);
       } catch (err) {
-        // Non-fatal â€” chips just won't be able to filter, "For You" still works
+        // Non-fatal — chips just won't be able to filter, "For You" still works
         console.error("Artist categories load error:", err);
       }
     }
@@ -185,7 +185,7 @@ export default function Home() {
 
   const toggleSave = (id) => setSaved((s) => ({ ...s, [id]: !s[id] }));
 
-  // â”€â”€ Filtered posts, driven by real artist category data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Filtered posts, driven by real artist category data ─────────────────
   const filteredPosts = useMemo(() => {
     if (activeChip === "For You") return posts;
     const needles = CATEGORY_MATCH[activeChip] || [];
@@ -195,7 +195,7 @@ export default function Home() {
     });
   }, [posts, activeChip, artistCategoryMap]);
 
-  // â”€â”€ Cover image per chip â€” first matching post's image, real data â”€â”€â”€â”€â”€â”€â”€
+  // ── Cover image per chip — first matching post's image, real data ───────
   const chipCover = (label) => {
     if (label === "For You") return posts[0]?.mediaUrl || null;
     const needles = CATEGORY_MATCH[label] || [];
@@ -208,8 +208,8 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28">
-      {/* â”€â”€ Watercolor background wash (and optional looping video) â”€â”€ */}
-      <div className="pointer-events-none fixed inset-0 -z-0 overflow-hidden">
+      {/* ── Watercolor background wash (and optional looping video) ── */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         {BG_VIDEO_SRC && (
           <>
             <video
@@ -234,12 +234,12 @@ export default function Home() {
       </div>
 
       <div className="relative z-10">
-        {/* Header */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-stone-200/60 bg-[#FBF3E7]/90 px-5 py-4 backdrop-blur">
+        {/* Header — glass instead of near-solid cream */}
+        <header className="glass sticky top-0 z-30 flex items-center justify-between border-b border-white/30 px-5 py-4">
           <button
             aria-label="Search"
             onClick={() => navigate("/search")}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/70"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/20"
           >
             <Search size={20} strokeWidth={1.8} />
           </button>
@@ -248,8 +248,8 @@ export default function Home() {
             <h1 className="font-serif text-2xl italic tracking-tight text-stone-900">
               Art<span className="text-violet-600">Spire</span>
             </h1>
-            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-400">
-              Inspire Today <Star size={10} className="fill-stone-300 text-stone-300" />
+            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-500">
+              Inspire Today <Star size={10} className="fill-stone-400 text-stone-400" />
             </span>
           </div>
 
@@ -259,14 +259,14 @@ export default function Home() {
                 <button
                   aria-label="Notifications"
                   onClick={() => navigate("/activity")}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/70"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/20"
                 >
                   <Bell size={20} strokeWidth={1.8} />
                 </button>
                 <button
                   onClick={handleLogout}
                   aria-label="Logout"
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/70"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/20"
                 >
                   <LogOut size={18} strokeWidth={1.8} />
                 </button>
@@ -274,7 +274,7 @@ export default function Home() {
             ) : (
               <button
                 onClick={() => navigate("/login")}
-                className="flex items-center gap-1.5 rounded-full bg-violet-600 px-3.5 py-1.5 text-sm font-medium text-white transition hover:bg-violet-700"
+                className="flex items-center gap-1.5 rounded-full bg-violet-600/90 px-3.5 py-1.5 text-sm font-medium text-white backdrop-blur transition hover:bg-violet-700"
               >
                 <LogIn size={16} strokeWidth={1.8} />
                 Login
@@ -283,7 +283,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Category chips â€” real data: filters posts by artist categories */}
+        {/* Category chips — glass instead of solid white/gradient fill */}
         <div className="flex gap-4 overflow-x-auto px-5 py-5 [scrollbar-width:none]">
           {CATEGORY_CHIPS.map((label, i) => {
             const active = activeChip === label;
@@ -296,19 +296,22 @@ export default function Home() {
                 className="flex shrink-0 flex-col items-center gap-1.5"
               >
                 <div
-                  className={`relative h-16 w-14 overflow-hidden border-2 transition ${shape} ${
-                    active ? "border-violet-400 shadow-md shadow-violet-200" : "border-white"
+                  className={`relative h-16 w-14 overflow-hidden border transition ${shape} ${
+                    active
+                      ? "glass border-violet-300/60 shadow-md shadow-violet-200/40"
+                      : "glass"
                   }`}
                 >
                   {cover ? (
                     <img src={cover} alt={label} className="h-full w-full object-cover" />
                   ) : (
-                    <div className="h-full w-full bg-gradient-to-b from-violet-100 to-orange-100" />
+                    // no solid fallback fill — let the glass + background show through
+                    <div className="h-full w-full" />
                   )}
                 </div>
                 <span
                   className={`rounded-full px-2 py-0.5 text-[11px] ${
-                    active ? "bg-violet-100 font-semibold text-violet-700" : "text-stone-500"
+                    active ? "bg-violet-100/70 font-semibold text-violet-700" : "text-stone-500"
                   }`}
                 >
                   {label}
@@ -319,7 +322,7 @@ export default function Home() {
         </div>
 
         {/* Feed states */}
-        {loading && <p className="px-5 py-10 text-center text-sm text-stone-400">Loading postsâ€¦</p>}
+        {loading && <p className="px-5 py-10 text-center text-sm text-stone-400">Loading posts…</p>}
         {!loading && error && <p className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>}
         {!loading && !error && filteredPosts.length === 0 && (
           <p className="px-5 py-10 text-center text-sm text-stone-400">
@@ -332,7 +335,7 @@ export default function Home() {
           {filteredPosts.map((post) => (
             <article
               key={post._id}
-              className="overflow-hidden rounded-3xl border border-stone-200/70 bg-white/90 shadow-sm shadow-stone-300/30 backdrop-blur-sm"
+              className="glass-strong overflow-hidden rounded-3xl"
             >
               {/* Author row */}
               <div className="flex items-center justify-between px-4 pt-3.5">
@@ -340,16 +343,16 @@ export default function Home() {
                   <img
                     src={post.artistAvatar || "https://i.pravatar.cc/150"}
                     alt={post.artistName}
-                    className="h-10 w-10 rounded-full object-cover ring-2 ring-orange-100"
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-orange-100/70"
                   />
                   <div className="leading-tight">
                     <p className="font-serif text-[15px] font-semibold text-stone-900">{post.artistName}</p>
-                    <p className="text-xs text-violet-500">
+                    <p className="text-xs text-violet-600">
                       {(artistCategoryMap[post.artistId] || [])[0] || "Artist"}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-stone-400">
+                <div className="flex items-center gap-2 text-stone-500">
                   <span className="text-xs">{timeAgo(post.createdAt)}</span>
                   <button aria-label="More options">
                     <MoreHorizontal size={18} />
@@ -367,7 +370,7 @@ export default function Home() {
                 <img src={post.mediaUrl} alt={post.caption || "Post"} className="aspect-square w-full object-cover" />
               )}
 
-              {/* Footer â€” heart / palette (comments) / bookmark / send */}
+              {/* Footer — heart / palette (comments) / bookmark / send */}
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-5">
                   <button onClick={() => toggleLike(post)} aria-label="Like" className="flex items-center gap-1.5">
@@ -409,21 +412,21 @@ export default function Home() {
 /**
  * Self-contained bottom nav matching the mockup's soft-colored circular
  * icons. Swap this out for your real src/BottomNav.jsx once its import
- * path is fixed â€” Home.jsx currently expects it at "../components/BottomNav"
+ * path is fixed — Home.jsx currently expects it at "../components/BottomNav"
  * but the file lives at src/BottomNav.jsx.
  */
 function HomeBottomNav() {
   const navigate = useNavigate();
 
   const tabs = [
-    { key: "home", label: "Home", icon: HomeIcon, path: "/", bg: "bg-violet-100", fg: "text-violet-600" },
-    { key: "explore", label: "Explore", icon: Compass, path: "/explore", bg: "bg-teal-100", fg: "text-teal-600" },
-    { key: "activity", label: "Activity", icon: Bell, path: "/activity", bg: "bg-amber-100", fg: "text-amber-600" },
-    { key: "profile", label: "Profile", icon: User, path: "/profile", bg: "bg-stone-200", fg: "text-stone-600" },
+    { key: "home", label: "Home", icon: HomeIcon, path: "/", bg: "bg-violet-100/70", fg: "text-violet-600" },
+    { key: "explore", label: "Explore", icon: Compass, path: "/explore", bg: "bg-teal-100/70", fg: "text-teal-600" },
+    { key: "activity", label: "Activity", icon: Bell, path: "/activity", bg: "bg-amber-100/70", fg: "text-amber-600" },
+    { key: "profile", label: "Profile", icon: User, path: "/profile", bg: "bg-stone-200/70", fg: "text-stone-600" },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 border-t border-stone-200/70 bg-white/95 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+    <nav className="glass-strong fixed bottom-0 left-0 right-0 z-40 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3">
       <div className="mx-auto flex max-w-md items-center justify-between">
         {tabs.slice(0, 2).map((tab) => {
           const Icon = tab.icon;
