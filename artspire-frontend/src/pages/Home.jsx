@@ -27,7 +27,7 @@ const CATEGORY_CHIPS = ["For You", "Watercolor", "Illustration", "Portraits", "L
 // 1. Drop your video file into: artspire-frontend/public/
 // 2. Put its filename below (must start with "/"), e.g. "/home-bg.mp4"
 // Leave as null to keep the plain watercolor-blob background instead.
-const BG_VIDEO_SRC = "/mp.mp4";
+const BG_VIDEO_SRC = "/back.mp4";
 
 // Each chip gets a visually distinct shape instead of all five looking
 // identical — cycles through this list by index.
