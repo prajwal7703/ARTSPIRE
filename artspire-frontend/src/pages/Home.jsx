@@ -14,6 +14,7 @@ import {
   Compass,
   User,
   Star,
+  Calendar,
 } from "lucide-react";
 
 // Falls back to your live Render backend if VITE_API_URL isn't set —
@@ -226,13 +227,18 @@ export default function Home() {
   };
 
   return (
-    // NOTE: no bg color here anymore — a solid background on this wrapper
-    // was painting over the fixed image layer. Keep this transparent.
-    <div className="relative min-h-screen overflow-x-hidden pb-28">
+    // Outer shell: full-width neutral backdrop (this is what shows on the
+    // left/right on wide laptop screens, like Instagram's desktop web view).
+    <div className="min-h-screen w-full bg-stone-200 flex justify-center">
+      {/* Phone-width column — same max width on laptop and mobile, so the
+          background image is never stretched wider than a phone screen. */}
+      <div className="relative w-full max-w-[480px] min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28 shadow-2xl">
       <FontImports />
 
       {/* ── Image background, fully visible, sits behind everything ── */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      {/* fixed + centered-to-column instead of full-viewport, so on wide
+          screens it stays sized to the phone column instead of zooming */}
+      <div className="pointer-events-none fixed inset-y-0 left-1/2 z-0 w-full max-w-[480px] -translate-x-1/2 overflow-hidden">
         {BG_IMAGE_SRC && (
           <>
             <img
@@ -257,7 +263,13 @@ export default function Home() {
       <div className="relative z-10">
         {/* Header — glass instead of near-solid cream */}
         <header className="glass sticky top-0 z-30 flex items-center justify-between border-b border-white/30 px-5 py-4">
-          <div className="w-9" aria-hidden="true" />
+          <button
+            aria-label="Events"
+            onClick={() => navigate("/events")}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/20"
+          >
+            <Calendar size={20} strokeWidth={1.8} />
+          </button>
 
           <div className="flex flex-col items-center leading-none">
             <h1 style={F_LOGO} className="text-2xl italic tracking-tight text-stone-900">
@@ -422,6 +434,7 @@ export default function Home() {
       </div>
 
       <HomeBottomNav />
+      </div>
     </div>
   );
 }
@@ -443,7 +456,7 @@ function HomeBottomNav() {
   ];
 
   return (
-    <nav className="glass-strong fixed bottom-0 left-0 right-0 z-40 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3">
+    <nav className="glass-strong fixed bottom-0 left-1/2 z-40 w-full max-w-[480px] -translate-x-1/2 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-3">
       <div className="mx-auto flex max-w-md items-center justify-between">
         {tabs.slice(0, 2).map((tab) => {
           const Icon = tab.icon;

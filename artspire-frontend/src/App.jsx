@@ -23,6 +23,7 @@ import Feed from "./pages/Feed";
 import AdminDashboard from "./pages/AdminDashboard";
 import Profile from "./pages/Profile";
 import Activity from "./pages/Activity";
+import Events from "./pages/Events";
 
 // -- Guards ----------------------------------------------------------------
 
@@ -70,6 +71,7 @@ function App() {
         <Route path="/artists" element={<Artists />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/discover" element={<DiscoverPage />} />
+        <Route path="/events" element={<Events />} />
         <Route path="/artist/:id" element={<ArtistProfile />} />
         <Route path="/artist-profile/:id" element={<ArtistProfile />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -147,10 +149,10 @@ function App() {
           }
         />
 
-        {/* â”€â”€ Chat â€” consolidated single implementation, real-data booking-gated.
+        {/* ── Chat — consolidated single implementation, real-data booking-gated.
             /chat            -> conversation list only
             /chat/:artistId  -> list + auto-opens (or starts) that thread
-            /user-chat       -> old link, kept working, same component â”€â”€ */}
+            /user-chat       -> old link, kept working, same component ── */}
         <Route
           path="/chat"
           element={
