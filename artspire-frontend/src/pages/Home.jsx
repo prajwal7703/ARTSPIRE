@@ -17,31 +17,20 @@ import {
   Calendar,
 } from "lucide-react";
 
-// Falls back to your live Render backend if VITE_API_URL isn't set —
-// matches the same fallback pattern already used in src/socket.js
 const API_BASE = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
 const CATEGORY_CHIPS = ["For You", "Watercolor", "Illustration", "Portraits", "Landscapes"];
 
-// ── PASTE YOUR BACKGROUND IMAGE PATH HERE ──────────────────────────
-// 1. Drop your image file into: artspire-frontend/public/
-// 2. Put its filename below (must start with "/"), e.g. "/artspire-bg.jpeg"
-// Leave as null to keep the plain watercolor-blob background instead.
 const BG_IMAGE_SRC = "/artspire-bg.jpeg";
 
-// Each chip gets a visually distinct shape instead of all five looking
-// identical — cycles through this list by index.
 const CHIP_SHAPES = [
-  "rounded-t-full rounded-b-2xl",              // arch
-  "rounded-2xl",                                // soft square
-  "rounded-full",                                // circle
-  "rounded-tl-3xl rounded-br-3xl rounded-tr-md rounded-bl-md", // diagonal cut
-  "rounded-b-full rounded-t-2xl",               // inverted arch
+  "rounded-t-full rounded-b-2xl",
+  "rounded-2xl",
+  "rounded-full",
+  "rounded-tl-3xl rounded-br-3xl rounded-tr-md rounded-bl-md",
+  "rounded-b-full rounded-t-2xl",
 ];
 
-// Maps a chip label to the substrings we look for inside an artist's
-// `categories` array (e.g. an artist with categories ["Portrait Artist"]
-// should match the "Portraits" chip).
 const CATEGORY_MATCH = {
   Watercolor: ["watercolor", "water colour", "watercolour"],
   Illustration: ["illustrat"],
@@ -49,16 +38,13 @@ const CATEGORY_MATCH = {
   Landscapes: ["landscape"],
 };
 
-// ── Distinct fonts per text role ────────────────────────────────────
-// Loaded once below via the <link> tag in <FontImports/>. Each constant is
-// an inline style object so it works regardless of your Tailwind config.
-const F_LOGO        = { fontFamily: "'Playfair Display', Georgia, serif" };     // brand wordmark
-const F_TAGLINE      = { fontFamily: "'Caveat', cursive" };                     // handwritten tagline
-const F_CHIP_LABEL   = { fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.04em" }; // condensed caps
-const F_ARTIST_NAME  = { fontFamily: "'Playfair Display', Georgia, serif" };    // post author
-const F_META         = { fontFamily: "'Nunito', sans-serif" };                  // timestamps, small labels
-const F_CAPTION      = { fontFamily: "'Nunito', sans-serif" };                  // post captions
-const F_NAV_LABEL    = { fontFamily: "'Nunito', sans-serif", fontWeight: 700 }; // bottom nav labels
+const F_LOGO        = { fontFamily: "'Playfair Display', Georgia, serif" };
+const F_TAGLINE      = { fontFamily: "'Caveat', cursive" };
+const F_CHIP_LABEL   = { fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.04em" };
+const F_ARTIST_NAME  = { fontFamily: "'Playfair Display', Georgia, serif" };
+const F_META         = { fontFamily: "'Nunito', sans-serif" };
+const F_CAPTION      = { fontFamily: "'Nunito', sans-serif" };
+const F_NAV_LABEL    = { fontFamily: "'Nunito', sans-serif", fontWeight: 700 };
 
 function timeAgo(dateStr) {
   if (!dateStr) return "";
@@ -92,11 +78,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // artistId -> lowercased categories array, used to power the filter chips
   const [artistCategoryMap, setArtistCategoryMap] = useState({});
   const [activeChip, setActiveChip] = useState("For You");
 
-  // ── Auth state — same pattern as your existing utils/auth.js ────────
   const currentUser = (() => {
     try {
       return JSON.parse(localStorage.getItem("user") || localStorage.getItem("artist") || "null");
@@ -113,7 +97,6 @@ export default function Home() {
     navigate("/login");
   };
 
-  // ── Load real feed + artist categories ──────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -157,7 +140,6 @@ export default function Home() {
         });
         setArtistCategoryMap(map);
       } catch (err) {
-        // Non-fatal — chips just won't be able to filter, "For You" still works
         console.error("Artist categories load error:", err);
       }
     }
@@ -205,7 +187,6 @@ export default function Home() {
 
   const toggleSave = (id) => setSaved((s) => ({ ...s, [id]: !s[id] }));
 
-  // ── Filtered posts, driven by real artist category data ─────────────
   const filteredPosts = useMemo(() => {
     if (activeChip === "For You") return posts;
     const needles = CATEGORY_MATCH[activeChip] || [];
@@ -215,7 +196,6 @@ export default function Home() {
     });
   }, [posts, activeChip, artistCategoryMap]);
 
-  // ── Cover image per chip — first matching post's image, real data ────
   const chipCover = (label) => {
     if (label === "For You") return posts[0]?.mediaUrl || null;
     const needles = CATEGORY_MATCH[label] || [];
@@ -227,17 +207,10 @@ export default function Home() {
   };
 
   return (
-    // Outer shell: full-width neutral backdrop (this is what shows on the
-    // left/right on wide laptop screens, like Instagram's desktop web view).
     <div className="min-h-screen w-full bg-stone-200 flex justify-center">
-      {/* Phone-width column — same max width on laptop and mobile, so the
-          background image is never stretched wider than a phone screen. */}
       <div className="relative w-full max-w-[480px] min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28 shadow-2xl">
       <FontImports />
 
-      {/* ── Image background, fully visible, sits behind everything ── */}
-      {/* fixed + centered-to-column instead of full-viewport, so on wide
-          screens it stays sized to the phone column instead of zooming */}
       <div className="pointer-events-none fixed inset-y-0 left-1/2 z-0 w-full max-w-[480px] -translate-x-1/2 overflow-hidden">
         {BG_IMAGE_SRC && (
           <>
@@ -246,8 +219,6 @@ export default function Home() {
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
-            {/* Very light wash, just enough to keep icons/text readable —
-                tweak this opacity (try 10–25) to taste */}
             <div className="absolute inset-0 bg-[#FBF3E7]/15" />
           </>
         )}
@@ -261,7 +232,6 @@ export default function Home() {
       </div>
 
       <div className="relative z-10">
-        {/* Header — glass instead of near-solid cream */}
         <header className="glass sticky top-0 z-30 flex items-center justify-between border-b border-white/30 px-5 py-4">
           <button
             aria-label="Events"
@@ -311,8 +281,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Category chips — glass instead of solid white/gradient fill */}
-        <div className="flex gap-4 overflow-x-auto px-5 py-5 [scrollbar-width:none]">
+        <div data-tour="chips" className="flex gap-4 overflow-x-auto px-5 py-5 [scrollbar-width:none]">
           {CATEGORY_CHIPS.map((label, i) => {
             const active = activeChip === label;
             const cover = chipCover(label);
@@ -333,7 +302,6 @@ export default function Home() {
                   {cover ? (
                     <img src={cover} alt={label} className="h-full w-full object-cover" />
                   ) : (
-                    // no solid fallback fill — let the glass + background show through
                     <div className="h-full w-full" />
                   )}
                 </div>
@@ -350,7 +318,6 @@ export default function Home() {
           })}
         </div>
 
-        {/* Feed states */}
         {loading && <p style={F_META} className="px-5 py-10 text-center text-sm text-stone-400">Loading posts…</p>}
         {!loading && error && <p style={F_META} className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>}
         {!loading && !error && filteredPosts.length === 0 && (
@@ -359,14 +326,12 @@ export default function Home() {
           </p>
         )}
 
-        {/* Feed */}
-        <div className="flex flex-col gap-5 px-5">
+        <div data-tour="feed" className="flex flex-col gap-5 px-5">
           {filteredPosts.map((post) => (
             <article
               key={post._id}
               className="glass-strong overflow-hidden rounded-3xl"
             >
-              {/* Author row */}
               <div className="flex items-center justify-between px-4 pt-3.5">
                 <div className="flex items-center gap-3">
                   <img
@@ -399,10 +364,14 @@ export default function Home() {
                 <img src={post.mediaUrl} alt={post.caption || "Post"} className="aspect-square w-full object-cover" />
               )}
 
-              {/* Footer — heart / palette (comments) / bookmark / send */}
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-5">
-                  <button onClick={() => toggleLike(post)} aria-label="Like" className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => toggleLike(post)}
+                    aria-label="Like"
+                    className="flex items-center gap-1.5"
+                    {...(filteredPosts[0]?._id === post._id ? { "data-tour": "like" } : {})}
+                  >
                     <Heart
                       size={21}
                       strokeWidth={1.8}
@@ -439,12 +408,6 @@ export default function Home() {
   );
 }
 
-/**
- * Self-contained bottom nav matching the mockup's soft-colored circular
- * icons. Swap this out for your real src/BottomNav.jsx once its import
- * path is fixed — Home.jsx currently expects it at "../components/BottomNav"
- * but the file lives at src/BottomNav.jsx.
- */
 function HomeBottomNav() {
   const navigate = useNavigate();
 
@@ -461,7 +424,12 @@ function HomeBottomNav() {
         {tabs.slice(0, 2).map((tab) => {
           const Icon = tab.icon;
           return (
-            <button key={tab.key} onClick={() => navigate(tab.path)} className="flex flex-col items-center gap-1">
+            <button
+              key={tab.key}
+              data-tour={tab.key === "explore" ? "explore" : undefined}
+              onClick={() => navigate(tab.path)}
+              className="flex flex-col items-center gap-1"
+            >
               <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tab.bg}`}>
                 <Icon size={18} strokeWidth={2} className={tab.fg} />
               </span>
@@ -471,6 +439,7 @@ function HomeBottomNav() {
         })}
 
         <button
+          data-tour="create"
           onClick={() => alert("Hook this up to your real CreateSheet / upload modal")}
           aria-label="Create"
           className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-indigo-500 text-white shadow-lg shadow-violet-300/60 transition active:scale-95"
@@ -481,7 +450,12 @@ function HomeBottomNav() {
         {tabs.slice(2).map((tab) => {
           const Icon = tab.icon;
           return (
-            <button key={tab.key} onClick={() => navigate(tab.path)} className="flex flex-col items-center gap-1">
+            <button
+              key={tab.key}
+              data-tour={tab.key === "profile" ? "profile" : undefined}
+              onClick={() => navigate(tab.path)}
+              className="flex flex-col items-center gap-1"
+            >
               <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tab.bg}`}>
                 <Icon size={18} strokeWidth={2} className={tab.fg} />
               </span>

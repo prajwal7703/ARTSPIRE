@@ -1,21 +1,8 @@
 // artspire-frontend/src/pages/Entry.jsx
-//
-// Mounted at "/" instead of Home directly. Decides what a visitor sees:
-//   - Logged in (real token)              -> straight to Home, no gate
-//   - Already chose "Just Looking" this browser session -> straight to Home
-//   - Otherwise                            -> Gate (Artist / User / Guest picker)
-//
-// Uses sessionStorage (not localStorage) for the guest flag on purpose:
-// closing the tab/browser and coming back later counts as "next time" and
-// shows the gate (and the cat's nag) again, per your request. If you'd
-// rather it only ever show once per device, change sessionStorage to
-// localStorage below.
-
 import { useState } from "react";
 import { getToken } from "../utils/auth";
 import Gate from "./Gate";
 import Home from "./Home";
-import MissionIntro from "../components/MissionIntro";
 import OnboardingGuide from "../components/OnboardingGuide";
 
 const GUEST_FLAG = "artspire_guest_entered";
@@ -24,7 +11,6 @@ export default function Entry() {
   const [entered, setEntered] = useState(
     () => Boolean(getToken()) || sessionStorage.getItem(GUEST_FLAG) === "true"
   );
-  const [showTour, setShowTour] = useState(false);
 
   if (!entered) {
     return (
@@ -40,8 +26,16 @@ export default function Entry() {
   return (
     <>
       <Home />
-      {!showTour && <MissionIntro onContinue={() => setShowTour(true)} />}
-      {showTour && <OnboardingGuide />}
+      <OnboardingGuide
+        targets={{
+          1: '[data-tour="chips"]',
+          2: '[data-tour="feed"]',
+          3: '[data-tour="like"]',
+          4: '[data-tour="create"]',
+          5: '[data-tour="explore"]',
+          6: '[data-tour="profile"]',
+        }}
+      />
     </>
   );
 }

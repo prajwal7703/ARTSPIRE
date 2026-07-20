@@ -1,110 +1,96 @@
 // artspire-frontend/src/components/OnboardingGuide.jsx
 //
-// A doodle mascot ("Inkling") that greets first-time visitors right after
-// they clear the Entry gate, and walks them through the app in a few short,
-// skippable beats. Shows once ever per browser (localStorage), not once per
-// session like the guest flag in Entry.jsx.
+// Doodle guide (see GuideAvatar.jsx) that walks a first-time visitor through
+// the app. Shows once ever per browser (localStorage).
 //
-// Drop this file in src/components/OnboardingGuide.jsx and render it once,
-// as a sibling to <Home />, from Entry.jsx (see integration note at bottom
-// of this file).
+// No `targets` prop -> generic floating card.
+// `targets` prop supplied -> for each step, if targets[i] selector matches a
+// real element, the guide moves next to it and draws a highlight ring
+// around it. Falls back to floating mode for any step whose selector
+// isn't found yet.
 
 import { useEffect, useState } from "react";
+import GuideAvatar from "./GuideAvatar";
 
 const SEEN_FLAG = "artspire_onboarding_seen";
 
-// Edit this array to change the tour. Each step is one thing Inkling says,
-// paired with a pose. Keep steps short — one idea per beat.
 const STEPS = [
   {
     pose: "wave",
     title: "Hey, welcome to Artspire!",
-    text: "I'm Inkling. Give me thirty seconds and I'll show you where everything lives.",
+    text: "I'm Sketch. Give me thirty seconds and I'll show you where everything lives.",
   },
   {
     pose: "point",
+    title: "Browse by style",
+    text: "Tap a category — watercolor, portraits, landscapes — to filter your feed to just that.",
+  },
+  {
+    pose: "explain",
     title: "This is your feed",
-    text: "Fresh work from artists you follow shows up here first. Scroll, react, get inspired.",
+    text: "Fresh work from artists shows up here. Scroll down to see more.",
   },
   {
-    pose: "sparkle",
-    title: "Sharing your own work",
-    text: "Hit the upload button any time to post a piece. Tag it well and it'll find the right audience.",
+    pose: "point",
+    title: "Show some love",
+    text: "Tap the heart to like a piece — it helps that artist get seen by more people.",
   },
   {
-    pose: "heart",
-    title: "Following artists",
-    text: "Found someone whose work you love? Follow them and their new posts land straight in your feed.",
+    pose: "explain",
+    title: "Share your own work",
+    text: "This button posts something new. Tag it well and it'll find the right audience.",
   },
   {
-    pose: "bow",
+    pose: "point",
+    title: "Explore",
+    text: "Find new artists and fresh styles you haven't seen yet.",
+  },
+  {
+    pose: "point",
+    title: "Your profile",
+    text: "Your posts, saves, and account settings all live here.",
+  },
+  {
+    pose: "rest",
     title: "That's the whole tour",
     text: "Poke around, everything else you'll find as you go. Have fun out there!",
   },
 ];
 
-function InklingPose({ pose }) {
-  // A small doodle cat, hand-drawn feel via slightly wobbly paths.
-  // Pose changes ears/paw/eyes just enough to feel alive without needing
-  // real animation assets.
-  const common = (
-    <>
-      <ellipse cx="60" cy="78" rx="34" ry="26" fill="var(--ink-body, #2b2b2b)" />
-      <path d="M32 58 L24 30 L46 46 Z" fill="var(--ink-body, #2b2b2b)" />
-      <path d="M88 58 L96 30 L74 46 Z" fill="var(--ink-body, #2b2b2b)" />
-    </>
-  );
-
-  const eyes =
-    pose === "sparkle" ? (
-      <>
-        <path d="M46 68 L50 72 L46 76 L42 72 Z" fill="#fff" />
-        <path d="M74 68 L78 72 L74 76 L70 72 Z" fill="#fff" />
-      </>
-    ) : (
-      <>
-        <circle cx="48" cy="72" r="3.2" fill="#fff" />
-        <circle cx="72" cy="72" r="3.2" fill="#fff" />
-      </>
-    );
-
-  const paw =
-    pose === "point" ? (
-      <path d="M84 92 Q104 84 112 68" stroke="var(--ink-body, #2b2b2b)" strokeWidth="7" strokeLinecap="round" fill="none" />
-    ) : pose === "wave" ? (
-      <path d="M84 92 Q108 96 106 74" stroke="var(--ink-body, #2b2b2b)" strokeWidth="7" strokeLinecap="round" fill="none" />
-    ) : pose === "bow" ? (
-      <path d="M40 96 Q60 108 80 96" stroke="var(--ink-body, #2b2b2b)" strokeWidth="7" strokeLinecap="round" fill="none" />
-    ) : (
-      <path d="M84 92 Q100 90 100 78" stroke="var(--ink-body, #2b2b2b)" strokeWidth="7" strokeLinecap="round" fill="none" />
-    );
-
-  return (
-    <svg viewBox="0 0 130 110" width="88" height="74" aria-hidden="true">
-      {common}
-      {eyes}
-      <path d="M60 80 Q64 84 60 87 Q56 84 60 80 Z" fill="#ff9d76" />
-      {paw}
-      {pose === "heart" && (
-        <path
-          d="M100 40 C100 34 108 34 108 40 C108 34 116 34 116 40 C116 46 108 52 108 52 C108 52 100 46 100 40 Z"
-          fill="#ff6b6b"
-        />
-      )}
-    </svg>
-  );
-}
-
-export default function OnboardingGuide({ forceShow = false, onDone }) {
+export default function OnboardingGuide({ forceShow = false, onDone, targets = {} }) {
   const [visible, setVisible] = useState(false);
   const [step, setStep] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
 
   useEffect(() => {
     const alreadySeen = localStorage.getItem(SEEN_FLAG) === "true";
-    if (forceShow || !alreadySeen) {
-      setVisible(true);
-    }
+    if (forceShow || !alreadySeen) setVisible(true);
   }, [forceShow]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const selector = targets[step];
+    if (!selector) {
+      setTargetRect(null);
+      return;
+    }
+    const el = document.querySelector(selector);
+    if (!el) {
+      setTargetRect(null);
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      setTargetRect({
+        top: r.top + window.scrollY,
+        left: r.left + window.scrollX,
+        width: r.width,
+        height: r.height,
+      });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [step, visible, targets]);
 
   function finish() {
     localStorage.setItem(SEEN_FLAG, "true");
@@ -113,11 +99,8 @@ export default function OnboardingGuide({ forceShow = false, onDone }) {
   }
 
   function next() {
-    if (step === STEPS.length - 1) {
-      finish();
-    } else {
-      setStep((s) => s + 1);
-    }
+    if (step === STEPS.length - 1) finish();
+    else setStep((s) => s + 1);
   }
 
   function back() {
@@ -128,17 +111,50 @@ export default function OnboardingGuide({ forceShow = false, onDone }) {
 
   const current = STEPS[step];
   const isLast = step === STEPS.length - 1;
+  const hasTarget = Boolean(targetRect);
 
   return (
-    <div style={styles.overlay} role="dialog" aria-label="Welcome tour">
-      <div style={styles.card}>
+    <>
+      <div style={styles.backdrop} />
+
+      {hasTarget && (
+        <div
+          style={{
+            position: "absolute",
+            top: targetRect.top - 6,
+            left: targetRect.left - 6,
+            width: targetRect.width + 12,
+            height: targetRect.height + 12,
+            borderRadius: 14,
+            border: "3px solid #1f1f1f",
+            boxShadow: "0 0 0 4000px rgba(20,18,24,0.55)",
+            zIndex: 2001,
+            pointerEvents: "none",
+            transition: "all 0.35s ease",
+          }}
+        />
+      )}
+
+      <div
+        style={
+          hasTarget
+            ? {
+                ...styles.card,
+                position: "absolute",
+                top: targetRect.top + targetRect.height + 16,
+                left: Math.max(16, Math.min(targetRect.left, window.innerWidth - 380)),
+                maxWidth: 360,
+              }
+            : { ...styles.card, ...styles.cardFloating }
+        }
+      >
         <button style={styles.skip} onClick={finish} aria-label="Skip tour">
           Skip
         </button>
 
         <div style={styles.mascotRow}>
-          <div style={styles.mascotBubbleWrap}>
-            <InklingPose pose={current.pose} />
+          <div style={styles.mascotWrap}>
+            <GuideAvatar pose={current.pose} size={80} />
           </div>
           <div style={styles.speechBubble}>
             <div style={styles.speechTail} />
@@ -150,16 +166,9 @@ export default function OnboardingGuide({ forceShow = false, onDone }) {
         <div style={styles.footer}>
           <div style={styles.dots}>
             {STEPS.map((_, i) => (
-              <span
-                key={i}
-                style={{
-                  ...styles.dot,
-                  ...(i === step ? styles.dotActive : {}),
-                }}
-              />
+              <span key={i} style={{ ...styles.dot, ...(i === step ? styles.dotActive : {}) }} />
             ))}
           </div>
-
           <div style={styles.buttons}>
             {step > 0 && (
               <button style={styles.secondaryBtn} onClick={back}>
@@ -172,30 +181,33 @@ export default function OnboardingGuide({ forceShow = false, onDone }) {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
 const styles = {
-  overlay: {
+  backdrop: {
     position: "fixed",
     inset: 0,
-    background: "rgba(20, 18, 24, 0.55)",
-    display: "flex",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    padding: 24,
     zIndex: 2000,
+    background: "transparent",
   },
   card: {
     width: "100%",
-    maxWidth: 460,
     background: "#fffaf3",
     borderRadius: 20,
     padding: "20px 20px 16px",
     boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
-    position: "relative",
-    border: "2px solid #2b2b2b",
+    border: "2px solid #1f1f1f",
+    zIndex: 2002,
+  },
+  cardFloating: {
+    position: "fixed",
+    left: 24,
+    right: 24,
+    bottom: 24,
+    maxWidth: 460,
+    margin: "0 auto",
   },
   skip: {
     position: "absolute",
@@ -208,18 +220,11 @@ const styles = {
     cursor: "pointer",
     textDecoration: "underline",
   },
-  mascotRow: {
-    display: "flex",
-    alignItems: "flex-end",
-    gap: 10,
-    marginTop: 8,
-  },
-  mascotBubbleWrap: {
-    flexShrink: 0,
-  },
+  mascotRow: { display: "flex", alignItems: "flex-end", gap: 10, marginTop: 8 },
+  mascotWrap: { flexShrink: 0 },
   speechBubble: {
     position: "relative",
-    background: "#2b2b2b",
+    background: "#1f1f1f",
     color: "#fffaf3",
     borderRadius: 14,
     padding: "12px 14px",
@@ -233,47 +238,19 @@ const styles = {
     height: 0,
     borderTop: "8px solid transparent",
     borderBottom: "8px solid transparent",
-    borderRight: "8px solid #2b2b2b",
+    borderRight: "8px solid #1f1f1f",
   },
-  title: {
-    margin: "0 0 4px",
-    fontSize: 15,
-    fontWeight: 700,
-  },
-  text: {
-    margin: 0,
-    fontSize: 14,
-    lineHeight: 1.4,
-  },
-  footer: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 16,
-  },
-  dots: {
-    display: "flex",
-    gap: 6,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: "50%",
-    background: "#d8d0c2",
-  },
-  dotActive: {
-    background: "#2b2b2b",
-    width: 16,
-    borderRadius: 4,
-  },
-  buttons: {
-    display: "flex",
-    gap: 8,
-  },
+  title: { margin: "0 0 4px", fontSize: 15, fontWeight: 700 },
+  text: { margin: 0, fontSize: 14, lineHeight: 1.4 },
+  footer: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16 },
+  dots: { display: "flex", gap: 6 },
+  dot: { width: 6, height: 6, borderRadius: "50%", background: "#d8d0c2" },
+  dotActive: { background: "#1f1f1f", width: 16, borderRadius: 4 },
+  buttons: { display: "flex", gap: 8 },
   secondaryBtn: {
     padding: "8px 14px",
     borderRadius: 10,
-    border: "2px solid #2b2b2b",
+    border: "2px solid #1f1f1f",
     background: "transparent",
     fontSize: 13,
     fontWeight: 600,
@@ -282,31 +259,11 @@ const styles = {
   primaryBtn: {
     padding: "8px 16px",
     borderRadius: 10,
-    border: "2px solid #2b2b2b",
-    background: "#2b2b2b",
+    border: "2px solid #1f1f1f",
+    background: "#1f1f1f",
     color: "#fffaf3",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
   },
 };
-
-/*
-INTEGRATION — Entry.jsx
-
-import OnboardingGuide from "../components/OnboardingGuide";
-
-...inside the `return <Home />;` branch, change to:
-
-  return (
-    <>
-      <Home />
-      <OnboardingGuide />
-    </>
-  );
-
-That's it — OnboardingGuide checks localStorage itself and renders nothing
-after the first visit. If you only want it shown to fresh signups (not
-returning logged-in users or repeat guests), pass a condition instead, e.g.
-`forceShow={justSignedUp}` and clear that flag in onDone.
-*/
