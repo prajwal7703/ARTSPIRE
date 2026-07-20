@@ -15,7 +15,7 @@ import { useState } from "react";
 import { getToken } from "../utils/auth";
 import Gate from "./Gate";
 import Home from "./Home";
-
+import OnboardingGuide from "../components/OnboardingGuide";
 const GUEST_FLAG = "artspire_guest_entered";
 
 export default function Entry() {
@@ -34,5 +34,10 @@ export default function Entry() {
     );
   }
 
-  return <Home />;
+  return (
+  <>
+    <Home />
+    <OnboardingGuide />
+  </>
+);
 }
