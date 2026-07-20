@@ -23,7 +23,7 @@ import Feed from "./pages/Feed";
 import AdminDashboard from "./pages/AdminDashboard";
 import Profile from "./pages/Profile";
 import Activity from "./pages/Activity";
-import Events from "./pages/Events";
+import events from "./pages/events";
 
 // -- Guards ----------------------------------------------------------------
 
@@ -71,7 +71,7 @@ function App() {
         <Route path="/artists" element={<Artists />} />
         <Route path="/explore" element={<Explore />} />
         <Route path="/discover" element={<DiscoverPage />} />
-        <Route path="/events" element={<Events />} />
+        <Route path="/events" element={<events />} />
         <Route path="/artist/:id" element={<ArtistProfile />} />
         <Route path="/artist-profile/:id" element={<ArtistProfile />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
