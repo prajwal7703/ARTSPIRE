@@ -16,6 +16,7 @@ import {
   Star,
   Calendar,
 } from "lucide-react";
+import OnboardingGuide from "../components/OnboardingGuide";
 
 const API_BASE = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.onrender.com";
 
@@ -36,6 +37,15 @@ const CATEGORY_MATCH = {
   Illustration: ["illustrat"],
   Portraits: ["portrait"],
   Landscapes: ["landscape"],
+};
+
+const TOUR_TARGETS = {
+  1: '[data-tour="chips"]',
+  2: '[data-tour="feed"]',
+  3: '[data-tour="like"]',
+  4: '[data-tour="create"]',
+  5: '[data-tour="explore"]',
+  6: '[data-tour="profile"]',
 };
 
 const F_LOGO        = { fontFamily: "'Playfair Display', Georgia, serif" };
@@ -210,6 +220,8 @@ export default function Home() {
     <div className="min-h-screen w-full bg-stone-200 flex justify-center">
       <div className="relative w-full max-w-[480px] min-h-screen overflow-x-hidden bg-[#FBF3E7] pb-28 shadow-2xl">
       <FontImports />
+
+      <OnboardingGuide targets={TOUR_TARGETS} />
 
       <div className="pointer-events-none fixed inset-y-0 left-1/2 z-0 w-full max-w-[480px] -translate-x-1/2 overflow-hidden">
         {BG_IMAGE_SRC && (
