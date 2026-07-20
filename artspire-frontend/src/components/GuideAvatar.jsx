@@ -5,16 +5,15 @@
 // Used by OnboardingGuide.
 //
 // Drop the 4 PNGs from guide-avatar-assets/ into:
-//   src/assets/guide/pose-explain.png
-//   src/assets/guide/pose-wave.png
-//   src/assets/guide/pose-point.png
-//   src/assets/guide/pose-rest.png
-// (adjust the import paths below if you place them elsewhere)
+//   src/assets/pose-explain.png
+//   src/assets/pose-wave.png
+//   src/assets/pose-point.png
+//   src/assets/pose-rest.png
 
-import poseExplain from "../assets/guide/pose-explain.png";
-import poseWave from "../assets/guide/pose-wave.png";
-import posePoint from "../assets/guide/pose-point.png";
-import poseRest from "../assets/guide/pose-rest.png";
+import poseExplain from "../assets/pose-explain.png";
+import poseWave from "../assets/pose-wave.png";
+import posePoint from "../assets/pose-point.png";
+import poseRest from "../assets/pose-rest.png";
 
 const POSES = {
   wave: poseWave,
