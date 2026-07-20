@@ -7,7 +7,6 @@ import {
   Bookmark,
   MoreHorizontal,
   Plus,
-  Search,
   Bell,
   LogIn,
   LogOut,
@@ -23,11 +22,11 @@ const API_BASE = import.meta.env.VITE_API_URL || "https://artspire-backend-qv5b.
 
 const CATEGORY_CHIPS = ["For You", "Watercolor", "Illustration", "Portraits", "Landscapes"];
 
-// ── PASTE YOUR VIDEO FILE PATH HERE ─────────────────────────────────────
-// 1. Drop your video file into: artspire-frontend/public/
-// 2. Put its filename below (must start with "/"), e.g. "/home-bg.mp4"
+// ── PASTE YOUR BACKGROUND IMAGE PATH HERE ──────────────────────────
+// 1. Drop your image file into: artspire-frontend/public/
+// 2. Put its filename below (must start with "/"), e.g. "/artspire-bg.jpeg"
 // Leave as null to keep the plain watercolor-blob background instead.
-const BG_VIDEO_SRC = "/back.mp4";
+const BG_IMAGE_SRC = "/artspire-bg.jpeg";
 
 // Each chip gets a visually distinct shape instead of all five looking
 // identical — cycles through this list by index.
@@ -49,6 +48,17 @@ const CATEGORY_MATCH = {
   Landscapes: ["landscape"],
 };
 
+// ── Distinct fonts per text role ────────────────────────────────────
+// Loaded once below via the <link> tag in <FontImports/>. Each constant is
+// an inline style object so it works regardless of your Tailwind config.
+const F_LOGO        = { fontFamily: "'Playfair Display', Georgia, serif" };     // brand wordmark
+const F_TAGLINE      = { fontFamily: "'Caveat', cursive" };                     // handwritten tagline
+const F_CHIP_LABEL   = { fontFamily: "'Bebas Neue', sans-serif", letterSpacing: "0.04em" }; // condensed caps
+const F_ARTIST_NAME  = { fontFamily: "'Playfair Display', Georgia, serif" };    // post author
+const F_META         = { fontFamily: "'Nunito', sans-serif" };                  // timestamps, small labels
+const F_CAPTION      = { fontFamily: "'Nunito', sans-serif" };                  // post captions
+const F_NAV_LABEL    = { fontFamily: "'Nunito', sans-serif", fontWeight: 700 }; // bottom nav labels
+
 function timeAgo(dateStr) {
   if (!dateStr) return "";
   const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -60,6 +70,15 @@ function timeAgo(dateStr) {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d`;
   return new Date(dateStr).toLocaleDateString();
+}
+
+function FontImports() {
+  return (
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;1,600&family=Caveat:wght@600&family=Bebas+Neue&family=Nunito:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  );
 }
 
 export default function Home() {
@@ -76,7 +95,7 @@ export default function Home() {
   const [artistCategoryMap, setArtistCategoryMap] = useState({});
   const [activeChip, setActiveChip] = useState("For You");
 
-  // ── Auth state — same pattern as your existing utils/auth.js ──────────
+  // ── Auth state — same pattern as your existing utils/auth.js ────────
   const currentUser = (() => {
     try {
       return JSON.parse(localStorage.getItem("user") || localStorage.getItem("artist") || "null");
@@ -93,7 +112,7 @@ export default function Home() {
     navigate("/login");
   };
 
-  // ── Load real feed + artist categories ─────────────────────────────────
+  // ── Load real feed + artist categories ──────────────────────────────
   useEffect(() => {
     let cancelled = false;
 
@@ -185,7 +204,7 @@ export default function Home() {
 
   const toggleSave = (id) => setSaved((s) => ({ ...s, [id]: !s[id] }));
 
-  // ── Filtered posts, driven by real artist category data ─────────────────
+  // ── Filtered posts, driven by real artist category data ─────────────
   const filteredPosts = useMemo(() => {
     if (activeChip === "For You") return posts;
     const needles = CATEGORY_MATCH[activeChip] || [];
@@ -195,7 +214,7 @@ export default function Home() {
     });
   }, [posts, activeChip, artistCategoryMap]);
 
-  // ── Cover image per chip — first matching post's image, real data ───────
+  // ── Cover image per chip — first matching post's image, real data ────
   const chipCover = (label) => {
     if (label === "For You") return posts[0]?.mediaUrl || null;
     const needles = CATEGORY_MATCH[label] || [];
@@ -208,18 +227,17 @@ export default function Home() {
 
   return (
     // NOTE: no bg color here anymore — a solid background on this wrapper
-    // was painting over the fixed video layer. Keep this transparent.
+    // was painting over the fixed image layer. Keep this transparent.
     <div className="relative min-h-screen overflow-x-hidden pb-28">
-      {/* ── Video background, fully visible, sits behind everything ── */}
+      <FontImports />
+
+      {/* ── Image background, fully visible, sits behind everything ── */}
       <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        {BG_VIDEO_SRC && (
+        {BG_IMAGE_SRC && (
           <>
-            <video
-              src={BG_VIDEO_SRC}
-              autoPlay
-              loop
-              muted
-              playsInline
+            <img
+              src={BG_IMAGE_SRC}
+              alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
             {/* Very light wash, just enough to keep icons/text readable —
@@ -239,20 +257,14 @@ export default function Home() {
       <div className="relative z-10">
         {/* Header — glass instead of near-solid cream */}
         <header className="glass sticky top-0 z-30 flex items-center justify-between border-b border-white/30 px-5 py-4">
-          <button
-            aria-label="Search"
-            onClick={() => navigate("/search")}
-            className="flex h-9 w-9 items-center justify-center rounded-full text-stone-500 transition hover:bg-white/20"
-          >
-            <Search size={20} strokeWidth={1.8} />
-          </button>
+          <div className="w-9" aria-hidden="true" />
 
           <div className="flex flex-col items-center leading-none">
-            <h1 className="font-serif text-2xl italic tracking-tight text-stone-900">
+            <h1 style={F_LOGO} className="text-2xl italic tracking-tight text-stone-900">
               Art<span className="text-violet-600">Spire</span>
             </h1>
-            <span className="mt-0.5 flex items-center gap-1 text-[11px] text-stone-500">
-              Inspire Today <Star size={10} className="fill-stone-400 text-stone-400" />
+            <span style={F_TAGLINE} className="mt-0.5 flex items-center gap-1 text-base leading-none text-stone-600">
+              Inspire Today <Star size={11} className="fill-stone-400 text-stone-400" />
             </span>
           </div>
 
@@ -277,6 +289,7 @@ export default function Home() {
             ) : (
               <button
                 onClick={() => navigate("/login")}
+                style={F_META}
                 className="flex items-center gap-1.5 rounded-full bg-violet-600/90 px-3.5 py-1.5 text-sm font-medium text-white backdrop-blur transition hover:bg-violet-700"
               >
                 <LogIn size={16} strokeWidth={1.8} />
@@ -313,7 +326,8 @@ export default function Home() {
                   )}
                 </div>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[11px] ${
+                  style={F_CHIP_LABEL}
+                  className={`rounded-full px-2 py-0.5 text-[11px] uppercase ${
                     active ? "bg-violet-100/70 font-semibold text-violet-700" : "text-stone-500"
                   }`}
                 >
@@ -325,10 +339,10 @@ export default function Home() {
         </div>
 
         {/* Feed states */}
-        {loading && <p className="px-5 py-10 text-center text-sm text-stone-400">Loading posts…</p>}
-        {!loading && error && <p className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>}
+        {loading && <p style={F_META} className="px-5 py-10 text-center text-sm text-stone-400">Loading posts…</p>}
+        {!loading && error && <p style={F_META} className="px-5 py-10 text-center text-sm text-rose-500">{error}</p>}
         {!loading && !error && filteredPosts.length === 0 && (
-          <p className="px-5 py-10 text-center text-sm text-stone-400">
+          <p style={F_META} className="px-5 py-10 text-center text-sm text-stone-400">
             {activeChip === "For You" ? "No posts yet. Be the first to share your art!" : `No ${activeChip.toLowerCase()} posts yet.`}
           </p>
         )}
@@ -349,14 +363,14 @@ export default function Home() {
                     className="h-10 w-10 rounded-full object-cover ring-2 ring-orange-100/70"
                   />
                   <div className="leading-tight">
-                    <p className="font-serif text-[15px] font-semibold text-stone-900">{post.artistName}</p>
-                    <p className="text-xs text-violet-600">
+                    <p style={F_ARTIST_NAME} className="text-[16px] font-semibold text-stone-900">{post.artistName}</p>
+                    <p style={F_META} className="text-xs font-semibold uppercase tracking-wide text-violet-600">
                       {(artistCategoryMap[post.artistId] || [])[0] || "Artist"}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-stone-500">
-                  <span className="text-xs">{timeAgo(post.createdAt)}</span>
+                  <span style={F_META} className="text-xs">{timeAgo(post.createdAt)}</span>
                   <button aria-label="More options">
                     <MoreHorizontal size={18} />
                   </button>
@@ -364,7 +378,7 @@ export default function Home() {
               </div>
 
               {post.caption && (
-                <p className="px-4 pb-3 pt-2 text-sm text-stone-700">{post.caption}</p>
+                <p style={F_CAPTION} className="px-4 pb-3 pt-2 text-sm text-stone-700">{post.caption}</p>
               )}
 
               {post.mediaType === "video" ? (
@@ -382,11 +396,11 @@ export default function Home() {
                       strokeWidth={1.8}
                       className={liked[post._id] ? "fill-rose-500 text-rose-500" : "text-stone-700"}
                     />
-                    <span className="text-sm text-stone-600">{(post.likes?.length ?? 0).toLocaleString()}</span>
+                    <span style={F_META} className="text-sm text-stone-600">{(post.likes?.length ?? 0).toLocaleString()}</span>
                   </button>
                   <button aria-label="Comments" className="flex items-center gap-1.5">
                     <Palette size={20} strokeWidth={1.8} className="text-stone-700" />
-                    <span className="text-sm text-stone-600">{post.comments?.length ?? 0}</span>
+                    <span style={F_META} className="text-sm text-stone-600">{post.comments?.length ?? 0}</span>
                   </button>
                 </div>
                 <div className="flex items-center gap-4">
@@ -438,7 +452,7 @@ function HomeBottomNav() {
               <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tab.bg}`}>
                 <Icon size={18} strokeWidth={2} className={tab.fg} />
               </span>
-              <span className="text-[11px] text-stone-500">{tab.label}</span>
+              <span style={F_NAV_LABEL} className="text-[11px] text-stone-500">{tab.label}</span>
             </button>
           );
         })}
@@ -458,7 +472,7 @@ function HomeBottomNav() {
               <span className={`flex h-9 w-9 items-center justify-center rounded-full ${tab.bg}`}>
                 <Icon size={18} strokeWidth={2} className={tab.fg} />
               </span>
-              <span className="text-[11px] text-stone-500">{tab.label}</span>
+              <span style={F_NAV_LABEL} className="text-[11px] text-stone-500">{tab.label}</span>
             </button>
           );
         })}
