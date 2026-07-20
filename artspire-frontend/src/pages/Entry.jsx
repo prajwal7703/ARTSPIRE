@@ -10,7 +10,42 @@
 // shows the gate (and the cat's nag) again, per your request. If you'd
 // rather it only ever show once per device, change sessionStorage to
 // localStorage below.
+// artspire-frontend/src/pages/Entry.jsx
 
+import { useState } from "react";
+import { getToken } from "../utils/auth";
+import Gate from "./Gate";
+import Home from "./Home";
+import MissionIntro from "../components/MissionIntro";
+import OnboardingGuide from "../components/OnboardingGuide";
+
+const GUEST_FLAG = "artspire_guest_entered";
+
+export default function Entry() {
+  const [entered, setEntered] = useState(
+    () => Boolean(getToken()) || sessionStorage.getItem(GUEST_FLAG) === "true"
+  );
+  const [showTour, setShowTour] = useState(false);
+
+  if (!entered) {
+    return (
+      <Gate
+        onGuestEnter={() => {
+          sessionStorage.setItem(GUEST_FLAG, "true");
+          setEntered(true);
+        }}
+      />
+    );
+  }
+
+  return (
+    <>
+      <Home />
+      {!showTour && <MissionIntro onContinue={() => setShowTour(true)} />}
+      {showTour && <OnboardingGuide />}
+    </>
+  );
+}
 import { useState } from "react";
 import { getToken } from "../utils/auth";
 import Gate from "./Gate";
